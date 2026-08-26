@@ -94,6 +94,93 @@ in this test runner (confirmed live: a jsdom `FormData` got rejected with
 against a local instance with this repo's migrations/hooks applied. Same
 skip-gracefully behavior when nothing answers `/api/health`.
 
+## Phase 4 (Auditoria, hardening y pulido) -- superuser + env vars now required for the full suite
+
+- `1787760000_users_phone_identity.js` -- task 4.2 added `createRule = null`
+  (admin-panel-only account creation, closing a real public
+  self-registration gap -- see `src/data/auth-registration.integration.test.ts`).
+  **This changes local setup**: `src/data/testSupport.ts` now creates every
+  live-integration test's throwaway user via a superuser session instead of
+  the (now closed) public create endpoint, so a superuser MUST exist on any
+  instance you run the suite against:
+  ```
+  ./pocketbase superuser upsert phase4-test-superuser@insumoso2.local Passw0rd!2026Super
+  ```
+  (email/password are `testSupport.ts`'s defaults, overridable via
+  `VITE_PB_TEST_SUPERUSER_EMAIL`/`VITE_PB_TEST_SUPERUSER_PASSWORD` for a
+  real/CI instance that shouldn't share this repo's committed default).
+- `1787760020_rentals_collection.js` / `1787760040_payments_collection.js`
+  -- task 4.1/4.2 added `created_by`/`updated_by` (`created_by` only for
+  `payments`) `:isset = false` guards to `updateRule` too, not just
+  `createRule` -- a real gap `src/data/audit-fields.integration.test.ts`
+  found: a client could otherwise forge those audit fields via a generic
+  `pb.collection(...).update()` call. See the migration files' own
+  docblocks for the full story.
+- `1787760050_rate_limiting_settings.js` (task 4.3) -- enables PocketBase's
+  **native, built-in rate limiter** (`app.settings().rateLimits`), a real
+  finding this task made: SDD.md §25 says PocketBase has no built-in
+  per-endpoint rate limiting and this must be configured at the
+  `nginx-proxy-manager` layer -- confirmed FALSE for PocketBase v0.40.1 via
+  its own live Settings API. **This changes how you run the full suite
+  locally**: set `PB_TEST_MODE=1` before starting any instance you intend
+  to run this repo's live-integration suite against, or the production
+  `*:auth` budget (10 requests / 30s) will 429 the suite's own legitimate
+  multi-user-login traffic:
+  ```
+  PB_TEST_MODE=1 ./pocketbase serve
+  ```
+  `src/data/rate-limiting.integration.test.ts` deliberately targets a
+  SECOND, separate instance (`VITE_PB_TEST_RATE_LIMIT_URL`) started
+  WITHOUT `PB_TEST_MODE`, to prove the real production budget genuinely
+  429s -- see that file's own docblock. See also
+  `deploy/nginx-proxy-manager-rate-limiting.md` for the complementary
+  (still VPS-dependent, not yet applied) reverse-proxy layer SDD.md §25
+  originally called for.
+- `1787760060_backups_settings.js` (task 4.4) -- always enables a daily
+  cron backup schedule (`0 3 * * *`, 7-day retention); conditionally
+  enables the Backblaze B2 (S3-compatible) backup destination only when 5
+  env vars are present at migration-apply time: `PB_BACKUPS_B2_BUCKET`,
+  `PB_BACKUPS_B2_REGION`, `PB_BACKUPS_B2_ENDPOINT`,
+  `PB_BACKUPS_B2_ACCESS_KEY`, `PB_BACKUPS_B2_SECRET`. None of these are
+  set in this repo or in any scratch instance used for verification --
+  real Backblaze B2 credentials are explicitly out of scope for this task
+  (see task 4.5, restore drill, still pending). See
+  `src/data/backups-settings.integration.test.ts` for how the conditional
+  wiring itself was verified live with structurally-valid dummy values
+  (`VITE_PB_TEST_B2_CONFIGURED_URL`, a third optional instance), and
+  `test-pocketbase/backup-restore.md` for the earlier POC's own real
+  local-zip backup/restore validation (same underlying PocketBase
+  mechanism, no B2 involved).
+
+### Running the full live-integration suite after Phase 4
+
+```
+# instance 1 (required) -- everything except the two scenarios below
+PB_TEST_MODE=1 ./pocketbase serve --http=127.0.0.1:8090
+./pocketbase superuser upsert phase4-test-superuser@insumoso2.local Passw0rd!2026Super
+
+# instance 2 (optional) -- proves the real (non-test-mode) rate limit
+./pocketbase serve --http=127.0.0.1:8091   # a second copy, no PB_TEST_MODE
+./pocketbase superuser upsert phase4-test-superuser@insumoso2.local Passw0rd!2026Super
+
+# instance 3 (optional) -- proves the B2 conditional wiring with dummy values
+PB_BACKUPS_B2_BUCKET=test-bucket PB_BACKUPS_B2_REGION=us-west-004 \
+PB_BACKUPS_B2_ENDPOINT=https://s3.us-west-004.backblazeb2.com \
+PB_BACKUPS_B2_ACCESS_KEY=dummy PB_BACKUPS_B2_SECRET=dummy \
+./pocketbase serve --http=127.0.0.1:8092
+./pocketbase superuser upsert phase4-test-superuser@insumoso2.local Passw0rd!2026Super
+
+VITE_POCKETBASE_URL=http://127.0.0.1:8090 \
+VITE_PB_TEST_RATE_LIMIT_URL=http://127.0.0.1:8091 \
+VITE_PB_TEST_B2_CONFIGURED_URL=http://127.0.0.1:8092 \
+npm test
+```
+
+Instances 2 and 3 are optional -- their tests skip gracefully (not fail) if
+those env vars aren't set, same pattern as every other live-instance
+dependency in this suite. Instance 1 is required for any of the other
+live-integration tests to run instead of skip.
+
 ## VPS provisioning (task 0.8) -- deliberately not done in this session
 
 Per `HANDOFF-INICIO-DESARROLLO.md`: "Aprovisionar PocketBase (local para
