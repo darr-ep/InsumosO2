@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { RentalDetailSheet } from "@/components/RentalDetailSheet";
+import { CustomerDetailSheet } from "@/components/CustomerDetailSheet";
 import {
   listActiveRentals,
   type RentalWithCustomer,
@@ -15,15 +17,23 @@ import { formatCurrencyMXN } from "@/lib/currency";
 
 /**
  * SDD.md §16.3 (regla de los 10 segundos) + §16.4/§16.6 (rentas activas +
- * "requiere revisión") + Anexo A.3 + CU2. Task 2.5 — real content replacing
- * the Phase 0 placeholder. Cards, not a Table, for mobile legibility (§17).
- * Tapping a card doesn't open Detalle de renta yet — that Sheet is task 3.3,
- * wired here in task 3.5.
+ * "requiere revisión") + Anexo A.3 + CU2 + §18 ("Dashboard → tap rental
+ * card → Sheet Detalle de renta"). Task 2.5 (real content) + task 3.5
+ * (wiring `RentalDetailSheet`/`CustomerDetailSheet`, task 3.3/3.4).
  */
 
 export function DashboardScreen() {
   const [rentals, setRentals] = useState<RentalWithCustomer[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [selectedRentalId, setSelectedRentalId] = useState<string | null>(
+    null,
+  );
+  const [rentalDetailOpen, setRentalDetailOpen] = useState(false);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(
+    null,
+  );
+  const [customerDetailOpen, setCustomerDetailOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,6 +54,11 @@ export function DashboardScreen() {
       cancelled = true;
     };
   }, []);
+
+  function openRentalDetail(rentalId: string) {
+    setSelectedRentalId(rentalId);
+    setRentalDetailOpen(true);
+  }
 
   const thresholdDays = staleRentalDaysThreshold(
     import.meta.env.VITE_STALE_RENTAL_DAYS,
@@ -85,21 +100,31 @@ export function DashboardScreen() {
             <ul className="flex flex-col gap-3">
               {rentals.map((rental) => (
                 <li key={rental.id}>
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>
-                        {rental.expand?.customer_id?.name ?? "Cliente"}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex flex-col gap-1 text-sm text-muted-foreground">
-                      <p>Folio: {rental.folio}</p>
-                      <p>
-                        Desde:{" "}
-                        {new Date(rental.created).toLocaleDateString("es-MX")}
-                      </p>
-                      <p>Renta: {formatCurrencyMXN(rental.initial_rent_amount)}</p>
-                    </CardContent>
-                  </Card>
+                  <button
+                    type="button"
+                    className="w-full text-left"
+                    onClick={() => openRentalDetail(rental.id)}
+                  >
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>
+                          {rental.expand?.customer_id?.name ?? "Cliente"}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="flex flex-col gap-1 text-sm text-muted-foreground">
+                        <p>Folio: {rental.folio}</p>
+                        <p>
+                          Desde:{" "}
+                          {new Date(rental.created).toLocaleDateString(
+                            "es-MX",
+                          )}
+                        </p>
+                        <p>
+                          Renta: {formatCurrencyMXN(rental.initial_rent_amount)}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </button>
                 </li>
               ))}
             </ul>
@@ -111,19 +136,25 @@ export function DashboardScreen() {
               <ul className="flex flex-col gap-3">
                 {staleRentals.map((rental) => (
                   <li key={rental.id}>
-                    <Card className="border-amber-500">
-                      <CardHeader>
-                        <CardTitle>
-                          {rental.expand?.customer_id?.name ?? "Cliente"}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="text-sm text-muted-foreground">
-                        <p>
-                          {daysSince(new Date(rental.created), now)} días
-                          activa · Revisar renta
-                        </p>
-                      </CardContent>
-                    </Card>
+                    <button
+                      type="button"
+                      className="w-full text-left"
+                      onClick={() => openRentalDetail(rental.id)}
+                    >
+                      <Card className="border-amber-500">
+                        <CardHeader>
+                          <CardTitle>
+                            {rental.expand?.customer_id?.name ?? "Cliente"}
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="text-sm text-muted-foreground">
+                          <p>
+                            {daysSince(new Date(rental.created), now)} días
+                            activa · Revisar renta
+                          </p>
+                        </CardContent>
+                      </Card>
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -131,6 +162,21 @@ export function DashboardScreen() {
           )}
         </>
       )}
+
+      <RentalDetailSheet
+        open={rentalDetailOpen}
+        onOpenChange={setRentalDetailOpen}
+        rentalId={selectedRentalId}
+        onViewCustomer={(customerId) => {
+          setSelectedCustomerId(customerId);
+          setCustomerDetailOpen(true);
+        }}
+      />
+      <CustomerDetailSheet
+        open={customerDetailOpen}
+        onOpenChange={setCustomerDetailOpen}
+        customerId={selectedCustomerId}
+      />
     </div>
   );
 }

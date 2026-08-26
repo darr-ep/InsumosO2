@@ -12,6 +12,7 @@ import {
 } from "@/components/ItemQuantityPicker";
 import { ExtrasList } from "@/components/ExtrasList";
 import { ReceiptDialog } from "@/components/ReceiptDialog";
+import { CustomerDetailSheet } from "@/components/CustomerDetailSheet";
 import type { CustomerRecord } from "@/data/customers.repo";
 import { createRental } from "@/data/rentals.repo";
 import { rentalFormSchema, type RentalExtraFormValues } from "@/domain/rentals/rental";
@@ -21,7 +22,9 @@ import { buildRentalReceipt, type RentalReceiptData } from "@/domain/rentals/rec
  * SDD.md §7.1 (flujo Nueva renta) + §16.7 (orden de campos, pantalla
  * única sin wizard) + §18 (confirmar → modal Comprobante → Dashboard) +
  * CU4. `folio`/`status` are never part of this screen's state — the
- * server (task 1.1/1.2) is the only source of truth for those.
+ * server (task 1.1/1.2) is the only source of truth for those. §16.6:
+ * "Ficha de cliente — abierta desde... el buscador de cliente en Nueva
+ * renta" — wired here (task 3.5) via `CustomerPicker`'s `onViewCustomer`.
  */
 
 export function RentalNewScreen() {
@@ -29,6 +32,7 @@ export function RentalNewScreen() {
 
   const [selectedCustomer, setSelectedCustomer] =
     useState<CustomerRecord | null>(null);
+  const [customerDetailOpen, setCustomerDetailOpen] = useState(false);
   const [itemQuantities, setItemQuantities] =
     useState<ItemQuantities>(emptyItemQuantities);
   const [initialRentAmount, setInitialRentAmount] = useState("");
@@ -122,6 +126,7 @@ export function RentalNewScreen() {
         <CustomerPicker
           selectedCustomer={selectedCustomer}
           onSelect={setSelectedCustomer}
+          onViewCustomer={() => setCustomerDetailOpen(true)}
         />
       </section>
 
@@ -181,6 +186,12 @@ export function RentalNewScreen() {
           }
         }}
         receipt={receipt}
+      />
+
+      <CustomerDetailSheet
+        open={customerDetailOpen}
+        onOpenChange={setCustomerDetailOpen}
+        customerId={selectedCustomer?.id ?? null}
       />
     </div>
   );

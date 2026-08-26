@@ -6,16 +6,20 @@ import { RentalNewScreen } from "@/screens/rental-new/RentalNewScreen";
 
 const searchCustomers = vi.fn();
 const createCustomer = vi.fn();
+const getCustomer = vi.fn();
 const createRental = vi.fn();
+const listRentalsForCustomer = vi.fn();
 const navigate = vi.fn();
 
 vi.mock("@/data/customers.repo", () => ({
   searchCustomers: (...args: unknown[]) => searchCustomers(...args),
   createCustomer: (...args: unknown[]) => createCustomer(...args),
+  getCustomer: (...args: unknown[]) => getCustomer(...args),
 }));
 
 vi.mock("@/data/rentals.repo", () => ({
   createRental: (...args: unknown[]) => createRental(...args),
+  listRentalsForCustomer: (...args: unknown[]) => listRentalsForCustomer(...args),
 }));
 
 vi.mock("react-router", async () => {
@@ -39,7 +43,9 @@ describe("RentalNewScreen (§7.1, §16.7, CU4)", () => {
   beforeEach(() => {
     searchCustomers.mockReset();
     createCustomer.mockReset();
+    getCustomer.mockReset();
     createRental.mockReset();
+    listRentalsForCustomer.mockReset();
     navigate.mockReset();
     vi.stubGlobal("navigator", {});
   });
@@ -103,6 +109,28 @@ describe("RentalNewScreen (§7.1, §16.7, CU4)", () => {
 
     expect(
       await screen.findByRole("heading", { name: "Comprobante R-000001" }),
+    ).toBeInTheDocument();
+  });
+
+  it("opens Ficha de cliente from the customer picker once a customer is selected (§16.6, task 3.5)", async () => {
+    searchCustomers.mockResolvedValue([juan]);
+    getCustomer.mockResolvedValue(juan);
+    listRentalsForCustomer.mockResolvedValue([]);
+    const user = userEvent.setup();
+    renderScreen();
+
+    await user.type(
+      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
+      "Juan",
+    );
+    await user.click(
+      await screen.findByRole("button", { name: /Juan Pérez/ }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Ver ficha" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Juan Pérez" }),
     ).toBeInTheDocument();
   });
 

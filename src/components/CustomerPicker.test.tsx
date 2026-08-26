@@ -49,6 +49,27 @@ describe("CustomerPicker (§7.1)", () => {
 
     expect(screen.getByText("Juan Pérez")).toBeInTheDocument();
     expect(screen.getByText("5512345678")).toBeInTheDocument();
+    // No "Ver ficha" affordance unless the caller opts in.
+    expect(
+      screen.queryByRole("button", { name: "Ver ficha" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("calls onViewCustomer with the selected customer's id when 'Ver ficha' is pressed (§16.6)", async () => {
+    const onSelect = vi.fn();
+    const onViewCustomer = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <CustomerPicker
+        selectedCustomer={juan}
+        onSelect={onSelect}
+        onViewCustomer={onViewCustomer}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Ver ficha" }));
+
+    expect(onViewCustomer).toHaveBeenCalledWith("c1");
   });
 
   it("switches to 'Cliente nuevo' and creates + selects a customer on submit", async () => {

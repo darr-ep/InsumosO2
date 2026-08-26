@@ -1,12 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { DashboardScreen } from "@/screens/dashboard/DashboardScreen";
 
 const listActiveRentals = vi.fn();
+const getRental = vi.fn();
+const listItemsForRental = vi.fn();
+const listPaymentsForRental = vi.fn();
 
 vi.mock("@/data/rentals.repo", () => ({
   listActiveRentals: (...args: unknown[]) => listActiveRentals(...args),
+  getRental: (...args: unknown[]) => getRental(...args),
+  listItemsForRental: (...args: unknown[]) => listItemsForRental(...args),
+}));
+
+vi.mock("@/data/payments.repo", () => ({
+  listPaymentsForRental: (...args: unknown[]) => listPaymentsForRental(...args),
 }));
 
 function renderScreen() {
@@ -22,6 +32,9 @@ const juan = { id: "c1", name: "Juan Pérez", phone: "5512345678" };
 describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
   beforeEach(() => {
     listActiveRentals.mockReset();
+    getRental.mockReset();
+    listItemsForRental.mockReset();
+    listPaymentsForRental.mockReset();
     vi.stubEnv("VITE_STALE_RENTAL_DAYS", "30");
   });
 
@@ -105,6 +118,39 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
 
     expect(
       await screen.findByText("No se pudieron cargar las rentas activas."),
+    ).toBeInTheDocument();
+  });
+
+  it("opens Detalle de renta as a Sheet when a rental card is tapped (§18)", async () => {
+    listActiveRentals.mockResolvedValue([
+      {
+        id: "r1",
+        folio: "R-000001",
+        created: "2026-08-20 10:00:00.000Z",
+        initial_rent_amount: 2800,
+        expand: { customer_id: juan },
+      },
+    ]);
+    getRental.mockResolvedValue({
+      id: "r1",
+      folio: "R-000001",
+      customer_id: "c1",
+      status: "ACTIVE",
+      initial_rent_amount: 2800,
+      deposit_amount: 1000,
+      created: "2026-08-20T10:00:00.000Z",
+      expand: { customer_id: juan },
+    });
+    listItemsForRental.mockResolvedValue([]);
+    listPaymentsForRental.mockResolvedValue([]);
+    const user = userEvent.setup();
+
+    renderScreen();
+
+    await user.click(await screen.findByText("Juan Pérez"));
+
+    expect(
+      await screen.findByRole("heading", { name: "Renta R-000001" }),
     ).toBeInTheDocument();
   });
 

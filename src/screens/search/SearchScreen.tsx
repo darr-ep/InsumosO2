@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { SearchBar } from "@/components/SearchBar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { RentalDetailSheet } from "@/components/RentalDetailSheet";
+import { CustomerDetailSheet } from "@/components/CustomerDetailSheet";
 import { searchRentals, type RentalWithCustomer } from "@/data/rentals.repo";
 
 /**
- * SDD.md §7.4 (flujo Búsqueda) + §16.9 + CU3. Real content replacing the
- * Phase 0 placeholder (task 2.6) — one field, results below, tap opens
- * Detalle de renta as a Sheet in Phase 3 (task 3.5, once task 3.3 exists).
+ * SDD.md §7.4 (flujo Búsqueda) + §16.9 + CU3 + §18 ("Buscar → tap
+ * resultado → Sheet Detalle de renta"). Real content (task 2.6) + wiring
+ * `RentalDetailSheet`/`CustomerDetailSheet` (task 3.5, tasks 3.3/3.4).
  */
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -16,6 +18,15 @@ export function SearchScreen() {
   const [results, setResults] = useState<RentalWithCustomer[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [selectedRentalId, setSelectedRentalId] = useState<string | null>(
+    null,
+  );
+  const [rentalDetailOpen, setRentalDetailOpen] = useState(false);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(
+    null,
+  );
+  const [customerDetailOpen, setCustomerDetailOpen] = useState(false);
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -58,6 +69,11 @@ export function SearchScreen() {
     };
   }, [query]);
 
+  function openRentalDetail(rentalId: string) {
+    setSelectedRentalId(rentalId);
+    setRentalDetailOpen(true);
+  }
+
   const trimmedQuery = query.trim();
   // Derived at render instead of cleared inside the effect above (avoids a
   // setState-in-effect cascading render for the "query was cleared" case,
@@ -87,21 +103,42 @@ export function SearchScreen() {
         <ul className="flex flex-col gap-3">
           {visibleResults.map((rental) => (
             <li key={rental.id}>
-              <Card>
-                <CardHeader>
-                  <CardTitle>
-                    {rental.expand?.customer_id?.name ?? "Cliente"}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-1 text-sm text-muted-foreground">
-                  <p>Folio: {rental.folio}</p>
-                  <p>Teléfono: {rental.expand?.customer_id?.phone ?? "—"}</p>
-                </CardContent>
-              </Card>
+              <button
+                type="button"
+                className="w-full text-left"
+                onClick={() => openRentalDetail(rental.id)}
+              >
+                <Card>
+                  <CardHeader>
+                    <CardTitle>
+                      {rental.expand?.customer_id?.name ?? "Cliente"}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-1 text-sm text-muted-foreground">
+                    <p>Folio: {rental.folio}</p>
+                    <p>Teléfono: {rental.expand?.customer_id?.phone ?? "—"}</p>
+                  </CardContent>
+                </Card>
+              </button>
             </li>
           ))}
         </ul>
       )}
+
+      <RentalDetailSheet
+        open={rentalDetailOpen}
+        onOpenChange={setRentalDetailOpen}
+        rentalId={selectedRentalId}
+        onViewCustomer={(customerId) => {
+          setSelectedCustomerId(customerId);
+          setCustomerDetailOpen(true);
+        }}
+      />
+      <CustomerDetailSheet
+        open={customerDetailOpen}
+        onOpenChange={setCustomerDetailOpen}
+        customerId={selectedCustomerId}
+      />
     </div>
   );
 }

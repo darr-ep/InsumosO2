@@ -14,7 +14,10 @@ import {
 /**
  * SDD.md §7.1 ("Buscar/crear cliente") + §17. First section of "Nueva
  * renta" (§16.7). Search is debounced so a non-technical user doesn't need
- * to know to press Enter (§16.2).
+ * to know to press Enter (§16.2). §16.6: "Ficha de cliente — abierta desde
+ * Detalle de renta o desde el buscador de cliente en Nueva renta" — task
+ * 3.5 wires that second entry point via the optional `onViewCustomer`
+ * callback, exposed once a customer is selected.
  */
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -22,11 +25,13 @@ const SEARCH_DEBOUNCE_MS = 300;
 export interface CustomerPickerProps {
   selectedCustomer?: CustomerRecord | null;
   onSelect: (customer: CustomerRecord | null) => void;
+  onViewCustomer?: (customerId: string) => void;
 }
 
 export function CustomerPicker({
   selectedCustomer = null,
   onSelect,
+  onViewCustomer,
 }: CustomerPickerProps) {
   const [mode, setMode] = useState<"search" | "create">("search");
   const [query, setQuery] = useState("");
@@ -109,14 +114,26 @@ export function CustomerPicker({
             {selectedCustomer.phone}
           </p>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => onSelect(null)}
-        >
-          Cambiar
-        </Button>
+        <div className="flex gap-2">
+          {onViewCustomer && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => onViewCustomer(selectedCustomer.id)}
+            >
+              Ver ficha
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onSelect(null)}
+          >
+            Cambiar
+          </Button>
+        </div>
       </div>
     );
   }
