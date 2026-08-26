@@ -129,12 +129,25 @@ migrate(
         "@request.body.returned_by:isset = false && " +
         "@request.body.created_by:isset = false && " +
         "@request.body.updated_by:isset = false",
+      // Phase 4 task 4.2: `created_by`/`updated_by` are also blocked on
+      // Update, not just Create — §13's closing paragraph ("también se
+      // bloquean en el body por el mismo motivo, sección 26") and §26's own
+      // "nunca se toman del body que manda el cliente" apply to any request
+      // the client sends, not only the initial create. Confirmed live as a
+      // real gap by task 4.1's audit before this fix: without this guard,
+      // any authenticated user could call
+      // `pb.collection('rentals').update(id, { updated_by: otherUserId })`
+      // and silently overwrite the audit trail with an arbitrary value —
+      // `pb_hooks/rentals_return.pb.js` is unaffected (it writes via
+      // internal `txApp.save()`, not subject to these API Rules).
       updateRule:
         "@request.auth.id != '' && " +
         "@request.body.status:isset = false && " +
         "@request.body.returned_at:isset = false && " +
         "@request.body.returned_by:isset = false && " +
-        "@request.body.folio:isset = false",
+        "@request.body.folio:isset = false && " +
+        "@request.body.created_by:isset = false && " +
+        "@request.body.updated_by:isset = false",
       deleteRule: null,
     });
 

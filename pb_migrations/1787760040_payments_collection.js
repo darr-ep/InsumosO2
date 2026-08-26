@@ -79,7 +79,18 @@ migrate(
       createRule:
         "@request.auth.id != '' && " +
         "@request.body.created_by:isset = false",
-      updateRule: "@request.auth.id != ''",
+      // Phase 4 task 4.2: `created_by` is also blocked on Update, mirroring
+      // the same fix applied to `rentals` in this same task — confirmed
+      // live as a real gap by task 4.1's audit before this fix (a client
+      // could otherwise forge `created_by` via a generic
+      // `pb.collection('payments').update()` call). `amount`/`payment_type`/
+      // `note` stay open on Update per §13's own generic base pattern (no
+      // literal SDD requirement to lock those down at the API layer); §19's
+      // "create-only, sin edición" is enforced at the UI level only, same as
+      // today.
+      updateRule:
+        "@request.auth.id != '' && " +
+        "@request.body.created_by:isset = false",
       deleteRule: null,
     });
 
