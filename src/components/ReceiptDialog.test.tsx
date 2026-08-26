@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ReceiptDialog } from "@/components/ReceiptDialog";
-import type { RentalReceiptData } from "@/domain/rentals/receipt";
+import type { RentalReceiptData, ReturnReceiptData } from "@/domain/rentals/receipt";
 
 const shareReceipt = vi.fn();
 
@@ -17,6 +17,7 @@ vi.mock("@/printing/ShareFallbackPrinter", async () => {
 });
 
 const receipt: RentalReceiptData = {
+  kind: "create",
   businessName: "Insumos O2",
   businessPhone: "771 131 3535",
   folio: "R-000001",
@@ -28,6 +29,20 @@ const receipt: RentalReceiptData = {
   depositAmount: 1000,
   extras: [{ description: "2 cubrebocas KF94", price: 50 }],
   total: 3850,
+};
+
+const returnReceipt: ReturnReceiptData = {
+  kind: "return",
+  businessName: "Insumos O2",
+  businessPhone: "771 131 3535",
+  folio: "R-000001",
+  customerName: "Juan Pérez",
+  customerPhone: "5512345678",
+  startedAt: new Date("2026-07-01T10:00:00Z"),
+  returnedAt: new Date("2026-08-01T10:00:00Z"),
+  rentedDays: 31,
+  amountCollected: 2800,
+  depositReturned: 1000,
 };
 
 describe("ReceiptDialog (§22)", () => {
@@ -100,6 +115,22 @@ describe("ReceiptDialog (§22)", () => {
       await screen.findByText("No se pudo compartir el comprobante."),
     ).toBeInTheDocument();
     expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it("shows folio, tiempo rentado, monto cobrado and depósito devuelto for a devolución receipt (task 3.2)", () => {
+    vi.stubGlobal("navigator", {});
+    render(
+      <ReceiptDialog open onOpenChange={vi.fn()} receipt={returnReceipt} />,
+    );
+
+    expect(
+      screen.getByRole("heading", {
+        name: "Comprobante de devolución R-000001",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("31 días")).toBeInTheDocument();
+    expect(screen.getByText("$2,800.00")).toBeInTheDocument();
+    expect(screen.getByText("$1,000.00")).toBeInTheDocument();
   });
 
   it("calls onOpenChange(false) when Cerrar is pressed", async () => {

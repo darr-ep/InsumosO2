@@ -1,9 +1,10 @@
 import { rentalItemTypeLabel } from "@/domain/rentals/rental";
-import type { RentalReceiptData } from "@/domain/rentals/receipt";
+import type { ReceiptData } from "@/domain/rentals/receipt";
 
 /**
- * SDD.md §21 (impresión falla → reintentar/compartir) + §22 (comprobante)
- * + §23.4 (`ShareFallbackPrinter` — único camino en iPhone, §23.2).
+ * SDD.md §21 (impresión falla → reintentar/compartir) + §22 (comprobante,
+ * de renta y de devolución) + §23.4 (`ShareFallbackPrinter` — único camino
+ * en iPhone, §23.2).
  *
  * This is deliberately standalone, not an implementation of the
  * `ReceiptPrinter` interface (§23.4) — that interface, `WebBluetoothPrinter`
@@ -31,8 +32,22 @@ const currencyFormatter = new Intl.NumberFormat("es-MX", {
 
 // Plain-text summary for navigator.share's `text` field — §22's austere
 // "comprobante de referencia, no factura fiscal" principle applies here
-// too, keep it short.
-export function formatReceiptShareText(receipt: RentalReceiptData): string {
+// too, keep it short. Branches on `receipt.kind` (task 3.2) since a
+// devolución comprobante has different content (§22).
+export function formatReceiptShareText(receipt: ReceiptData): string {
+  if (receipt.kind === "return") {
+    const lines = [
+      `${receipt.businessName} · ${receipt.businessPhone}`,
+      `Folio: ${receipt.folio}`,
+      `Cliente: ${receipt.customerName} (${receipt.customerPhone})`,
+      `Tiempo rentado: ${receipt.rentedDays} días`,
+      `Monto cobrado: ${currencyFormatter.format(receipt.amountCollected)}`,
+      `Depósito devuelto: ${currencyFormatter.format(receipt.depositReturned)}`,
+    ];
+
+    return lines.join("\n");
+  }
+
   const lines = [
     `${receipt.businessName} · ${receipt.businessPhone}`,
     `Folio: ${receipt.folio}`,
@@ -52,7 +67,7 @@ export function formatReceiptShareText(receipt: RentalReceiptData): string {
 }
 
 export async function shareReceipt(
-  receipt: RentalReceiptData,
+  receipt: ReceiptData,
 ): Promise<ShareReceiptResult> {
   if (!isShareAvailable()) {
     return "unsupported";
@@ -60,7 +75,10 @@ export async function shareReceipt(
 
   try {
     await navigator.share({
-      title: `Comprobante ${receipt.folio}`,
+      title:
+        receipt.kind === "return"
+          ? `Comprobante de devolución ${receipt.folio}`
+          : `Comprobante ${receipt.folio}`,
       text: formatReceiptShareText(receipt),
     });
     return "shared";

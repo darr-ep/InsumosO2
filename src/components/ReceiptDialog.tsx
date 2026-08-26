@@ -9,16 +9,19 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { rentalItemTypeLabel } from "@/domain/rentals/rental";
-import type { RentalReceiptData } from "@/domain/rentals/receipt";
+import type { ReceiptData } from "@/domain/rentals/receipt";
 import {
   isShareAvailable,
   shareReceipt,
 } from "@/printing/ShareFallbackPrinter";
 
 /**
- * SDD.md §22 (generación de comprobantes — modal, no pantalla/ruta aparte)
- * + §21 (compartir es opcional, nunca bloqueante) + §18 (Nueva renta →
- * confirmar → modal Comprobante).
+ * SDD.md §22 (generación de comprobantes — modal, no pantalla/ruta aparte,
+ * de renta y de devolución) + §21 (compartir es opcional, nunca
+ * bloqueante) + §18 (Nueva renta → confirmar → modal Comprobante; Devolver
+ * → confirmar → modal Comprobante de devolución) + §16.6. One shared modal
+ * for both flows (task 1.9, extended task 3.2) — `receipt.kind`
+ * discriminates the content.
  */
 
 const currencyFormatter = new Intl.NumberFormat("es-MX", {
@@ -29,7 +32,7 @@ const currencyFormatter = new Intl.NumberFormat("es-MX", {
 export interface ReceiptDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  receipt: RentalReceiptData | null;
+  receipt: ReceiptData | null;
 }
 
 export function ReceiptDialog({
@@ -69,57 +72,94 @@ export function ReceiptDialog({
         {receipt && (
           <>
             <DialogHeader>
-              <DialogTitle>Comprobante {receipt.folio}</DialogTitle>
+              <DialogTitle>
+                {receipt.kind === "return"
+                  ? `Comprobante de devolución ${receipt.folio}`
+                  : `Comprobante ${receipt.folio}`}
+              </DialogTitle>
               <DialogDescription>
                 {receipt.businessName} · {receipt.businessPhone}
               </DialogDescription>
             </DialogHeader>
 
-            <dl className="flex flex-col gap-2 text-sm">
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Cliente</dt>
-                <dd>{receipt.customerName}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Teléfono</dt>
-                <dd>{receipt.customerPhone}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Fecha</dt>
-                <dd>{receipt.date.toLocaleDateString("es-MX")}</dd>
-              </div>
-              {receipt.items.map((item) => (
-                <div
-                  className="flex justify-between"
-                  key={item.itemType}
-                >
-                  <dt className="text-muted-foreground">
-                    {rentalItemTypeLabel(item.itemType)}
-                  </dt>
-                  <dd>x{item.quantity}</dd>
+            {receipt.kind === "return" ? (
+              <dl className="flex flex-col gap-2 text-sm">
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Cliente</dt>
+                  <dd>{receipt.customerName}</dd>
                 </div>
-              ))}
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Renta inicial</dt>
-                <dd>{currencyFormatter.format(receipt.initialRentAmount)}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Depósito</dt>
-                <dd>{currencyFormatter.format(receipt.depositAmount)}</dd>
-              </div>
-              {receipt.extras.map((extra) => (
-                <div className="flex justify-between" key={extra.description}>
-                  <dt className="text-muted-foreground">
-                    {extra.description}
-                  </dt>
-                  <dd>{currencyFormatter.format(extra.price)}</dd>
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Teléfono</dt>
+                  <dd>{receipt.customerPhone}</dd>
                 </div>
-              ))}
-              <div className="flex justify-between font-semibold">
-                <dt>Total</dt>
-                <dd>{currencyFormatter.format(receipt.total)}</dd>
-              </div>
-            </dl>
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Fecha de inicio</dt>
+                  <dd>{receipt.startedAt.toLocaleDateString("es-MX")}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Fecha de devolución</dt>
+                  <dd>{receipt.returnedAt.toLocaleDateString("es-MX")}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Tiempo rentado</dt>
+                  <dd>{receipt.rentedDays} días</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Monto cobrado</dt>
+                  <dd>{currencyFormatter.format(receipt.amountCollected)}</dd>
+                </div>
+                <div className="flex justify-between font-semibold">
+                  <dt>Depósito devuelto</dt>
+                  <dd>{currencyFormatter.format(receipt.depositReturned)}</dd>
+                </div>
+              </dl>
+            ) : (
+              <dl className="flex flex-col gap-2 text-sm">
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Cliente</dt>
+                  <dd>{receipt.customerName}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Teléfono</dt>
+                  <dd>{receipt.customerPhone}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Fecha</dt>
+                  <dd>{receipt.date.toLocaleDateString("es-MX")}</dd>
+                </div>
+                {receipt.items.map((item) => (
+                  <div
+                    className="flex justify-between"
+                    key={item.itemType}
+                  >
+                    <dt className="text-muted-foreground">
+                      {rentalItemTypeLabel(item.itemType)}
+                    </dt>
+                    <dd>x{item.quantity}</dd>
+                  </div>
+                ))}
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Renta inicial</dt>
+                  <dd>{currencyFormatter.format(receipt.initialRentAmount)}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Depósito</dt>
+                  <dd>{currencyFormatter.format(receipt.depositAmount)}</dd>
+                </div>
+                {receipt.extras.map((extra) => (
+                  <div className="flex justify-between" key={extra.description}>
+                    <dt className="text-muted-foreground">
+                      {extra.description}
+                    </dt>
+                    <dd>{currencyFormatter.format(extra.price)}</dd>
+                  </div>
+                ))}
+                <div className="flex justify-between font-semibold">
+                  <dt>Total</dt>
+                  <dd>{currencyFormatter.format(receipt.total)}</dd>
+                </div>
+              </dl>
+            )}
 
             {shareStatus === "error" && (
               <p className="text-destructive text-sm">
