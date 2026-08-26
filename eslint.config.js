@@ -1,0 +1,30 @@
+import js from "@eslint/js";
+import globals from "globals";
+import reactHooks from "eslint-plugin-react-hooks";
+import reactRefresh from "eslint-plugin-react-refresh";
+import tseslint from "typescript-eslint";
+import { globalIgnores } from "eslint/config";
+
+export default tseslint.config(
+  globalIgnores([
+    "dist",
+    "dev-dist",
+    "pb_data",
+    "test-pocketbase",
+    "test-impresora",
+  ]),
+  {
+    files: ["**/*.{ts,tsx}"],
+    extends: [js.configs.recommended, tseslint.configs.recommended, reactRefresh.configs.vite],
+    plugins: {
+      "react-hooks": reactHooks,
+    },
+    rules: {
+      ...reactHooks.configs.recommended.rules,
+    },
+    languageOptions: {
+      ecmaVersion: 2022,
+      globals: globals.browser,
+    },
+  },
+);
