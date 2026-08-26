@@ -4,6 +4,8 @@ const getList = vi.fn();
 const create = vi.fn();
 const update = vi.fn();
 const getOne = vi.fn();
+const getToken = vi.fn();
+const getURL = vi.fn();
 const collection = vi.fn(() => ({ getList, create, update, getOne }));
 const filter = vi.fn(
   (raw: string, params: Record<string, unknown>) =>
@@ -11,7 +13,7 @@ const filter = vi.fn(
 );
 
 vi.mock("@/data/pocketbaseClient", () => ({
-  pb: { collection, filter },
+  pb: { collection, filter, files: { getToken, getURL } },
 }));
 
 const {
@@ -19,6 +21,7 @@ const {
   createCustomer,
   updateCustomerCredentialPhoto,
   getCustomer,
+  getCredentialPhotoUrl,
 } = await import("@/data/customers.repo");
 
 describe("searchCustomers (§7.1 buscar/crear cliente)", () => {
@@ -134,5 +137,38 @@ describe("getCustomer (§16.6, CU7 — ficha de cliente)", () => {
     expect(collection).toHaveBeenCalledWith("customers");
     expect(getOne).toHaveBeenCalledWith("c1");
     expect(customer).toEqual({ id: "c1", name: "Juan Pérez" });
+  });
+});
+
+describe("getCredentialPhotoUrl (§15, CU7 — ver credencial bajo demanda)", () => {
+  beforeEach(() => {
+    getToken.mockReset();
+    getURL.mockReset();
+  });
+
+  it("requests a file token first, then builds the URL with it (never a bare/permanent URL)", async () => {
+    getToken.mockResolvedValueOnce("short-lived-token");
+    getURL.mockReturnValueOnce(
+      "http://pb.local/api/files/customers/c1/credencial.png?token=short-lived-token",
+    );
+
+    const customer = {
+      id: "c1",
+      collectionId: "customers",
+      collectionName: "customers",
+      name: "Juan Pérez",
+      phone: "5512345678",
+      credential_photo: "credencial.png",
+    };
+
+    const url = await getCredentialPhotoUrl(customer);
+
+    expect(getToken).toHaveBeenCalledTimes(1);
+    expect(getURL).toHaveBeenCalledWith(customer, "credencial.png", {
+      token: "short-lived-token",
+    });
+    expect(url).toBe(
+      "http://pb.local/api/files/customers/c1/credencial.png?token=short-lived-token",
+    );
   });
 });

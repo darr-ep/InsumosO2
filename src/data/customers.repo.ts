@@ -89,3 +89,18 @@ export async function updateCustomerCredentialPhoto(
 export async function getCustomer(customerId: string): Promise<CustomerRecord> {
   return pb.collection(CUSTOMERS_COLLECTION).getOne<CustomerRecord>(customerId);
 }
+
+/**
+ * SDD.md §15 (manejo de credenciales) + CU7's second scenario. A protected
+ * file is NOT resolvable by URL alone — a short-lived `pb.files.getToken()`
+ * token is required first, then appended as a query param via
+ * `pb.files.getURL()`. Only called on demand (task 3.4's "Ver credencial"
+ * button) — never eagerly, and never rendered in any listing (§15: "no
+ * aparece en listados").
+ */
+export async function getCredentialPhotoUrl(
+  customer: CustomerRecord,
+): Promise<string> {
+  const token = await pb.files.getToken();
+  return pb.files.getURL(customer, customer.credential_photo, { token });
+}
