@@ -57,6 +57,25 @@ create/view works, delete is rejected (403), and the protected
   see the integration test evidence in `src/data/rentals.integration.test.ts`
   (task 1.10).
 
+## Running the Phase 1 integration test (task 1.10)
+
+`src/data/rentals.integration.test.ts` exercises the real folio/status
+guards (tasks 1.1/1.2) against a live PocketBase, not a mock. `npm test`
+skips it automatically if nothing answers `${VITE_POCKETBASE_URL}/api/health`
+(default `http://127.0.0.1:8090`) -- normal on a machine without a local
+instance running, and does not fail the rest of the suite.
+
+To actually run it: start a local instance per "Local development" above,
+then `VITE_POCKETBASE_URL=http://127.0.0.1:8090 npm test -- src/data/rentals.integration`.
+The `credential_photo` field's `mimeTypes` validation sniffs real file
+content, not the declared `Content-Type` -- the test uploads an actual
+minimal PNG, not arbitrary bytes with a spoofed type. This test file
+forces the Node test environment (`// @vitest-environment node`) rather
+than the project default `jsdom`, since jsdom's `FormData`/`File` didn't
+reliably interoperate with Node's native `fetch` for multipart uploads
+in this test runner (confirmed live: a jsdom `FormData` got rejected with
+"400: Unsupported Content-Type").
+
 ## VPS provisioning (task 0.8) -- deliberately not done in this session
 
 Per `HANDOFF-INICIO-DESARROLLO.md`: "Aprovisionar PocketBase (local para
