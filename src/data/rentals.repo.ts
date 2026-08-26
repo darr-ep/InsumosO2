@@ -1,5 +1,6 @@
 import type { RecordModel } from "pocketbase";
 import { pb } from "@/data/pocketbaseClient";
+import type { CustomerRecord } from "@/data/customers.repo";
 import {
   shouldRegisterDepositPayment,
   type RentalItemType,
@@ -64,9 +65,18 @@ export interface CreateRentalResult {
   depositPayment: PaymentRecord | null;
 }
 
+// §16.6/CU2 (Dashboard) and §7.4/CU3 (Buscar) both need the customer's
+// name/phone alongside a rental — expanded via PocketBase's `expand`
+// query param (task 2.5/2.6) rather than a second round-trip per rental.
+export interface RentalWithCustomer extends RentalRecord {
+  expand?: { customer_id?: CustomerRecord };
+}
+
 const RENTALS_COLLECTION = "rentals";
 const RENTAL_ITEMS_COLLECTION = "rental_items";
 const PAYMENTS_COLLECTION = "payments";
+const ACTIVE_RENTALS_PAGE_SIZE = 200;
+const RENTAL_SEARCH_PAGE_SIZE = 20;
 
 /**
  * Orchestrates the writes behind CU4 "Crear renta": the rental record
@@ -113,4 +123,48 @@ export async function createRental(
     : null;
 
   return { rental, items, depositPayment };
+}
+
+// §16.3/§16.6/CU2: Dashboard's active-rentals list + count. "requiere
+// revisión" staleness (Anexo A.3) is a pure client-side filter over this
+// result — see domain/rentals/dashboard.ts (task 2.5).
+export async function listActiveRentals(): Promise<RentalWithCustomer[]> {
+  const result = await pb
+    .collection(RENTALS_COLLECTION)
+    .getList<RentalWithCustomer>(1, ACTIVE_RENTALS_PAGE_SIZE, {
+      filter: pb.filter("status = {:status}", { status: "ACTIVE" }),
+      sort: "-created",
+      expand: "customer_id",
+    });
+
+  return result.items;
+}
+
+// §7.4/§16.9/CU3: matches folio (parcial), nombre de cliente (contiene) o
+// teléfono (contiene) in one query — PocketBase supports dot-notation
+// relation filters (`customer_id.name`/`customer_id.phone`), confirmed
+// live against v0.40.1 in this task's runtime harness.
+export async function searchRentals(
+  query: string,
+): Promise<RentalWithCustomer[]> {
+  const trimmed = query.trim();
+
+  if (!trimmed) {
+    return [];
+  }
+
+  const filter = pb.filter(
+    "folio ~ {:q} || customer_id.name ~ {:q} || customer_id.phone ~ {:q}",
+    { q: trimmed },
+  );
+
+  const result = await pb
+    .collection(RENTALS_COLLECTION)
+    .getList<RentalWithCustomer>(1, RENTAL_SEARCH_PAGE_SIZE, {
+      filter,
+      sort: "-created",
+      expand: "customer_id",
+    });
+
+  return result.items;
 }

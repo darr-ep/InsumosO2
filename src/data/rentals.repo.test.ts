@@ -1,13 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const create = vi.fn();
-const collection = vi.fn(() => ({ create }));
+const getList = vi.fn();
+const collection = vi.fn(() => ({ create, getList }));
+const filter = vi.fn(
+  (raw: string, params: Record<string, unknown>) =>
+    `${raw}::${JSON.stringify(params)}`,
+);
 
 vi.mock("@/data/pocketbaseClient", () => ({
-  pb: { collection },
+  pb: { collection, filter },
 }));
 
-const { createRental } = await import("@/data/rentals.repo");
+const { createRental, listActiveRentals, searchRentals } = await import(
+  "@/data/rentals.repo"
+);
 
 describe("createRental (CU4 orchestration)", () => {
   beforeEach(() => {
@@ -83,5 +90,59 @@ describe("createRental (CU4 orchestration)", () => {
 
     expect(collection).not.toHaveBeenCalledWith("payments");
     expect(result.depositPayment).toBeNull();
+  });
+});
+
+describe("listActiveRentals (§16.6, CU2)", () => {
+  beforeEach(() => {
+    getList.mockReset();
+    collection.mockClear();
+  });
+
+  it("filters by status=ACTIVE, sorted newest first, expanding the customer", async () => {
+    getList.mockResolvedValueOnce({ items: [{ id: "r1" }, { id: "r2" }] });
+
+    const result = await listActiveRentals();
+
+    expect(collection).toHaveBeenCalledWith("rentals");
+    expect(getList).toHaveBeenCalledWith(
+      1,
+      200,
+      expect.objectContaining({ sort: "-created", expand: "customer_id" }),
+    );
+    expect(result).toEqual([{ id: "r1" }, { id: "r2" }]);
+  });
+});
+
+describe("searchRentals (§7.4, §16.9, CU3)", () => {
+  beforeEach(() => {
+    getList.mockReset();
+    collection.mockClear();
+    filter.mockClear();
+  });
+
+  it("returns an empty array without querying PocketBase for a blank query", async () => {
+    const result = await searchRentals("   ");
+
+    expect(result).toEqual([]);
+    expect(collection).not.toHaveBeenCalled();
+  });
+
+  it("matches folio/customer name/customer phone in one filter, expanding the customer", async () => {
+    getList.mockResolvedValueOnce({ items: [{ id: "r1", folio: "R-000184" }] });
+
+    const result = await searchRentals("184");
+
+    expect(collection).toHaveBeenCalledWith("rentals");
+    expect(filter).toHaveBeenCalledWith(
+      "folio ~ {:q} || customer_id.name ~ {:q} || customer_id.phone ~ {:q}",
+      { q: "184" },
+    );
+    expect(getList).toHaveBeenCalledWith(
+      1,
+      20,
+      expect.objectContaining({ expand: "customer_id" }),
+    );
+    expect(result).toEqual([{ id: "r1", folio: "R-000184" }]);
   });
 });
