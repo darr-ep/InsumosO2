@@ -9,6 +9,17 @@
  *
  * `credential_photo` is `protected` per §15 — never publicly resolvable by
  * URL alone, only via a short-lived `pb.files.getToken()` token.
+ *
+ * **Deviation found during Phase 1 task 1.1/1.2 runtime harness (fixed
+ * here):** §11's "PocketBase gives every collection `created`/`updated`
+ * automatically" does not hold for JS-migration `new Collection()` base
+ * collections on v0.40.1 — unlike the built-in `_superusers`/`users` system
+ * collections (which declare explicit `autodate` fields), a base collection
+ * with no `created`/`updated` entries in its `fields` array simply has no
+ * such fields; they don't error, they just don't exist. Confirmed live:
+ * `GET customers/records` returned records with no `created` key at all.
+ * Both fields are now declared explicitly, matching how the built-in
+ * `users` auth collection actually does it.
  */
 migrate(
   (app) => {
@@ -35,6 +46,8 @@ migrate(
           maxSize: 8388608, // 8MB, matches the client-side Zod limit (§20)
           mimeTypes: ["image/jpeg", "image/png", "image/webp"],
         },
+        { name: "created", type: "autodate", onCreate: true, onUpdate: false },
+        { name: "updated", type: "autodate", onCreate: true, onUpdate: true },
       ],
       listRule: "@request.auth.id != ''",
       viewRule: "@request.auth.id != ''",

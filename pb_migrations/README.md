@@ -25,11 +25,16 @@ table so each file only runs once.
   directly against `phone` as the identity field, no synthetic email
   workaround needed).
 - `1787760010_customers_collection.js`
-- `1787760020_rentals_collection.js` -- schema only. The `folio` unique
-  index and the `:isset` guard rules that block client-set
-  `folio`/`status`/`returned_at`/`returned_by`/`created_by`/`updated_by`
-  are Phase 1 task 1.1, landing together with the folio-generation hook
-  (task 1.2) they exist to protect (section 13, section 19.1).
+- `1787760020_rentals_collection.js` -- Phase 0 shipped the field set only.
+  Phase 1 task 1.1 added the unique index on `folio` and the `:isset` guard
+  rules blocking client-set `folio`/`status`/`returned_at`/`returned_by`/
+  `created_by`/`updated_by` on `create`/`update` (section 13), landing
+  together with `pb_hooks/rentals_folio.pb.js` (task 1.2, section 11.1 /
+  19.1) that those guards exist to protect. The migration file was edited
+  in place rather than layering a second migration on top, since it had
+  never been applied against a real deployed/persistent PocketBase instance
+  (only ephemeral local runtime-harness runs) -- see this file's own note
+  above about `pb_data/` being gitignored.
 - `1787760030_rental_items_collection.js`
 - `1787760040_payments_collection.js` -- `payment_type = 'adjustment'`
   requiring `note` is Phase 2 task 2.2 (`pb_hooks/payments_validate.pb.js`,
@@ -42,6 +47,15 @@ v0.40.1 instance: anonymous list/view is empty/404, authenticated
 create/view works, delete is rejected (403), and the protected
 `credential_photo` file 404s without a `pb.files.getToken()` token and
 200s with one (section 15).
+
+## pb_hooks (Phase 1+)
+
+- `rentals_folio.pb.js` (task 1.2) -- `onRecordCreateRequest` hook on
+  `rentals`. Computes the next sequential folio (`R-000001`, ...), forces
+  `status = "ACTIVE"`, and sets `created_by`/`updated_by` from
+  `@request.auth`/`e.auth`. Validated live against PocketBase v0.40.1 --
+  see the integration test evidence in `src/data/rentals.integration.test.ts`
+  (task 1.10).
 
 ## VPS provisioning (task 0.8) -- deliberately not done in this session
 

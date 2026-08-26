@@ -1,17 +1,32 @@
 /// <reference path="../pb_data/types.d.ts" />
 
 /**
- * SDD.md §11 (rentals) + §13 (Base API Rules, Phase 0 task 0.10).
+ * SDD.md §11 (rentals) + §11.1 (folio) + §13 (API Rules) + §19.1 (server-side
+ * status).
  *
- * Phase 0 scope only (per sdd/mvp/tasks): the collection's full §11 field
- * set exists, with the *generic* auth-only API rule pattern from §13's
- * first code block. The rentals-specific guards — unique index on `folio`
- * and the `:isset = false` rules blocking client-set `folio`/`status`/
- * `returned_at`/`returned_by`/`created_by`/`updated_by` — are explicitly
- * Phase 1 task 1.1, done together with the folio-generation hook (task 1.2)
- * that those guards exist to protect. Until Phase 1 lands, nothing enforces
- * `status`/`folio` server-side yet — this collection is schema-only
- * scaffolding, not yet safe to write real rental data against.
+ * Phase 1 task 1.1: adds the rentals-specific guards on top of the Phase 0
+ * schema-only collection —
+ *   - unique index on `folio` (§11.1's safety net against a colliding
+ *     MAX+1 read from `pb_hooks/rentals_folio.pb.js`, task 1.2)
+ *   - `:isset = false` on `create`/`update` blocking the client from ever
+ *     sending `folio`/`status`/`returned_at`/`returned_by`/`created_by`/
+ *     `updated_by` in the request body (§13), so those fields can only be
+ *     set by the hooks running with internal access.
+ *   - explicit `created`/`updated` `autodate` fields (see the customers
+ *     migration's docblock for why this isn't automatic on v0.40.1 despite
+ *     §11's wording) — `created` is what §11 calls a rental's `started_at`,
+ *     and `pb_hooks/rentals_folio.pb.js` (task 1.2) sorts by it to compute
+ *     the next folio, so this collection is unusable without it.
+ *
+ * **API Rule syntax deviation from §13's literal text (confirmed against
+ * v0.40.1, not assumed):** the SDD draft used `@request.data.<field>:isset`;
+ * the real PocketBase filter parser rejects `@request.data` as an unresolved
+ * field and requires `@request.body.<field>:isset` instead (`data` was
+ * renamed to `body` in the v0.23 request-rule rewrite). Verified live: the
+ * literal §13 syntax fails migration apply with "failed to resolve field
+ * ...isset"; `@request.body...` applies cleanly and both the isset guard
+ * (malicious create/update with client-set folio/status) and the legit path
+ * were exercised end-to-end (task 1.10 evidence).
  */
 migrate(
   (app) => {
@@ -94,11 +109,32 @@ migrate(
           cascadeDelete: false,
           maxSelect: 1,
         },
+        { name: "created", type: "autodate", onCreate: true, onUpdate: false },
+        { name: "updated", type: "autodate", onCreate: true, onUpdate: true },
+      ],
+      indexes: [
+        "CREATE UNIQUE INDEX idx_rentals_folio ON rentals (folio)",
       ],
       listRule: "@request.auth.id != ''",
       viewRule: "@request.auth.id != ''",
-      createRule: "@request.auth.id != ''",
-      updateRule: "@request.auth.id != ''",
+      // §13: the client may never set folio/status/returned_at/returned_by/
+      // created_by/updated_by — those are forced server-side by
+      // pb_hooks/rentals_folio.pb.js (create) and
+      // pb_hooks/rentals_return.pb.js (return, Phase 3).
+      createRule:
+        "@request.auth.id != '' && " +
+        "@request.body.folio:isset = false && " +
+        "@request.body.status:isset = false && " +
+        "@request.body.returned_at:isset = false && " +
+        "@request.body.returned_by:isset = false && " +
+        "@request.body.created_by:isset = false && " +
+        "@request.body.updated_by:isset = false",
+      updateRule:
+        "@request.auth.id != '' && " +
+        "@request.body.status:isset = false && " +
+        "@request.body.returned_at:isset = false && " +
+        "@request.body.returned_by:isset = false && " +
+        "@request.body.folio:isset = false",
       deleteRule: null,
     });
 
