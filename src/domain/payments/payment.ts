@@ -1,0 +1,67 @@
+import { z } from "zod";
+
+/**
+ * SDD.md §20 (validaciones — pago, capa Zod) + §7.2 (flujo Registrar pago) +
+ * §11.2 (payment_type) + Anexo A.7 (sugerencia de pago) + CU5. Pure rules
+ * for `PaymentDialog` (task 2.4). `PaymentDialog` only ever creates `rent`
+ * or `adjustment` payments — `deposit` payments are created exclusively as
+ * part of "Nueva renta" (task 1.4/1.5, §7.1), never from this dialog.
+ */
+
+export const PAYMENT_DIALOG_TYPES = ["rent", "adjustment"] as const;
+export type PaymentDialogType = (typeof PAYMENT_DIALOG_TYPES)[number];
+
+export const paymentFormSchema = z
+  .object({
+    payment_type: z.enum(PAYMENT_DIALOG_TYPES),
+    amount: z.number(),
+    note: z.string().trim().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.payment_type === "adjustment") {
+      // §11.2/§20/CU5: an adjustment's note is mandatory (also enforced
+      // server-side by pb_hooks/payments_validate.pb.js, task 2.2) — this
+      // is the client-side immediate-feedback layer, not the last line of
+      // defense.
+      if (!data.note || data.note.trim().length === 0) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["note"],
+          message: "La nota es obligatoria para un ajuste.",
+        });
+      }
+
+      if (data.amount === 0) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["amount"],
+          message: "El monto del ajuste no puede ser cero.",
+        });
+      }
+    } else if (data.amount <= 0) {
+      // §20: "payment.amount: requerido, numérico, > 0 (negativo permitido
+      // solo si payment_type = 'adjustment')".
+      ctx.addIssue({
+        code: "custom",
+        path: ["amount"],
+        message: "El monto debe ser mayor a 0.",
+      });
+    }
+  });
+
+export type PaymentFormValues = z.infer<typeof paymentFormSchema>;
+
+/**
+ * Anexo A.7 + CU5: monto sugerido para "Registrar pago" es el último pago
+ * de tipo `rent` (§7.2's "Último pago: $X"); sin historial de pagos `rent`
+ * previos, se usa `initial_rent_amount` como sugerencia del primer pago.
+ * The `deposit` payment a rental may already have (task 1.4) is
+ * deliberately not "historial" for this rule — see
+ * data/payments.repo.ts#getLastRentPayment.
+ */
+export function suggestedPaymentAmount(
+  lastRentPaymentAmount: number | null,
+  initialRentAmount: number,
+): number {
+  return lastRentPaymentAmount ?? initialRentAmount;
+}
