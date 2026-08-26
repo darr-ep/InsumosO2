@@ -13,12 +13,20 @@ import {
 
 /**
  * SDD.md §7.1 (cliente nuevo: nombre, teléfono, foto de credencial) + §20
- * (validación) + §15 (credencial protegida). Used both standalone (from
- * `CustomerPicker`) and, later, from `CustomerDetailSheet` (Phase 3).
+ * (validación) + §15 (credencial protegida) + §21/Anexo A.5 (falla de
+ * subida no bloquea la creación). Used both standalone (from
+ * `CustomerPicker`) and from `CustomerDetailSheet` (Phase 3, retry upload).
+ *
+ * Phase 3 fix: the photo is no longer required to submit this form —
+ * §21's own failure table and Anexo A.5 say a missing/failed upload must
+ * still let the customer (and rental) be created, marked "credencial
+ * pendiente" (domain/customers/customer.ts#isCredentialPending). Before
+ * this fix the form hard-blocked submission without a photo, which made
+ * A.5's fallback impossible to reach from the UI at all.
  */
 
 export interface CustomerFormSubmitValues extends CustomerFormValues {
-  credentialPhoto: File;
+  credentialPhoto: File | null;
 }
 
 export interface CustomerFormProps {
@@ -69,11 +77,10 @@ export function CustomerForm({
   }
 
   async function submit(values: CustomerFormValues) {
-    if (!photo) {
-      setPhotoError("Selecciona una foto de credencial.");
-      return;
-    }
-
+    // §21/Anexo A.5: no photo is not a blocking error — the customer gets
+    // created "credencial pendiente" instead. `photoError` here can only be
+    // a real validation problem (wrong type/too big), set by
+    // `handlePhotoChange`, never "you forgot the photo".
     await onSubmit({ ...values, credentialPhoto: photo });
   }
 
@@ -125,6 +132,14 @@ export function CustomerForm({
         {photo && !photoError && (
           <p className="text-muted-foreground text-sm">
             Foto seleccionada: {photo.name}
+          </p>
+        )}
+        {!photo && !photoError && (
+          // §16.13's "credencial pendiente" state, made visible at the
+          // point of creation too — not just later in CustomerDetailSheet.
+          <p className="text-muted-foreground text-sm">
+            Sin foto, el cliente se guardará con "credencial pendiente" y
+            podrás agregarla después.
           </p>
         )}
       </div>

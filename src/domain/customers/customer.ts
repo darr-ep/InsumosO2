@@ -45,3 +45,17 @@ export function isAcceptedCredentialPhotoType(mimeType: string): boolean {
 export function isCredentialPhotoWithinSizeLimit(sizeBytes: number): boolean {
   return sizeBytes > 0 && sizeBytes <= CREDENTIAL_PHOTO_MAX_SIZE_BYTES;
 }
+
+/**
+ * §21's failure table + Anexo A.5: "si falla la subida de la foto de
+ * credencial, se permite continuar... el cliente queda marcado 'credencial
+ * pendiente'". `customers.credential_photo` is `required: false` at the
+ * PocketBase schema level (Phase 3 fix — see the migration's docblock), so
+ * there's no separate status field to track this: "pendiente" is simply
+ * "no credential file exists yet", derived from the record itself. Used by
+ * `CustomerDetailSheet` (task 3.4, §16.13's own "credencial pendiente" UI
+ * state) to decide whether to show a warning + retry-upload affordance.
+ */
+export function isCredentialPending(credentialPhoto: string | null | undefined): boolean {
+  return !credentialPhoto;
+}

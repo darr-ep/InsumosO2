@@ -20,6 +20,21 @@
  * `GET customers/records` returned records with no `created` key at all.
  * Both fields are now declared explicitly, matching how the built-in
  * `users` auth collection actually does it.
+ *
+ * **Phase 3 fix (real conflict found+confirmed by sdd-verify, blocking
+ * Phase 3): `credential_photo` is now `required: false`, not `true`.**
+ * §11's own line ("requerido al crear") contradicted §21's failure table
+ * ("Falla al subir foto de credencial → se permite continuar y crear la
+ * renta igual; el cliente queda marcado 'credencial pendiente'") and Anexo
+ * A.5 — with `required: true` at the PocketBase schema level, a client
+ * literally cannot submit the `customers` record at all without the file,
+ * making A.5's fallback structurally impossible, not just unimplemented.
+ * The field stays `type: "file"` and `protected: true` (§15 unchanged) —
+ * only the `required` constraint changes. No new status field was added:
+ * "credencial pendiente" is derived implicitly from
+ * `!customer.credential_photo` (domain/customers/customer.ts —
+ * `isCredentialPending`), matching the project's own "sin ERP, sin roles
+ * complejos" minimalism (§16.15/§4).
  */
 migrate(
   (app) => {
@@ -40,7 +55,7 @@ migrate(
         {
           name: "credential_photo",
           type: "file",
-          required: true,
+          required: false,
           protected: true,
           maxSelect: 1,
           maxSize: 8388608, // 8MB, matches the client-side Zod limit (§20)

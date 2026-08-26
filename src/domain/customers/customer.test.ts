@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   customerFormSchema,
   isAcceptedCredentialPhotoType,
+  isCredentialPending,
   isCredentialPhotoWithinSizeLimit,
 } from "@/domain/customers/customer";
 
@@ -61,5 +62,17 @@ describe("isCredentialPhotoWithinSizeLimit (§20 — max 8MB)", () => {
   it("rejects files over 8MB or empty files", () => {
     expect(isCredentialPhotoWithinSizeLimit(8 * 1024 * 1024 + 1)).toBe(false);
     expect(isCredentialPhotoWithinSizeLimit(0)).toBe(false);
+  });
+});
+
+describe("isCredentialPending (§21/Anexo A.5 — 'credencial pendiente', task 3.4)", () => {
+  it("is pending when credential_photo is empty, null or undefined", () => {
+    expect(isCredentialPending("")).toBe(true);
+    expect(isCredentialPending(null)).toBe(true);
+    expect(isCredentialPending(undefined)).toBe(true);
+  });
+
+  it("is not pending once a credential_photo filename exists", () => {
+    expect(isCredentialPending("credencial_abc123.png")).toBe(false);
   });
 });

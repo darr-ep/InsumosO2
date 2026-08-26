@@ -24,8 +24,18 @@ describe("CustomerForm (§7.1, §20)", () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
-  it("blocks submit when no credential photo was selected, even with valid name/phone", async () => {
-    const onSubmit = vi.fn();
+  it("shows the 'credencial pendiente' hint when no photo has been selected yet", () => {
+    render(<CustomerForm onSubmit={vi.fn()} />);
+
+    expect(
+      screen.getByText(
+        'Sin foto, el cliente se guardará con "credencial pendiente" y podrás agregarla después.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("submits with credentialPhoto: null when no credential photo was selected (§21/Anexo A.5 — 'credencial pendiente', not blocked)", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
     const user = userEvent.setup();
     render(<CustomerForm onSubmit={onSubmit} />);
 
@@ -33,10 +43,12 @@ describe("CustomerForm (§7.1, §20)", () => {
     await user.type(screen.getByLabelText("Teléfono"), "5512345678");
     await user.click(screen.getByRole("button", { name: "Guardar cliente" }));
 
-    expect(
-      await screen.findByText("Selecciona una foto de credencial."),
-    ).toBeInTheDocument();
-    expect(onSubmit).not.toHaveBeenCalled();
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith({
+      name: "Juan Pérez",
+      phone: "5512345678",
+      credentialPhoto: null,
+    });
   });
 
   it("submits name, phone and the selected credential photo when everything is valid", async () => {

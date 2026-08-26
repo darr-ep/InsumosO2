@@ -17,7 +17,12 @@ export interface CustomerRecord extends RecordModel {
 export interface CreateCustomerInput {
   name: string;
   phone: string;
-  credentialPhoto: File;
+  // §21/Anexo A.5: uploading the credential photo may fail or simply not
+  // happen at creation time — the rental/customer must still be creatable.
+  // Optional here on purpose (Phase 3 fix, see the customers migration's
+  // docblock for the full story); `credencial pendiente` is then derived
+  // from an empty `credential_photo` (domain/customers/customer.ts).
+  credentialPhoto?: File | null;
 }
 
 const CUSTOMERS_COLLECTION = "customers";
@@ -53,7 +58,34 @@ export async function createCustomer(
   const formData = new FormData();
   formData.append("name", input.name);
   formData.append("phone", input.phone);
-  formData.append("credential_photo", input.credentialPhoto);
+  // Phase 3 fix: only append the file when present — the field is
+  // `required: false` server-side now, and sending an empty/undefined file
+  // part would defeat the point of making it optional.
+  if (input.credentialPhoto) {
+    formData.append("credential_photo", input.credentialPhoto);
+  }
 
   return pb.collection(CUSTOMERS_COLLECTION).create<CustomerRecord>(formData);
+}
+
+// §16.13/CU7's "credencial pendiente" state needs a way out: task 3.4
+// (`CustomerDetailSheet`) lets staff retry/complete the upload later,
+// without recreating the customer.
+export async function updateCustomerCredentialPhoto(
+  customerId: string,
+  credentialPhoto: File,
+): Promise<CustomerRecord> {
+  const formData = new FormData();
+  formData.append("credential_photo", credentialPhoto);
+
+  return pb
+    .collection(CUSTOMERS_COLLECTION)
+    .update<CustomerRecord>(customerId, formData);
+}
+
+// §16.6/CU7: "Ficha de cliente" needs the customer's own record on demand
+// (opened from Detalle de renta or from the customer picker in Nueva
+// renta) — not just whatever a search result already carried.
+export async function getCustomer(customerId: string): Promise<CustomerRecord> {
+  return pb.collection(CUSTOMERS_COLLECTION).getOne<CustomerRecord>(customerId);
 }
