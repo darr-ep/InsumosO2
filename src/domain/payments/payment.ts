@@ -65,3 +65,11 @@ export function suggestedPaymentAmount(
 ): number {
   return lastRentPaymentAmount ?? initialRentAmount;
 }
+
+// §16.10: "total pagado" in Detalle de renta (task 3.3) — the sum of every
+// payment on the rental (deposit + rent + adjustment, adjustments can be
+// negative per §11.2/§20). No business rule filters any payment_type out
+// here, unlike getLastRentPayment's rent-only filter for the suggestion.
+export function totalPaid(amounts: number[]): number {
+  return amounts.reduce((sum, amount) => sum + amount, 0);
+}

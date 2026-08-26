@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   rentalFormSchema,
   rentalItemTypeLabel,
+  rentalStatusLabel,
   shouldRegisterDepositPayment,
 } from "@/domain/rentals/rental";
 
@@ -58,6 +59,13 @@ describe("rentalItemTypeLabel (§16.14 microcopy)", () => {
   it("labels concentrator and tank in plain Spanish", () => {
     expect(rentalItemTypeLabel("concentrator")).toBe("Concentrador");
     expect(rentalItemTypeLabel("tank")).toBe("Tanque");
+  });
+});
+
+describe("rentalStatusLabel (§16.4 microcopy, task 3.3)", () => {
+  it("labels ACTIVE and RETURNED in plain Spanish", () => {
+    expect(rentalStatusLabel("ACTIVE")).toBe("Activa");
+    expect(rentalStatusLabel("RETURNED")).toBe("Devuelta");
   });
 });
 

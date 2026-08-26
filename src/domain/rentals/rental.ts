@@ -20,6 +20,17 @@ export function rentalItemTypeLabel(itemType: RentalItemType): string {
   return RENTAL_ITEM_TYPE_LABELS[itemType];
 }
 
+// §16.4: "el estado se comunica primero con texto, el color es refuerzo" —
+// `RentalStatusBadge` (task 3.3, §17) always pairs its color with this.
+const RENTAL_STATUS_LABELS: Record<"ACTIVE" | "RETURNED", string> = {
+  ACTIVE: "Activa",
+  RETURNED: "Devuelta",
+};
+
+export function rentalStatusLabel(status: "ACTIVE" | "RETURNED"): string {
+  return RENTAL_STATUS_LABELS[status];
+}
+
 export const rentalItemSchema = z.object({
   item_type: z.enum(RENTAL_ITEM_TYPES),
   quantity: z.number().int().min(1, "La cantidad debe ser al menos 1."),

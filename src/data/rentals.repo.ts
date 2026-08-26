@@ -132,6 +132,30 @@ export async function createRental(
   return { rental, items, depositPayment };
 }
 
+// §16.10/CU6/CU7: `RentalDetailSheet` (task 3.3) always reloads the rental
+// fresh by id — it's opened from a stale Dashboard/Search card and must
+// reflect a status change (e.g. after a return) without a full page reload.
+export async function getRental(
+  rentalId: string,
+): Promise<RentalWithCustomer> {
+  return pb
+    .collection(RENTALS_COLLECTION)
+    .getOne<RentalWithCustomer>(rentalId, { expand: "customer_id" });
+}
+
+// §16.10: "qué tiene rentado" — the rental_items for one rental.
+export async function listItemsForRental(
+  rentalId: string,
+): Promise<RentalItemRecord[]> {
+  const result = await pb
+    .collection(RENTAL_ITEMS_COLLECTION)
+    .getList<RentalItemRecord>(1, ACTIVE_RENTALS_PAGE_SIZE, {
+      filter: pb.filter("rental_id = {:rentalId}", { rentalId }),
+    });
+
+  return result.items;
+}
+
 /**
  * SDD.md §19.1 (endpoint custom de devolución) + §7.3 + CU6. The client
  * NEVER calls `pb.collection('rentals').update(id, { status: 'RETURNED' })`

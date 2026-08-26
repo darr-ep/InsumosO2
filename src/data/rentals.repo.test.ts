@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const create = vi.fn();
 const getList = vi.fn();
+const getOne = vi.fn();
 const send = vi.fn();
-const collection = vi.fn(() => ({ create, getList }));
+const collection = vi.fn(() => ({ create, getList, getOne }));
 const filter = vi.fn(
   (raw: string, params: Record<string, unknown>) =>
     `${raw}::${JSON.stringify(params)}`,
@@ -15,7 +16,9 @@ vi.mock("@/data/pocketbaseClient", () => ({
 
 const {
   createRental,
+  getRental,
   listActiveRentals,
+  listItemsForRental,
   listRentalsForCustomer,
   returnRental,
   searchRentals,
@@ -116,6 +119,47 @@ describe("listActiveRentals (§16.6, CU2)", () => {
       expect.objectContaining({ sort: "-created", expand: "customer_id" }),
     );
     expect(result).toEqual([{ id: "r1" }, { id: "r2" }]);
+  });
+});
+
+describe("getRental (§16.10, CU6/CU7, task 3.3)", () => {
+  beforeEach(() => {
+    getOne.mockReset();
+    collection.mockClear();
+  });
+
+  it("fetches a single rental by id, expanding the customer", async () => {
+    getOne.mockResolvedValueOnce({ id: "r1", status: "ACTIVE" });
+
+    const result = await getRental("r1");
+
+    expect(collection).toHaveBeenCalledWith("rentals");
+    expect(getOne).toHaveBeenCalledWith("r1", { expand: "customer_id" });
+    expect(result).toEqual({ id: "r1", status: "ACTIVE" });
+  });
+});
+
+describe("listItemsForRental (§16.10, task 3.3)", () => {
+  beforeEach(() => {
+    getList.mockReset();
+    collection.mockClear();
+    filter.mockClear();
+  });
+
+  it("filters rental_items by rental_id", async () => {
+    getList.mockResolvedValueOnce({
+      items: [{ id: "i1", item_type: "concentrator", quantity: 2 }],
+    });
+
+    const result = await listItemsForRental("r1");
+
+    expect(collection).toHaveBeenCalledWith("rental_items");
+    expect(filter).toHaveBeenCalledWith("rental_id = {:rentalId}", {
+      rentalId: "r1",
+    });
+    expect(result).toEqual([
+      { id: "i1", item_type: "concentrator", quantity: 2 },
+    ]);
   });
 });
 

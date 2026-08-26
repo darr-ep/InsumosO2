@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   paymentFormSchema,
   suggestedPaymentAmount,
+  totalPaid,
 } from "@/domain/payments/payment";
 
 describe("paymentFormSchema (§20, §7.2)", () => {
@@ -73,5 +74,15 @@ describe("suggestedPaymentAmount (Anexo A.7, CU5)", () => {
 
   it("falls back to initial_rent_amount when there is no rent payment history", () => {
     expect(suggestedPaymentAmount(null, 2800)).toBe(2800);
+  });
+});
+
+describe("totalPaid (§16.10, task 3.3)", () => {
+  it("sums deposit + rent + adjustment payments, adjustments can be negative", () => {
+    expect(totalPaid([1000, 2800, -200])).toBe(3600);
+  });
+
+  it("returns 0 for no payments", () => {
+    expect(totalPaid([])).toBe(0);
   });
 });
