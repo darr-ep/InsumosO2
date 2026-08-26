@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -49,18 +49,22 @@ export function PaymentDialog({
   const [note, setNote] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [wasOpen, setWasOpen] = useState(open);
 
-  // Re-seed the suggested amount whenever the dialog opens fresh for a
-  // (possibly different) rental — §7.2: "monto sugerido = último pago
-  // (editable)".
-  useEffect(() => {
-    if (open) {
-      setMode("rent");
-      setAmount(String(suggestedAmount));
-      setNote("");
-      setFormError(null);
-    }
-  }, [open, suggestedAmount]);
+  // React's recommended "adjust state during render" pattern for resetting
+  // state when a prop changes (https://react.dev/learn/you-might-not-need-an-effect)
+  // instead of a useEffect — §7.2: "monto sugerido = último pago (editable)"
+  // needs to re-seed every time the dialog opens fresh, possibly for a
+  // different rental.
+  if (open && !wasOpen) {
+    setWasOpen(true);
+    setMode("rent");
+    setAmount(String(suggestedAmount));
+    setNote("");
+    setFormError(null);
+  } else if (!open && wasOpen) {
+    setWasOpen(false);
+  }
 
   async function handleConfirm() {
     setFormError(null);
