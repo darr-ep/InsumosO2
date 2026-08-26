@@ -8,6 +8,7 @@
 // Content-Type"). No DOM is needed here anyway.
 import { beforeAll, describe, expect, it } from "vitest";
 import PocketBase from "pocketbase";
+import { createTestUser } from "@/data/testSupport";
 
 /**
  * SDD.md §30 (integration tests ligeros contra una instancia local de
@@ -45,27 +46,15 @@ describe.skipIf(!reachable)(
     let authUserId: string;
 
     beforeAll(async () => {
-      pb = new PocketBase(PB_URL);
+      // Phase 4 task 4.2: users.createRule is now admin-panel-only (see
+      // pb_migrations/1787760000_users_phone_identity.js) — throwaway test
+      // users are created via a superuser session (src/data/testSupport.ts),
+      // never the public create endpoint.
+      const testUser = await createTestUser(PB_URL, "5");
+      pb = testUser.client;
+      authUserId = testUser.userId;
 
-      // Unique per run so repeated local test runs never collide on the
-      // unique `phone` index (§14).
       const uniqueSuffix = Date.now().toString().slice(-9);
-      const phone = `5${uniqueSuffix}`;
-      const email = `phase1-integration-${uniqueSuffix}@insumoso2.local`;
-      const password = "Passw0rd!2026";
-
-      await pb.collection("users").create({
-        email,
-        password,
-        passwordConfirm: password,
-        phone,
-        name: "Integration Test User",
-      });
-
-      const auth = await pb
-        .collection("users")
-        .authWithPassword(phone, password);
-      authUserId = auth.record.id;
 
       // Built as FormData explicitly (matching customers.repo.ts, task
       // 1.4) rather than relying on the SDK's own File-in-object

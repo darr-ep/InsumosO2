@@ -6,6 +6,7 @@
 // support with Node's native fetch.
 import { beforeAll, describe, expect, it } from "vitest";
 import PocketBase from "pocketbase";
+import { createTestUser } from "@/data/testSupport";
 
 /**
  * SDD.md §20 (validación server-side) + §11.2 (payment_type) + §26
@@ -41,27 +42,15 @@ describe.skipIf(!reachable)(
     let authUserId: string;
 
     beforeAll(async () => {
-      pb = new PocketBase(PB_URL);
+      // Phase 4 task 4.2: users.createRule is now admin-panel-only (see
+      // pb_migrations/1787760000_users_phone_identity.js) — throwaway test
+      // users are created via a superuser session (src/data/testSupport.ts),
+      // never the public create endpoint.
+      const testUser = await createTestUser(PB_URL, "6");
+      pb = testUser.client;
+      authUserId = testUser.userId;
 
-      // Unique per run so repeated local test runs never collide on the
-      // unique `phone` index (§14).
       const uniqueSuffix = Date.now().toString().slice(-9);
-      const phone = `6${uniqueSuffix}`;
-      const email = `phase2-integration-${uniqueSuffix}@insumoso2.local`;
-      const password = "Passw0rd!2026";
-
-      await pb.collection("users").create({
-        email,
-        password,
-        passwordConfirm: password,
-        phone,
-        name: "Phase 2 Integration Test User",
-      });
-
-      const auth = await pb
-        .collection("users")
-        .authWithPassword(phone, password);
-      authUserId = auth.record.id;
 
       const minimalPngBase64 =
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
