@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const create = vi.fn();
 const getList = vi.fn();
+const send = vi.fn();
 const collection = vi.fn(() => ({ create, getList }));
 const filter = vi.fn(
   (raw: string, params: Record<string, unknown>) =>
@@ -9,12 +10,16 @@ const filter = vi.fn(
 );
 
 vi.mock("@/data/pocketbaseClient", () => ({
-  pb: { collection, filter },
+  pb: { collection, filter, send },
 }));
 
-const { createRental, listActiveRentals, searchRentals } = await import(
-  "@/data/rentals.repo"
-);
+const {
+  createRental,
+  listActiveRentals,
+  listRentalsForCustomer,
+  returnRental,
+  searchRentals,
+} = await import("@/data/rentals.repo");
 
 describe("createRental (CU4 orchestration)", () => {
   beforeEach(() => {
@@ -111,6 +116,78 @@ describe("listActiveRentals (§16.6, CU2)", () => {
       expect.objectContaining({ sort: "-created", expand: "customer_id" }),
     );
     expect(result).toEqual([{ id: "r1" }, { id: "r2" }]);
+  });
+});
+
+describe("returnRental (§19.1, §7.3, CU6, task 3.1)", () => {
+  beforeEach(() => {
+    send.mockReset();
+  });
+
+  it("POSTs to the custom return endpoint with amount_collected/deposit_returned, never a direct collection update", async () => {
+    send.mockResolvedValueOnce({ id: "rental1", status: "RETURNED" });
+
+    const result = await returnRental({
+      rentalId: "rental1",
+      amountCollected: 2800,
+      depositReturned: 1000,
+    });
+
+    expect(send).toHaveBeenCalledWith("/api/rentals/rental1/return", {
+      method: "POST",
+      body: { amount_collected: 2800, deposit_returned: 1000 },
+    });
+    expect(result).toEqual({ id: "rental1", status: "RETURNED" });
+  });
+
+  it("includes an optional note when provided", async () => {
+    send.mockResolvedValueOnce({ id: "rental1", status: "RETURNED" });
+
+    await returnRental({
+      rentalId: "rental1",
+      amountCollected: 0,
+      depositReturned: 500,
+      note: "acuerdo especial",
+    });
+
+    expect(send).toHaveBeenCalledWith("/api/rentals/rental1/return", {
+      method: "POST",
+      body: {
+        amount_collected: 0,
+        deposit_returned: 500,
+        note: "acuerdo especial",
+      },
+    });
+  });
+});
+
+describe("listRentalsForCustomer (§16.6, CU7, task 3.4)", () => {
+  beforeEach(() => {
+    getList.mockReset();
+    collection.mockClear();
+    filter.mockClear();
+  });
+
+  it("filters by customer_id, sorted newest first, across all statuses", async () => {
+    getList.mockResolvedValueOnce({
+      items: [{ id: "r1", status: "RETURNED" }, { id: "r2", status: "ACTIVE" }],
+    });
+
+    const result = await listRentalsForCustomer("cust1");
+
+    expect(collection).toHaveBeenCalledWith("rentals");
+    expect(filter).toHaveBeenCalledWith("customer_id = {:customerId}", {
+      customerId: "cust1",
+    });
+    expect(getList).toHaveBeenCalledWith(
+      1,
+      200,
+      expect.objectContaining({ sort: "-created" }),
+    );
+    expect(result).toEqual([
+      { id: "r1", status: "RETURNED" },
+      { id: "r2", status: "ACTIVE" },
+    ]);
   });
 });
 

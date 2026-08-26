@@ -65,6 +65,13 @@ export interface CreateRentalResult {
   depositPayment: PaymentRecord | null;
 }
 
+export interface ReturnRentalInput {
+  rentalId: string;
+  amountCollected: number;
+  depositReturned: number;
+  note?: string;
+}
+
 // §16.6/CU2 (Dashboard) and §7.4/CU3 (Buscar) both need the customer's
 // name/phone alongside a rental — expanded via PocketBase's `expand`
 // query param (task 2.5/2.6) rather than a second round-trip per rental.
@@ -123,6 +130,44 @@ export async function createRental(
     : null;
 
   return { rental, items, depositPayment };
+}
+
+/**
+ * SDD.md §19.1 (endpoint custom de devolución) + §7.3 + CU6. The client
+ * NEVER calls `pb.collection('rentals').update(id, { status: 'RETURNED' })`
+ * directly (task 1.1's `:isset` guards would reject it anyway) — this is
+ * the only path to closing a rental, mirroring `createRental`'s relationship
+ * to `pb_hooks/rentals_folio.pb.js`. The real logic (status/returned_at/
+ * returned_by/final payment) lives entirely in
+ * `pb_hooks/rentals_return.pb.js` (task 3.1); this is a thin wrapper.
+ */
+export async function returnRental(
+  input: ReturnRentalInput,
+): Promise<RentalRecord> {
+  return pb.send<RentalRecord>(`/api/rentals/${input.rentalId}/return`, {
+    method: "POST",
+    body: {
+      amount_collected: input.amountCollected,
+      deposit_returned: input.depositReturned,
+      ...(input.note ? { note: input.note } : {}),
+    },
+  });
+}
+
+// §16.6/CU7: "Ficha de cliente" shows a customer's full rental history
+// (all statuses, not just ACTIVE) — opened from Detalle de renta or from
+// the customer picker in Nueva renta (task 3.4).
+export async function listRentalsForCustomer(
+  customerId: string,
+): Promise<RentalRecord[]> {
+  const result = await pb
+    .collection(RENTALS_COLLECTION)
+    .getList<RentalRecord>(1, ACTIVE_RENTALS_PAGE_SIZE, {
+      filter: pb.filter("customer_id = {:customerId}", { customerId }),
+      sort: "-created",
+    });
+
+  return result.items;
 }
 
 // §16.3/§16.6/CU2: Dashboard's active-rentals list + count. "requiere
