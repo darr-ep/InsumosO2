@@ -56,6 +56,17 @@ create/view works, delete is rejected (403), and the protected
   `@request.auth`/`e.auth`. Validated live against PocketBase v0.40.1 --
   see the integration test evidence in `src/data/rentals.integration.test.ts`
   (task 1.10).
+- `payments_validate.pb.js` (task 2.2) -- `onRecordCreateRequest` hook on
+  `payments`. Rejects `payment_type = "adjustment"` without a non-blank
+  `note` (§20/CU5), and sets `created_by` from `@request.auth`/`e.auth`
+  (§26) -- closing a real gap the Phase 0 version of the `payments`
+  migration left open (nothing blocked a client from sending `created_by`
+  directly). `1787760040_payments_collection.js` was edited in place to add
+  the matching `@request.body.created_by:isset = false` guard, same
+  justification as every other in-place migration edit in this repo: never
+  applied against a real deployed/persistent instance. Validated live
+  against PocketBase v0.40.1 -- see
+  `src/data/payments.integration.test.ts` (task 2.8).
 
 ## Running the Phase 1 integration test (task 1.10)
 
@@ -75,6 +86,13 @@ than the project default `jsdom`, since jsdom's `FormData`/`File` didn't
 reliably interoperate with Node's native `fetch` for multipart uploads
 in this test runner (confirmed live: a jsdom `FormData` got rejected with
 "400: Unsupported Content-Type").
+
+## Running the Phase 2 integration test (task 2.8)
+
+`src/data/payments.integration.test.ts` follows the exact same pattern:
+`VITE_POCKETBASE_URL=http://127.0.0.1:8090 npm test -- src/data/payments.integration`
+against a local instance with this repo's migrations/hooks applied. Same
+skip-gracefully behavior when nothing answers `/api/health`.
 
 ## VPS provisioning (task 0.8) -- deliberately not done in this session
 
