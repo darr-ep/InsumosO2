@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dev-dist/
+*.tsbuildinfo
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Test / coverage
+coverage/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+
+# PocketBase local dev data (never commit SQLite data or uploaded files)
+pb_data/
+pb_local/
+
+# Throwaway validation spikes (see sdd-init/insumoso2) — not part of this
+# app's scaffold or git history, kept on disk only for local reference.
+/test-pocketbase/
+/test-impresora/
