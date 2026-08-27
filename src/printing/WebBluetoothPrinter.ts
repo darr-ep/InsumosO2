@@ -162,3 +162,11 @@ export class WebBluetoothPrinter implements ReceiptPrinter {
     }
   }
 }
+
+/**
+ * Shared instance (task 5.4) — `ReceiptDialog` prints potentially more
+ * than once per tab session (e.g. a rental receipt now, a devolución
+ * receipt later), and reusing the same instance is what makes `connect()`
+ * skip the native picker on the second print (§23.3).
+ */
+export const webBluetoothPrinter: ReceiptPrinter = new WebBluetoothPrinter();

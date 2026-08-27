@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,6 +14,7 @@ import {
   isShareAvailable,
   shareReceipt,
 } from "@/printing/ShareFallbackPrinter";
+import { webBluetoothPrinter } from "@/printing/WebBluetoothPrinter";
 
 /**
  * SDD.md §22 (generación de comprobantes — modal, no pantalla/ruta aparte,
@@ -22,6 +23,16 @@ import {
  * → confirmar → modal Comprobante de devolución) + §16.6. One shared modal
  * for both flows (task 1.9, extended task 3.2) — `receipt.kind`
  * discriminates the content.
+ *
+ * §23.2/§23.3/§23.4/CU8 (task 5.4): Bluetooth printing is tried first when
+ * available (`webBluetoothPrinter.isAvailable()` — resolves `false` on
+ * unsupported browsers/devices such as iOS Safari, so the button simply
+ * never appears there, per CU8's iPhone scenario). Any failure — no
+ * printer available, connection failure, write failure — shows §21's
+ * exact message plus a retry option; `Compartir` (`ShareFallbackPrinter`)
+ * always stays available alongside it. Printing never touches
+ * `onOpenChange` — the rental is already saved by the time this dialog
+ * is open, regardless of print outcome (§23's "regla de oro").
  */
 
 const currencyFormatter = new Intl.NumberFormat("es-MX", {
@@ -43,6 +54,27 @@ export function ReceiptDialog({
   const [shareStatus, setShareStatus] = useState<
     "idle" | "shared" | "error"
   >("idle");
+  const [printAvailable, setPrintAvailable] = useState(false);
+  const [printStatus, setPrintStatus] = useState<
+    "idle" | "printing" | "printed" | "failed"
+  >("idle");
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    let cancelled = false;
+    webBluetoothPrinter.isAvailable().then((available) => {
+      if (!cancelled) {
+        setPrintAvailable(available);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   async function handleShare() {
     if (!receipt) {
@@ -58,12 +90,28 @@ export function ReceiptDialog({
     }
   }
 
+  async function handlePrint() {
+    if (!receipt) {
+      return;
+    }
+
+    setPrintStatus("printing");
+    try {
+      await webBluetoothPrinter.connect();
+      await webBluetoothPrinter.print(receipt);
+      setPrintStatus("printed");
+    } catch {
+      setPrintStatus("failed");
+    }
+  }
+
   return (
     <Dialog
       open={open}
       onOpenChange={(next) => {
         if (!next) {
           setShareStatus("idle");
+          setPrintStatus("idle");
         }
         onOpenChange(next);
       }}
@@ -171,8 +219,31 @@ export function ReceiptDialog({
                 Comprobante compartido.
               </p>
             )}
+            {printStatus === "failed" && (
+              <p className="text-destructive text-sm">
+                La renta se guardó correctamente, pero no se pudo imprimir el
+                comprobante.
+              </p>
+            )}
+            {printStatus === "printed" && (
+              <p className="text-muted-foreground text-sm">
+                Comprobante impreso.
+              </p>
+            )}
 
             <DialogFooter>
+              {printAvailable && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handlePrint}
+                  disabled={printStatus === "printing"}
+                >
+                  {printStatus === "failed"
+                    ? "Reintentar impresión"
+                    : "Imprimir"}
+                </Button>
+              )}
               {isShareAvailable() && (
                 <Button type="button" variant="outline" onClick={handleShare}>
                   Compartir

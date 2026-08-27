@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ReceiptDialog } from "@/components/ReceiptDialog";
+import { webBluetoothPrinter } from "@/printing/WebBluetoothPrinter";
 import type { RentalReceiptData, ReturnReceiptData } from "@/domain/rentals/receipt";
 
 const shareReceipt = vi.fn();
@@ -15,6 +16,21 @@ vi.mock("@/printing/ShareFallbackPrinter", async () => {
     shareReceipt: (...args: unknown[]) => shareReceipt(...args),
   };
 });
+
+// SDD.md §23.2/§23.4/CU8 (task 5.4). WebBluetoothPrinter itself is fully
+// covered in WebBluetoothPrinter.test.ts (task 5.3) — here we only verify
+// ReceiptDialog's orchestration: show/hide the button based on
+// `isAvailable()`, the Bluetooth-first → failure-message → retry/share
+// flow (§21), and that a print failure never touches `onOpenChange`
+// (the rental stays saved regardless of print outcome).
+vi.mock("@/printing/WebBluetoothPrinter", () => ({
+  webBluetoothPrinter: {
+    isAvailable: vi.fn(),
+    connect: vi.fn(),
+    print: vi.fn(),
+    disconnect: vi.fn(),
+  },
+}));
 
 const receipt: RentalReceiptData = {
   kind: "create",
@@ -46,9 +62,21 @@ const returnReceipt: ReturnReceiptData = {
 };
 
 describe("ReceiptDialog (§22)", () => {
+  beforeEach(() => {
+    // Sensible default for tests that don't care about Bluetooth printing
+    // — most existing tests predate task 5.4 and stub `navigator` without
+    // `bluetooth` anyway; tests that DO exercise the print flow override
+    // this explicitly.
+    vi.mocked(webBluetoothPrinter.isAvailable).mockResolvedValue(false);
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
     shareReceipt.mockReset();
+    vi.mocked(webBluetoothPrinter.isAvailable).mockReset();
+    vi.mocked(webBluetoothPrinter.connect).mockReset();
+    vi.mocked(webBluetoothPrinter.print).mockReset();
+    vi.mocked(webBluetoothPrinter.disconnect).mockReset();
   });
 
   it("renders nothing (no dialog content) when there is no receipt", () => {
@@ -147,5 +175,118 @@ describe("ReceiptDialog (§22)", () => {
     await user.click(closeButtons[0]);
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+});
+
+describe("ReceiptDialog Bluetooth printing (§23.2/§23.3/§23.4, CU8, task 5.4)", () => {
+  beforeEach(() => {
+    vi.mocked(webBluetoothPrinter.isAvailable).mockResolvedValue(false);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.mocked(webBluetoothPrinter.isAvailable).mockReset();
+    vi.mocked(webBluetoothPrinter.connect).mockReset();
+    vi.mocked(webBluetoothPrinter.print).mockReset();
+    vi.mocked(webBluetoothPrinter.disconnect).mockReset();
+  });
+
+  it("does not show an Imprimir button when Bluetooth printing isn't available (CU8 — e.g. iPhone)", async () => {
+    vi.mocked(webBluetoothPrinter.isAvailable).mockResolvedValue(false);
+    vi.stubGlobal("navigator", {});
+    render(<ReceiptDialog open onOpenChange={vi.fn()} receipt={receipt} />);
+
+    await screen.findByRole("heading", { name: "Comprobante R-000001" });
+    expect(
+      screen.queryByRole("button", { name: "Imprimir" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows an Imprimir button when Bluetooth printing is available", async () => {
+    vi.mocked(webBluetoothPrinter.isAvailable).mockResolvedValue(true);
+    vi.stubGlobal("navigator", {});
+    render(<ReceiptDialog open onOpenChange={vi.fn()} receipt={receipt} />);
+
+    expect(
+      await screen.findByRole("button", { name: "Imprimir" }),
+    ).toBeInTheDocument();
+  });
+
+  it("connects and prints via Bluetooth, showing a confirmation on success (CU8 scenario 1)", async () => {
+    vi.mocked(webBluetoothPrinter.isAvailable).mockResolvedValue(true);
+    vi.mocked(webBluetoothPrinter.connect).mockResolvedValue(undefined);
+    vi.mocked(webBluetoothPrinter.print).mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", {});
+    const user = userEvent.setup();
+    render(<ReceiptDialog open onOpenChange={vi.fn()} receipt={receipt} />);
+
+    await user.click(await screen.findByRole("button", { name: "Imprimir" }));
+
+    expect(await screen.findByText("Comprobante impreso.")).toBeInTheDocument();
+    expect(webBluetoothPrinter.connect).toHaveBeenCalled();
+    expect(webBluetoothPrinter.print).toHaveBeenCalledWith(receipt);
+  });
+
+  it("shows the exact §21 failure message and a retry button when printing fails, without closing the dialog (CU8 scenario 3)", async () => {
+    vi.mocked(webBluetoothPrinter.isAvailable).mockResolvedValue(true);
+    vi.mocked(webBluetoothPrinter.connect).mockRejectedValue(
+      new Error("No se encontró ninguna impresora."),
+    );
+    vi.stubGlobal("navigator", {});
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ReceiptDialog open onOpenChange={onOpenChange} receipt={receipt} />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Imprimir" }));
+
+    expect(
+      await screen.findByText(
+        "La renta se guardó correctamente, pero no se pudo imprimir el comprobante.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Reintentar impresión" }),
+    ).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it("can succeed on retry after a failed print attempt (triangulation)", async () => {
+    vi.mocked(webBluetoothPrinter.isAvailable).mockResolvedValue(true);
+    vi.mocked(webBluetoothPrinter.connect)
+      .mockRejectedValueOnce(new Error("busy"))
+      .mockResolvedValueOnce(undefined);
+    vi.mocked(webBluetoothPrinter.print).mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", {});
+    const user = userEvent.setup();
+    render(<ReceiptDialog open onOpenChange={vi.fn()} receipt={receipt} />);
+
+    await user.click(await screen.findByRole("button", { name: "Imprimir" }));
+    await screen.findByText(
+      "La renta se guardó correctamente, pero no se pudo imprimir el comprobante.",
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Reintentar impresión" }),
+    );
+
+    expect(await screen.findByText("Comprobante impreso.")).toBeInTheDocument();
+  });
+
+  it("also offers Bluetooth printing for a devolución receipt", async () => {
+    vi.mocked(webBluetoothPrinter.isAvailable).mockResolvedValue(true);
+    vi.mocked(webBluetoothPrinter.connect).mockResolvedValue(undefined);
+    vi.mocked(webBluetoothPrinter.print).mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", {});
+    const user = userEvent.setup();
+    render(
+      <ReceiptDialog open onOpenChange={vi.fn()} receipt={returnReceipt} />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Imprimir" }));
+
+    expect(await screen.findByText("Comprobante impreso.")).toBeInTheDocument();
+    expect(webBluetoothPrinter.print).toHaveBeenCalledWith(returnReceipt);
   });
 });
