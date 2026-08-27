@@ -10,6 +10,7 @@ import {
   searchCustomers,
   type CustomerRecord,
 } from "@/data/customers.repo";
+import { handleIfStaleSession } from "@/data/staleSession";
 
 /**
  * SDD.md §7.1 ("Buscar/crear cliente") + §17. First section of "Nueva
@@ -98,7 +99,14 @@ export function CustomerPicker({
       onSelect(customer);
       setMode("search");
       setQuery("");
-    } catch {
+    } catch (error) {
+      // §14 gap-fill: a rotated/expired session (still locally "valid" per
+      // `pb.authStore.isValid`) surfaces here as this exact generic
+      // "no se pudo guardar" — redirect to `/login` instead of showing a
+      // confusing domain error the user can never fix by retrying.
+      if (handleIfStaleSession(error)) {
+        return;
+      }
       setError("No se pudo guardar el cliente. Intenta de nuevo.");
     } finally {
       setIsCreating(false);

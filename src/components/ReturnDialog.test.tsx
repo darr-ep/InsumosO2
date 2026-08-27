@@ -2,12 +2,23 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
+import { ClientResponseError } from "pocketbase";
 import { ReturnDialog } from "@/components/ReturnDialog";
+import { consumeSessionMessage, STALE_SESSION_MESSAGE } from "@/data/staleSession";
 
 const returnRental = vi.fn();
 
 vi.mock("@/data/rentals.repo", () => ({
   returnRental: (...args: unknown[]) => returnRental(...args),
+}));
+
+const clear = vi.fn();
+
+// §14 gap-fill: `handleConfirm`'s catch block calls the real
+// `staleSession.ts` helper, which calls `pb.authStore.clear()` — mocked
+// the same way App.test.tsx already mocks `pb`.
+vi.mock("@/data/pocketbaseClient", () => ({
+  pb: { authStore: { clear: (...args: unknown[]) => clear(...args) } },
 }));
 
 // Gap-fill finding 4 (§16.13/§17): ReturnDialog gave zero success
@@ -39,6 +50,8 @@ describe("ReturnDialog (§7.3, §16.8, CU6, task 3.2)", () => {
     baseProps.onOpenChange.mockReset();
     vi.mocked(toast.success).mockReset();
     vi.mocked(toast.error).mockReset();
+    clear.mockReset();
+    consumeSessionMessage();
   });
 
   it("shows cliente, productos, fecha de inicio, tiempo transcurrido and depósito, with editable suggested amounts (CU6 first scenario)", () => {
@@ -150,6 +163,52 @@ describe("ReturnDialog (§7.3, §16.8, CU6, task 3.2)", () => {
       ),
     ).toBeInTheDocument();
     expect(baseProps.onOpenChange).not.toHaveBeenCalled();
+    expect(clear).not.toHaveBeenCalled();
+  });
+
+  it("still shows the generic return-error message (never redirects) on this app's own business-rule rejection, e.g. an already-returned rental (§14 gap-fill, requirement: don't swallow real errors)", async () => {
+    returnRental.mockRejectedValueOnce(
+      new ClientResponseError({
+        status: 400,
+        response: { message: "Esta renta ya fue devuelta.", data: {} },
+      }),
+    );
+    const user = userEvent.setup();
+    render(<ReturnDialog {...baseProps} />);
+
+    await user.click(
+      screen.getByRole("button", { name: "Confirmar devolución" }),
+    );
+
+    expect(
+      await screen.findByText(
+        "No se pudo registrar la devolución. Verifica tu conexión e intenta de nuevo.",
+      ),
+    ).toBeInTheDocument();
+    expect(clear).not.toHaveBeenCalled();
+  });
+
+  it("clears the session instead of showing the generic return-error message when the call fails with a stale-session-shaped error (§14 gap-fill)", async () => {
+    returnRental.mockRejectedValueOnce(
+      new ClientResponseError({
+        status: 400,
+        response: { message: "Failed to update record.", data: {} },
+      }),
+    );
+    const user = userEvent.setup();
+    render(<ReturnDialog {...baseProps} />);
+
+    await user.click(
+      screen.getByRole("button", { name: "Confirmar devolución" }),
+    );
+
+    await waitFor(() => expect(clear).toHaveBeenCalledTimes(1));
+    expect(
+      screen.queryByText(
+        "No se pudo registrar la devolución. Verifica tu conexión e intenta de nuevo.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(consumeSessionMessage()).toBe(STALE_SESSION_MESSAGE);
   });
 
   it("shows a Guardando… loading label on the confirm button while submitting, reverting after success (§16.13)", async () => {

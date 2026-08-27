@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, render, screen, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { ClientResponseError } from "pocketbase";
 import { App } from "@/app/App";
+import { STALE_SESSION_MESSAGE } from "@/data/staleSession";
 
 // Both real tabs behind the nav now fetch data on mount (DashboardScreen,
 // task 2.5; SearchScreen, task 2.6) — mocked here so this smoke test stays
@@ -10,10 +12,17 @@ import { App } from "@/app/App";
 const listActiveRentals = vi.fn();
 const searchRentals = vi.fn();
 const getLoginDirectory = vi.fn();
+const createCustomer = vi.fn();
+const searchCustomers = vi.fn();
 
 vi.mock("@/data/rentals.repo", () => ({
   listActiveRentals: (...args: unknown[]) => listActiveRentals(...args),
   searchRentals: (...args: unknown[]) => searchRentals(...args),
+}));
+
+vi.mock("@/data/customers.repo", () => ({
+  createCustomer: (...args: unknown[]) => createCustomer(...args),
+  searchCustomers: (...args: unknown[]) => searchCustomers(...args),
 }));
 
 vi.mock("@/data/auth.repo", () => ({
@@ -39,7 +48,13 @@ vi.mock("@/data/pocketbaseClient", () => ({
         changeListener = callback;
         return () => {};
       },
-      clear: vi.fn(),
+      // §14 gap-fill: mirrors real `pb.authStore.clear()` behavior — it
+      // both flips local state AND notifies subscribers, which is what
+      // makes `RequireAuth` react live to a stale-session redirect.
+      clear: vi.fn(() => {
+        isValidState = false;
+        changeListener?.();
+      }),
     },
   },
 }));
@@ -49,6 +64,8 @@ describe("App", () => {
     listActiveRentals.mockReset().mockResolvedValue([]);
     searchRentals.mockReset().mockResolvedValue([]);
     getLoginDirectory.mockReset().mockResolvedValue([]);
+    createCustomer.mockReset();
+    searchCustomers.mockReset();
     isValidState = true;
     changeListener = null;
   });
@@ -172,6 +189,60 @@ describe("App", () => {
       expect(
         await screen.findByRole("heading", { name: "Dashboard" }),
       ).toBeInTheDocument();
+    });
+  });
+
+  describe("stale session (§14 gap-fill — real live bug: 'Crear cliente' failing with a rotated tokenKey)", () => {
+    it("redirects from Nueva renta to /login with the session-expired message when creating a customer fails with a stale-session-shaped error", async () => {
+      createCustomer.mockRejectedValueOnce(
+        new ClientResponseError({
+          status: 400,
+          response: { message: "Failed to create record.", data: {} },
+        }),
+      );
+      window.history.pushState({}, "", "/nueva-renta");
+      const user = userEvent.setup();
+      render(<App />);
+
+      await screen.findByRole("heading", { name: "Nueva renta" });
+
+      await user.click(screen.getByRole("button", { name: "Cliente nuevo" }));
+      await user.type(screen.getByLabelText("Nombre"), "Darrell");
+      await user.type(screen.getByLabelText("Teléfono"), "5512345678");
+      await user.click(screen.getByRole("button", { name: "Crear cliente" }));
+
+      // Redirected to /login, not left on a confusing generic error.
+      expect(await screen.findByText("Insumos O2")).toBeInTheDocument();
+      expect(
+        screen.queryByRole("heading", { name: "Nueva renta" }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByText("No se pudo guardar el cliente. Intenta de nuevo."),
+      ).not.toBeInTheDocument();
+      expect(await screen.findByText(STALE_SESSION_MESSAGE)).toBeInTheDocument();
+    });
+
+    it("does NOT redirect and keeps the generic error visible when creating a customer fails with a normal (non-stale-session) error", async () => {
+      createCustomer.mockRejectedValueOnce(new Error("network down"));
+      window.history.pushState({}, "", "/nueva-renta");
+      const user = userEvent.setup();
+      render(<App />);
+
+      await screen.findByRole("heading", { name: "Nueva renta" });
+
+      await user.click(screen.getByRole("button", { name: "Cliente nuevo" }));
+      await user.type(screen.getByLabelText("Nombre"), "Darrell");
+      await user.type(screen.getByLabelText("Teléfono"), "5512345678");
+      await user.click(screen.getByRole("button", { name: "Crear cliente" }));
+
+      expect(
+        await screen.findByText("No se pudo guardar el cliente. Intenta de nuevo."),
+      ).toBeInTheDocument();
+      await waitFor(() =>
+        expect(
+          screen.getByRole("heading", { name: "Nueva renta" }),
+        ).toBeInTheDocument(),
+      );
     });
   });
 });

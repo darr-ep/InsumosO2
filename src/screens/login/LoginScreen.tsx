@@ -9,6 +9,7 @@ import {
   loginWithPassword,
   type LoginDirectoryEntry,
 } from "@/data/auth.repo";
+import { consumeSessionMessage } from "@/data/staleSession";
 
 /**
  * Real login screen (§14, §16.6, CU1) — Gap-fill fix (found post-Phase-5,
@@ -36,6 +37,11 @@ export function LoginScreen() {
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // §14 gap-fill: a stale/rotated session redirects here via
+  // `handleIfStaleSession` (staleSession.ts) — read once on mount so a
+  // visitor who just got redirected understands why, instead of silently
+  // landing back on the picker with no explanation.
+  const [sessionExpiredMessage] = useState(() => consumeSessionMessage());
 
   useEffect(() => {
     let cancelled = false;
@@ -107,6 +113,10 @@ export function LoginScreen() {
     <div className="flex min-h-dvh flex-col items-center justify-center gap-6 p-6 text-center">
       <img src="/logo.png" alt="Insumos O2" className="size-20" />
       <h1 className="text-xl font-semibold">Insumos O2</h1>
+
+      {sessionExpiredMessage && (
+        <p className="text-destructive text-sm">{sessionExpiredMessage}</p>
+      )}
 
       {directoryError && (
         <p className="text-destructive text-sm">

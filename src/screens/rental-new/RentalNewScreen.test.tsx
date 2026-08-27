@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
+import { ClientResponseError } from "pocketbase";
 import { RentalNewScreen } from "@/screens/rental-new/RentalNewScreen";
+import { consumeSessionMessage, STALE_SESSION_MESSAGE } from "@/data/staleSession";
 
 const searchCustomers = vi.fn();
 const createCustomer = vi.fn();
@@ -10,6 +12,14 @@ const getCustomer = vi.fn();
 const createRental = vi.fn();
 const listRentalsForCustomer = vi.fn();
 const navigate = vi.fn();
+const clear = vi.fn();
+
+// §14 gap-fill: `handleConfirm`'s catch block calls the real
+// `staleSession.ts` helper, which calls `pb.authStore.clear()` — mocked
+// the same way App.test.tsx already mocks `pb`.
+vi.mock("@/data/pocketbaseClient", () => ({
+  pb: { authStore: { clear: (...args: unknown[]) => clear(...args) } },
+}));
 
 vi.mock("@/data/customers.repo", () => ({
   searchCustomers: (...args: unknown[]) => searchCustomers(...args),
@@ -47,6 +57,8 @@ describe("RentalNewScreen (§7.1, §16.7, CU4)", () => {
     createRental.mockReset();
     listRentalsForCustomer.mockReset();
     navigate.mockReset();
+    clear.mockReset();
+    consumeSessionMessage();
     vi.stubGlobal("navigator", {});
   });
 
@@ -160,6 +172,40 @@ describe("RentalNewScreen (§7.1, §16.7, CU4)", () => {
     ).toBeInTheDocument();
     // Customer selection survives the failed attempt (§21 — no recapturing).
     expect(screen.getByText("Juan Pérez")).toBeInTheDocument();
+    expect(clear).not.toHaveBeenCalled();
+  });
+
+  it("clears the session instead of showing the generic save-error message when confirming fails with a stale-session-shaped error (§14 gap-fill)", async () => {
+    searchCustomers.mockResolvedValue([juan]);
+    createRental.mockRejectedValue(
+      new ClientResponseError({
+        status: 400,
+        response: { message: "Failed to create record.", data: {} },
+      }),
+    );
+
+    const user = userEvent.setup();
+    renderScreen();
+
+    await user.type(
+      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
+      "Juan",
+    );
+    await user.click(
+      await screen.findByRole("button", { name: /Juan Pérez/ }),
+    );
+    await user.click(screen.getByLabelText("Agregar un tanque"));
+    await user.type(screen.getByLabelText("Renta"), "1500");
+
+    await user.click(screen.getByRole("button", { name: "Confirmar renta" }));
+
+    await waitFor(() => expect(clear).toHaveBeenCalledTimes(1));
+    expect(
+      screen.queryByText(
+        "No se pudo guardar la renta. Verifica tu conexión e intenta de nuevo.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(consumeSessionMessage()).toBe(STALE_SESSION_MESSAGE);
   });
 
   it("shows a Guardando… loading label on the confirm button while submitting, reverting after success (§16.13)", async () => {

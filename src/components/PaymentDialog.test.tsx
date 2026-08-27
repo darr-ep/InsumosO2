@@ -1,13 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
+import { ClientResponseError } from "pocketbase";
 import { PaymentDialog } from "@/components/PaymentDialog";
+import { consumeSessionMessage, STALE_SESSION_MESSAGE } from "@/data/staleSession";
 
 const createPayment = vi.fn();
 
 vi.mock("@/data/payments.repo", () => ({
   createPayment: (...args: unknown[]) => createPayment(...args),
+}));
+
+const clear = vi.fn();
+
+// §14 gap-fill: `handleConfirm`'s catch block calls the real
+// `staleSession.ts` helper, which calls `pb.authStore.clear()` — mocked
+// the same way App.test.tsx already mocks `pb`.
+vi.mock("@/data/pocketbaseClient", () => ({
+  pb: { authStore: { clear: (...args: unknown[]) => clear(...args) } },
 }));
 
 // Gap-fill finding 4 (§16.13/§17): PaymentDialog gave zero success
@@ -22,6 +33,8 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
     createPayment.mockReset();
     vi.mocked(toast.success).mockReset();
     vi.mocked(toast.error).mockReset();
+    clear.mockReset();
+    consumeSessionMessage();
   });
 
   it("pre-fills the amount with the suggested value and registers a rent payment", async () => {
@@ -195,6 +208,69 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         "No se pudo registrar el pago. Verifica tu conexión e intenta de nuevo.",
       ),
     ).toBeInTheDocument();
+    expect(clear).not.toHaveBeenCalled();
+  });
+
+  it("still shows the generic payment-error message (never redirects) on this app's own business-rule rejection, e.g. the payment-race guard (§14 gap-fill, requirement: don't swallow real errors)", async () => {
+    createPayment.mockRejectedValueOnce(
+      new ClientResponseError({
+        status: 400,
+        response: {
+          message: "No se puede registrar un pago: la renta ya fue devuelta.",
+          data: {},
+        },
+      }),
+    );
+    const user = userEvent.setup();
+
+    render(
+      <PaymentDialog
+        open
+        onOpenChange={() => {}}
+        rentalId="r1"
+        suggestedAmount={3000}
+        hasPreviousRentPayment
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
+
+    expect(
+      await screen.findByText(
+        "No se pudo registrar el pago. Verifica tu conexión e intenta de nuevo.",
+      ),
+    ).toBeInTheDocument();
+    expect(clear).not.toHaveBeenCalled();
+  });
+
+  it("clears the session instead of showing the generic payment-error message when the create fails with a stale-session-shaped error (§14 gap-fill)", async () => {
+    createPayment.mockRejectedValueOnce(
+      new ClientResponseError({
+        status: 400,
+        response: { message: "Failed to create record.", data: {} },
+      }),
+    );
+    const user = userEvent.setup();
+
+    render(
+      <PaymentDialog
+        open
+        onOpenChange={() => {}}
+        rentalId="r1"
+        suggestedAmount={3000}
+        hasPreviousRentPayment
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
+
+    await waitFor(() => expect(clear).toHaveBeenCalledTimes(1));
+    expect(
+      screen.queryByText(
+        "No se pudo registrar el pago. Verifica tu conexión e intenta de nuevo.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(consumeSessionMessage()).toBe(STALE_SESSION_MESSAGE);
   });
 
   it("shows a Guardando… loading label on the confirm button while submitting, reverting after success (§16.13)", async () => {

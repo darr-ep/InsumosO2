@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { PaymentSuggestionField } from "@/components/PaymentSuggestionField";
 import { createPayment } from "@/data/payments.repo";
+import { handleIfStaleSession } from "@/data/staleSession";
 import type { PaymentRecord } from "@/data/rentals.repo";
 import {
   paymentFormSchema,
@@ -100,7 +101,13 @@ export function PaymentDialog({
       // to notice the change on their own.
       toast.success("Pago registrado.");
       onOpenChange(false);
-    } catch {
+    } catch (error) {
+      // §14 gap-fill: a rotated/expired session (still locally "valid" per
+      // `pb.authStore.isValid`) surfaces here as this exact generic
+      // save-error — redirect to `/login` instead.
+      if (handleIfStaleSession(error)) {
+        return;
+      }
       // §21: never show "saved" when the write failed — keep the form as
       // the user left it so they can retry without recapturing everything.
       setFormError(

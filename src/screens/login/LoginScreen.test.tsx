@@ -4,6 +4,11 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { ClientResponseError } from "pocketbase";
 import { LoginScreen } from "@/screens/login/LoginScreen";
+import {
+  consumeSessionMessage,
+  handleIfStaleSession,
+  STALE_SESSION_MESSAGE,
+} from "@/data/staleSession";
 
 const getLoginDirectory = vi.fn();
 const loginWithPassword = vi.fn();
@@ -12,6 +17,14 @@ const navigate = vi.fn();
 vi.mock("@/data/auth.repo", () => ({
   getLoginDirectory: (...args: unknown[]) => getLoginDirectory(...args),
   loginWithPassword: (...args: unknown[]) => loginWithPassword(...args),
+}));
+
+// §14 gap-fill: `handleIfStaleSession` calls `pb.authStore.clear()` —
+// mocked the same way App.test.tsx already mocks `pb`, so this file can
+// legitimately queue a pending session message via the real
+// `staleSession.ts` module without touching a real PocketBase client.
+vi.mock("@/data/pocketbaseClient", () => ({
+  pb: { authStore: { clear: vi.fn() } },
 }));
 
 vi.mock("react-router", async () => {
@@ -40,6 +53,8 @@ describe("LoginScreen — real login (§14, §16.6, CU1, gap-fill)", () => {
     getLoginDirectory.mockReset();
     loginWithPassword.mockReset();
     navigate.mockReset();
+    // Drain any pending message left over by a prior test in this file.
+    consumeSessionMessage();
   });
 
   it("shows a picker with every business user's name after loading the directory", async () => {
@@ -162,5 +177,23 @@ describe("LoginScreen — real login (§14, §16.6, CU1, gap-fill)", () => {
     expect(
       await screen.findByRole("button", { name: "María López" }),
     ).toBeInTheDocument();
+  });
+
+  it("shows 'Tu sesión expiró. Vuelve a entrar.' when a stale-session redirect queued that message (§14 gap-fill)", async () => {
+    getLoginDirectory.mockResolvedValue([juan]);
+    handleIfStaleSession(new ClientResponseError({ status: 401, response: {} }));
+
+    renderScreen();
+
+    expect(await screen.findByText(STALE_SESSION_MESSAGE)).toBeInTheDocument();
+  });
+
+  it("does NOT show a session-expired message on a normal fresh visit to /login (regression)", async () => {
+    getLoginDirectory.mockResolvedValue([juan]);
+
+    renderScreen();
+
+    await screen.findByRole("button", { name: "Juan Pérez" });
+    expect(screen.queryByText(STALE_SESSION_MESSAGE)).not.toBeInTheDocument();
   });
 });

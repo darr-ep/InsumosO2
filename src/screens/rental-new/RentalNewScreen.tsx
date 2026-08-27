@@ -15,6 +15,7 @@ import { ReceiptDialog } from "@/components/ReceiptDialog";
 import { CustomerDetailSheet } from "@/components/CustomerDetailSheet";
 import type { CustomerRecord } from "@/data/customers.repo";
 import { createRental } from "@/data/rentals.repo";
+import { handleIfStaleSession } from "@/data/staleSession";
 import { rentalFormSchema, type RentalExtraFormValues } from "@/domain/rentals/rental";
 import { buildRentalReceipt, type RentalReceiptData } from "@/domain/rentals/receipt";
 
@@ -103,7 +104,13 @@ export function RentalNewScreen() {
       );
       setReceiptOpen(true);
       resetForm();
-    } catch {
+    } catch (error) {
+      // §14 gap-fill: a rotated/expired session (still locally "valid" per
+      // `pb.authStore.isValid`) surfaces here as this exact generic
+      // save-error — redirect to `/login` instead.
+      if (handleIfStaleSession(error)) {
+        return;
+      }
       // §21: never show "saved" when the write failed — keep the form
       // exactly as the user left it so they can retry without recapturing
       // everything.
