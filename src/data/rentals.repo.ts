@@ -258,19 +258,37 @@ export async function listRentalsForCustomer(
   return result.items;
 }
 
-// §16.3/§16.6/CU2: Dashboard's active-rentals list + count. "requiere
-// revisión" staleness (Anexo A.3) is a pure client-side filter over this
-// result — see domain/rentals/dashboard.ts (task 2.5).
-export async function listActiveRentals(): Promise<RentalWithCustomer[]> {
+// Shared by `listActiveRentals` and `listReturnedRentals` below — both are
+// the exact same query shape over the same `rentals` collection, filtered
+// by a different `status`. Not a new business concept: Historial (redesign
+// nav batch) is just a different view over data that already exists, same
+// as `listRentalsForCustomer` already queries across all statuses.
+async function listRentalsByStatus(
+  status: RentalStatus,
+): Promise<RentalWithCustomer[]> {
   const result = await pb
     .collection(RENTALS_COLLECTION)
     .getList<RentalWithCustomer>(1, ACTIVE_RENTALS_PAGE_SIZE, {
-      filter: pb.filter("status = {:status}", { status: "ACTIVE" }),
+      filter: pb.filter("status = {:status}", { status }),
       sort: "-created",
       expand: "customer_id",
     });
 
   return result.items;
+}
+
+// §16.3/§16.6/CU2: Dashboard's active-rentals list + count. "requiere
+// revisión" staleness (Anexo A.3) is a pure client-side filter over this
+// result — see domain/rentals/dashboard.ts (task 2.5).
+export async function listActiveRentals(): Promise<RentalWithCustomer[]> {
+  return listRentalsByStatus("ACTIVE");
+}
+
+// Historial screen (redesign nav batch): "Dashboard → Historial" secondary
+// nav item. Same collection/shape as `listActiveRentals`, just the other
+// terminal status — no new business logic or schema.
+export async function listReturnedRentals(): Promise<RentalWithCustomer[]> {
+  return listRentalsByStatus("RETURNED");
 }
 
 // §7.4/§16.9/CU3: matches folio (parcial), nombre de cliente (contiene) o

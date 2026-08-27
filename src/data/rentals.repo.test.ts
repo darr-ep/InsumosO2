@@ -20,6 +20,7 @@ const {
   listActiveRentals,
   listItemsForRental,
   listRentalsForCustomer,
+  listReturnedRentals,
   returnRental,
   searchRentals,
   RentalPartiallyCreatedError,
@@ -203,6 +204,31 @@ describe("listActiveRentals (§16.6, CU2)", () => {
     const result = await listActiveRentals();
 
     expect(collection).toHaveBeenCalledWith("rentals");
+    expect(getList).toHaveBeenCalledWith(
+      1,
+      200,
+      expect.objectContaining({ sort: "-created", expand: "customer_id" }),
+    );
+    expect(result).toEqual([{ id: "r1" }, { id: "r2" }]);
+  });
+});
+
+describe("listReturnedRentals (Historial screen, redesign — new route, same rentals collection)", () => {
+  beforeEach(() => {
+    getList.mockReset();
+    collection.mockClear();
+    filter.mockClear();
+  });
+
+  it("filters by status=RETURNED, sorted newest first, expanding the customer", async () => {
+    getList.mockResolvedValueOnce({ items: [{ id: "r1" }, { id: "r2" }] });
+
+    const result = await listReturnedRentals();
+
+    expect(collection).toHaveBeenCalledWith("rentals");
+    expect(filter).toHaveBeenCalledWith("status = {:status}", {
+      status: "RETURNED",
+    });
     expect(getList).toHaveBeenCalledWith(
       1,
       200,
