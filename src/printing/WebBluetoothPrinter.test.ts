@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WebBluetoothPrinter } from "@/printing/WebBluetoothPrinter";
 import type { RentalReceiptData } from "@/domain/rentals/receipt";
 
@@ -108,7 +108,12 @@ describe("WebBluetoothPrinter.isAvailable (§23.2 — graceful degradation)", ()
 });
 
 describe("WebBluetoothPrinter.connect (§23.1/§23.3)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -163,7 +168,33 @@ describe("WebBluetoothPrinter.connect (§23.1/§23.3)", () => {
     await expect(printer.connect()).rejects.toThrow();
   });
 
-  it("throws when gatt.connect() itself fails (e.g. NetworkError — resilience/retry lands in task 5.3 part 2)", async () => {
+  it("retries gatt.connect() on a transient NetworkError and succeeds", async () => {
+    const writable = makeCharacteristic({ write: true });
+    let attempts = 0;
+    const { device } = makeDevice({
+      services: [makeService([writable])],
+      connectImpl: async () => {
+        attempts += 1;
+        if (attempts < 2) {
+          throw new DOMException("busy", "NetworkError");
+        }
+        return { getPrimaryServices: vi.fn().mockResolvedValue([makeService([writable])]) };
+      },
+    });
+    vi.stubGlobal("navigator", {
+      bluetooth: { requestDevice: vi.fn().mockResolvedValue(device) },
+    });
+    vi.stubGlobal("window", { isSecureContext: true });
+    const printer = new WebBluetoothPrinter();
+
+    const connectPromise = printer.connect();
+    await vi.runAllTimersAsync();
+    await connectPromise;
+
+    expect(attempts).toBe(2);
+  });
+
+  it("throws after exhausting retries on a persistent NetworkError (triangulation)", async () => {
     const { device } = makeDevice({
       connectImpl: async () => {
         throw new DOMException("gone", "NetworkError");
@@ -175,7 +206,25 @@ describe("WebBluetoothPrinter.connect (§23.1/§23.3)", () => {
     vi.stubGlobal("window", { isSecureContext: true });
     const printer = new WebBluetoothPrinter();
 
-    await expect(printer.connect()).rejects.toThrow();
+    const connectPromise = printer.connect();
+    const assertion = expect(connectPromise).rejects.toThrow();
+    await vi.runAllTimersAsync();
+    await assertion;
+  });
+
+  it("rejects immediately for a non-NetworkError gatt.connect() failure, without retrying (triangulation)", async () => {
+    const { device } = makeDevice({
+      connectImpl: async () => {
+        throw new DOMException("blocked", "SecurityError");
+      },
+    });
+    vi.stubGlobal("navigator", {
+      bluetooth: { requestDevice: vi.fn().mockResolvedValue(device) },
+    });
+    vi.stubGlobal("window", { isSecureContext: true });
+    const printer = new WebBluetoothPrinter();
+
+    await expect(printer.connect()).rejects.toThrow(/blocked/);
   });
 
   it("does not prompt again when already connected in this session", async () => {

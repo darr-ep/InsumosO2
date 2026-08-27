@@ -1,3 +1,4 @@
+import { sleep } from "@/printing/escpos";
 import type { ReceiptData } from "@/domain/rentals/receipt";
 import type { ReceiptPrinter } from "@/printing/ReceiptPrinter";
 
@@ -7,12 +8,10 @@ import type { ReceiptPrinter } from "@/printing/ReceiptPrinter";
  * against real hardware in the `test-impresora` prototype (see
  * `test-impresora/HANDOFF-IMPRESION-BLUETOOTH.md`).
  *
- * This commit lands device discovery/connection (`isAvailable`,
- * `connect`, `disconnect`) with a single connection attempt. Retrying a
- * transient `NetworkError` on `gatt.connect()` (a known Android behavior
- * confirmed in the prototype) lands in the next commit (task 5.3 part 2)
- * to keep this change reviewable; `print()`'s real chunked-write logic
- * lands in a further commit (task 5.3 part 3).
+ * This commit adds `gatt.connect()` NetworkError retry (task 5.3 part 2)
+ * on top of the device discovery/connection landed in part 1.
+ * `print()`'s real chunked-write logic lands in a further commit (task
+ * 5.3 part 3).
  *
  * Web Bluetooth cannot enumerate "every service" of a device by design
  * (browser privacy) — only services declared up-front in
@@ -28,6 +27,14 @@ const CANDIDATE_SERVICE_UUIDS: string[] = [
   "49535343-fe7d-4ae5-8fa9-9fafd205e455", // transparent UART (ISSC/Microchip), used by some POS units
   "e7810a71-73ae-499d-8c15-faa9aef0c3f2", // Nordic-like serial service, present on some POS boards
 ];
+
+// gatt.connect() can fail with a transient NetworkError right after a
+// previous disconnect while the BLE stack is still winding down — a known
+// Android behavior confirmed in the prototype. Retrying a few times
+// avoids surfacing a false failure for something that clears itself. Any
+// other error name is not transient and rejects immediately.
+const MAX_CONNECT_ATTEMPTS = 3;
+const CONNECT_RETRY_DELAY_MS = 800;
 
 export class WebBluetoothPrinter implements ReceiptPrinter {
   protected device: BluetoothDevice | null = null;
@@ -70,7 +77,23 @@ export class WebBluetoothPrinter implements ReceiptPrinter {
       );
     }
 
-    const server = await device.gatt.connect();
+    let server: BluetoothRemoteGATTServer | undefined;
+    for (let attempt = 1; attempt <= MAX_CONNECT_ATTEMPTS; attempt++) {
+      try {
+        server = await device.gatt.connect();
+        break;
+      } catch (error) {
+        const isNetworkError =
+          error instanceof DOMException && error.name === "NetworkError";
+        if (!isNetworkError || attempt === MAX_CONNECT_ATTEMPTS) {
+          throw error;
+        }
+        await sleep(CONNECT_RETRY_DELAY_MS);
+      }
+    }
+    if (!server) {
+      throw new Error("No se pudo conectar con la impresora tras varios intentos.");
+    }
 
     const services = await server.getPrimaryServices();
     if (services.length === 0) {
