@@ -196,4 +196,35 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
       ),
     ).toBeInTheDocument();
   });
+
+  it("shows a Guardando… loading label on the confirm button while submitting, reverting after success (§16.13)", async () => {
+    let resolveCreatePayment: (value: { id: string }) => void = () => {};
+    createPayment.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveCreatePayment = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+
+    render(
+      <PaymentDialog
+        open
+        onOpenChange={() => {}}
+        rentalId="r1"
+        suggestedAmount={3000}
+        hasPreviousRentPayment
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
+
+    expect(screen.getByRole("button", { name: "Guardando…" })).toBeDisabled();
+
+    resolveCreatePayment({ id: "p1" });
+
+    expect(
+      await screen.findByRole("button", { name: "Confirmar" }),
+    ).toBeInTheDocument();
+  });
 });

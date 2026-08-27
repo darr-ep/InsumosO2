@@ -175,7 +175,7 @@ export function PaymentDialog({
             disabled={isSubmitting}
             onClick={() => void handleConfirm()}
           >
-            Confirmar
+            {isSubmitting ? "Guardando…" : "Confirmar"}
           </Button>
         </DialogFooter>
       </DialogContent>

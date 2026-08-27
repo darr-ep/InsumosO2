@@ -151,4 +151,34 @@ describe("ReturnDialog (§7.3, §16.8, CU6, task 3.2)", () => {
     ).toBeInTheDocument();
     expect(baseProps.onOpenChange).not.toHaveBeenCalled();
   });
+
+  it("shows a Guardando… loading label on the confirm button while submitting, reverting after success (§16.13)", async () => {
+    let resolveReturnRental: (value: {
+      id: string;
+      returned_at: string;
+    }) => void = () => {};
+    returnRental.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveReturnRental = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    render(<ReturnDialog {...baseProps} />);
+
+    await user.click(
+      screen.getByRole("button", { name: "Confirmar devolución" }),
+    );
+
+    expect(screen.getByRole("button", { name: "Guardando…" })).toBeDisabled();
+
+    resolveReturnRental({
+      id: "rental1",
+      returned_at: "2026-08-26T12:00:00.000Z",
+    });
+
+    expect(
+      await screen.findByRole("button", { name: "Confirmar devolución" }),
+    ).toBeInTheDocument();
+  });
 });

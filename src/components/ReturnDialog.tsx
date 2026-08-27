@@ -224,7 +224,7 @@ export function ReturnDialog({
             disabled={isSubmitting}
             onClick={() => void handleConfirm()}
           >
-            Confirmar devolución
+            {isSubmitting ? "Guardando…" : "Confirmar devolución"}
           </Button>
         </DialogFooter>
       </DialogContent>

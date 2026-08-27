@@ -161,4 +161,47 @@ describe("RentalNewScreen (§7.1, §16.7, CU4)", () => {
     // Customer selection survives the failed attempt (§21 — no recapturing).
     expect(screen.getByText("Juan Pérez")).toBeInTheDocument();
   });
+
+  it("shows a Guardando… loading label on the confirm button while submitting, reverting after success (§16.13)", async () => {
+    searchCustomers.mockResolvedValue([juan]);
+    let resolveCreateRental: (value: {
+      rental: { id: string; folio: string; created: string };
+      items: { id: string }[];
+      depositPayment: { id: string };
+    }) => void = () => {};
+    createRental.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveCreateRental = resolve;
+        }),
+    );
+
+    const user = userEvent.setup();
+    renderScreen();
+
+    await user.type(
+      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
+      "Juan",
+    );
+    await user.click(
+      await screen.findByRole("button", { name: /Juan Pérez/ }),
+    );
+    await user.click(screen.getByLabelText("Agregar un concentrador"));
+    await user.type(screen.getByLabelText("Renta"), "2800");
+    await user.type(screen.getByLabelText("Depósito"), "1000");
+
+    await user.click(screen.getByRole("button", { name: "Confirmar renta" }));
+
+    expect(screen.getByRole("button", { name: "Guardando…" })).toBeDisabled();
+
+    resolveCreateRental({
+      rental: { id: "r1", folio: "R-000001", created: "2026-08-26 10:00:00.000Z" },
+      items: [{ id: "i1" }],
+      depositPayment: { id: "p1" },
+    });
+
+    expect(
+      await screen.findByRole("heading", { name: "Comprobante R-000001" }),
+    ).toBeInTheDocument();
+  });
 });

@@ -174,7 +174,7 @@ export function RentalNewScreen() {
       {formError && <p className="text-destructive text-sm">{formError}</p>}
 
       <Button type="button" size="lg" disabled={isSubmitting} onClick={() => void handleConfirm()}>
-        Confirmar renta
+        {isSubmitting ? "Guardando…" : "Confirmar renta"}
       </Button>
 
       <ReceiptDialog
