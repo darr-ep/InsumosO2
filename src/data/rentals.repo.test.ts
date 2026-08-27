@@ -22,6 +22,7 @@ const {
   listRentalsForCustomer,
   returnRental,
   searchRentals,
+  RentalPartiallyCreatedError,
 } = await import("@/data/rentals.repo");
 
 describe("createRental (CU4 orchestration)", () => {
@@ -53,11 +54,15 @@ describe("createRental (CU4 orchestration)", () => {
     });
 
     expect(collection).toHaveBeenNthCalledWith(2, "rental_items");
-    expect(create).toHaveBeenNthCalledWith(2, {
-      rental_id: "rental1",
-      item_type: "concentrator",
-      quantity: 1,
-    });
+    expect(create).toHaveBeenNthCalledWith(
+      2,
+      {
+        rental_id: "rental1",
+        item_type: "concentrator",
+        quantity: 1,
+      },
+      { requestKey: null },
+    );
 
     expect(collection).toHaveBeenNthCalledWith(3, "payments");
     expect(create).toHaveBeenNthCalledWith(3, {
@@ -67,6 +72,91 @@ describe("createRental (CU4 orchestration)", () => {
     });
 
     expect(result.depositPayment).toEqual({ id: "payment1" });
+  });
+
+  it("gap-fill (deposit payment race): passes a distinct requestKey: null on EVERY concurrent rental_item create, so the PocketBase SDK's default auto-cancellation (which shares one requestKey per method+URL) never aborts a sibling create firing from the same Promise.all — real root cause confirmed live via _logs (zero payments POST ever attempted) and reproduced against a scratch PocketBase instance (ClientResponseError 'The request was aborted (most likely autocancelled)')", async () => {
+    create
+      .mockResolvedValueOnce({ id: "rental1", folio: "R-000001" })
+      .mockResolvedValueOnce({ id: "item1" })
+      .mockResolvedValueOnce({ id: "item2" })
+      .mockResolvedValueOnce({ id: "payment1" });
+
+    await createRental({
+      customerId: "cust1",
+      items: [
+        { itemType: "concentrator", quantity: 1 },
+        { itemType: "tank", quantity: 1 },
+      ],
+      initialRentAmount: 2800,
+      depositAmount: 12000,
+      extras: [],
+    });
+
+    const itemCreateCalls = create.mock.calls.slice(1, 3);
+    for (const call of itemCreateCalls) {
+      expect(call[1]).toEqual({ requestKey: null });
+    }
+  });
+
+  it("gap-fill (deposit payment race): wraps a rental_items/payment failure in RentalPartiallyCreatedError carrying the already-saved rental — never re-throws the raw error, so a caller can tell the rental record itself was NOT lost", async () => {
+    const rejection = new Error("aborted");
+    create
+      .mockResolvedValueOnce({ id: "rental1", folio: "R-000001" })
+      .mockRejectedValueOnce(rejection);
+
+    const error: unknown = await createRental({
+      customerId: "cust1",
+      items: [
+        { itemType: "concentrator", quantity: 1 },
+        { itemType: "tank", quantity: 1 },
+      ],
+      initialRentAmount: 2800,
+      depositAmount: 12000,
+      extras: [],
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(RentalPartiallyCreatedError);
+    const partial = error as InstanceType<typeof RentalPartiallyCreatedError>;
+    expect(partial.rental).toEqual({ id: "rental1", folio: "R-000001" });
+    expect(partial.itemsCreated).toEqual([]);
+    expect(partial.cause).toBe(rejection);
+  });
+
+  it("gap-fill (deposit payment race): wraps a deposit-payment-only failure in RentalPartiallyCreatedError, carrying the items that DID get created", async () => {
+    const rejection = new Error("payment rejected");
+    create
+      .mockResolvedValueOnce({ id: "rental1", folio: "R-000001" })
+      .mockResolvedValueOnce({ id: "item1" })
+      .mockRejectedValueOnce(rejection);
+
+    const error: unknown = await createRental({
+      customerId: "cust1",
+      items: [{ itemType: "concentrator", quantity: 1 }],
+      initialRentAmount: 2800,
+      depositAmount: 12000,
+      extras: [],
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(RentalPartiallyCreatedError);
+    const partial = error as InstanceType<typeof RentalPartiallyCreatedError>;
+    expect(partial.rental).toEqual({ id: "rental1", folio: "R-000001" });
+    expect(partial.itemsCreated).toEqual([{ id: "item1" }]);
+    expect(partial.cause).toBe(rejection);
+  });
+
+  it("gap-fill (deposit payment race): does NOT wrap a failure creating the rental record itself — nothing was saved yet, so the raw error passes through unchanged", async () => {
+    const rejection = new Error("network down");
+    create.mockRejectedValueOnce(rejection);
+
+    await expect(
+      createRental({
+        customerId: "cust1",
+        items: [{ itemType: "concentrator", quantity: 1 }],
+        initialRentAmount: 2800,
+        depositAmount: 1000,
+        extras: [],
+      }),
+    ).rejects.toBe(rejection);
   });
 
   it("never sends folio or status when creating the rental", async () => {

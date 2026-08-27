@@ -64,6 +64,18 @@ export interface TestUserHandle {
   /** Authenticated as the newly created regular (non-superuser) user. */
   client: PocketBase;
   userId: string;
+  /**
+   * Gap-fill (Deposit Payment Creation Failure): exposed so a test that
+   * exercises a `src/data/*.repo.ts` function directly (which always uses
+   * the app-wide shared `pb` singleton from `pocketbaseClient.ts`, never
+   * this handle's own separate `client`) can authenticate THAT singleton
+   * with the same real phone+password login the app itself uses
+   * (`src/data/auth.repo.ts#loginWithPassword`), instead of ending up with
+   * an unauthenticated shared client and a misleading "create rule
+   * failure" 400.
+   */
+  phone: string;
+  password: string;
 }
 
 /**
@@ -103,5 +115,5 @@ export async function createTestUser(
     .collection("users")
     .authWithPassword(phone, password);
 
-  return { client, userId: auth.record.id };
+  return { client, userId: auth.record.id, phone, password };
 }

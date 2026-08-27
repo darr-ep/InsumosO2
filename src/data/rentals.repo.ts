@@ -65,6 +65,53 @@ export interface CreateRentalResult {
   depositPayment: PaymentRecord | null;
 }
 
+/**
+ * Gap-fill: Deposit Payment Creation Failure (found live, 2026-08-27). Real
+ * root cause: `createRental`'s `Promise.all` over `rental_items` creates
+ * fires 2+ concurrent `POST` requests to the exact same collection endpoint.
+ * The PocketBase JS SDK's default auto-cancellation shares one request key
+ * per `method+URL` — so the SDK itself aborts every earlier pending create
+ * as soon as the next one starts, throwing a `ClientResponseError` (isAbort:
+ * true, "The request was autocancelled") from inside `Promise.all`, BEFORE
+ * this function ever reaches the deposit-payment step. Confirmed live
+ * (PocketBase's own `_logs` table showed both `rental_items` creates
+ * succeeding server-side yet zero `payments` POSTs ever attempted) and
+ * reproduced deterministically against a scratch PocketBase instance. The
+ * exact same SDK gotcha was already discovered and worked around, but only
+ * inside a TEST client (`src/data/rentals-folio-concurrency.integration.test.ts`'s
+ * `pb.autoCancellation(false)`) — never fixed in this production code path.
+ *
+ * §21 requires "never show saved when the DB failed", but the corollary is
+ * just as real: never claim NOTHING saved when the rental record itself did.
+ * Since PocketBase's REST API has no cross-collection transaction (see this
+ * function's own docblock above), a later step (rental_items/payments) can
+ * fail after the rental record already exists. This error carries that
+ * already-created `rental` (plus whichever `itemsCreated` succeeded before
+ * the failure) so a caller can show an honest message with the real folio
+ * instead of the misleading "no se pudo guardar la renta" — same principle
+ * `src/data/staleSession.ts` established for distinguishing failure classes
+ * instead of lumping everything into one generic message.
+ */
+export class RentalPartiallyCreatedError extends Error {
+  readonly rental: RentalRecord;
+  readonly itemsCreated: RentalItemRecord[];
+  readonly cause: unknown;
+
+  constructor(
+    rental: RentalRecord,
+    itemsCreated: RentalItemRecord[],
+    cause: unknown,
+  ) {
+    super(
+      `La renta ${rental.folio} se guardó, pero un paso posterior (productos o depósito) falló.`,
+    );
+    this.name = "RentalPartiallyCreatedError";
+    this.rental = rental;
+    this.itemsCreated = itemsCreated;
+    this.cause = cause;
+  }
+}
+
 export interface ReturnRentalInput {
   rentalId: string;
   amountCollected: number;
@@ -111,25 +158,42 @@ export async function createRental(
     },
   );
 
-  const items = await Promise.all(
-    input.items.map((item) =>
-      pb.collection(RENTAL_ITEMS_COLLECTION).create<RentalItemRecord>({
-        rental_id: rental.id,
-        item_type: item.itemType,
-        quantity: item.quantity,
-      }),
-    ),
-  );
+  let items: RentalItemRecord[];
+  try {
+    items = await Promise.all(
+      input.items.map((item) =>
+        // `requestKey: null` opts this call OUT of the PocketBase SDK's
+        // default auto-cancellation (see `RentalPartiallyCreatedError`'s
+        // docblock above) — without it, firing 2+ of these concurrently via
+        // Promise.all shares one request key per method+URL and the SDK
+        // aborts every earlier pending create as soon as the next starts.
+        pb.collection(RENTAL_ITEMS_COLLECTION).create<RentalItemRecord>(
+          {
+            rental_id: rental.id,
+            item_type: item.itemType,
+            quantity: item.quantity,
+          },
+          { requestKey: null },
+        ),
+      ),
+    );
+  } catch (error) {
+    throw new RentalPartiallyCreatedError(rental, [], error);
+  }
 
-  const depositPayment = shouldRegisterDepositPayment(input.depositAmount)
-    ? await pb.collection(PAYMENTS_COLLECTION).create<PaymentRecord>({
-        rental_id: rental.id,
-        amount: input.depositAmount,
-        payment_type: "deposit" satisfies PaymentType,
-      })
-    : null;
+  try {
+    const depositPayment = shouldRegisterDepositPayment(input.depositAmount)
+      ? await pb.collection(PAYMENTS_COLLECTION).create<PaymentRecord>({
+          rental_id: rental.id,
+          amount: input.depositAmount,
+          payment_type: "deposit" satisfies PaymentType,
+        })
+      : null;
 
-  return { rental, items, depositPayment };
+    return { rental, items, depositPayment };
+  } catch (error) {
+    throw new RentalPartiallyCreatedError(rental, items, error);
+  }
 }
 
 // §16.10/CU6/CU7: `RentalDetailSheet` (task 3.3) always reloads the rental
