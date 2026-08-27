@@ -1,4 +1,4 @@
-import { rentalItemTypeLabel } from "@/domain/rentals/rental";
+import { formatReceiptLines } from "@/domain/rentals/receipt";
 import type { ReceiptData } from "@/domain/rentals/receipt";
 
 /**
@@ -25,45 +25,13 @@ export function isShareAvailable(): boolean {
   );
 }
 
-const currencyFormatter = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-});
-
 // Plain-text summary for navigator.share's `text` field — §22's austere
 // "comprobante de referencia, no factura fiscal" principle applies here
-// too, keep it short. Branches on `receipt.kind` (task 3.2) since a
-// devolución comprobante has different content (§22).
+// too, keep it short. Content lives in `formatReceiptLines` (domain
+// layer, task 5.3 refactor) so it's the single source of truth shared
+// with `WebBluetoothPrinter.print`.
 export function formatReceiptShareText(receipt: ReceiptData): string {
-  if (receipt.kind === "return") {
-    const lines = [
-      `${receipt.businessName} · ${receipt.businessPhone}`,
-      `Folio: ${receipt.folio}`,
-      `Cliente: ${receipt.customerName} (${receipt.customerPhone})`,
-      `Tiempo rentado: ${receipt.rentedDays} días`,
-      `Monto cobrado: ${currencyFormatter.format(receipt.amountCollected)}`,
-      `Depósito devuelto: ${currencyFormatter.format(receipt.depositReturned)}`,
-    ];
-
-    return lines.join("\n");
-  }
-
-  const lines = [
-    `${receipt.businessName} · ${receipt.businessPhone}`,
-    `Folio: ${receipt.folio}`,
-    `Cliente: ${receipt.customerName} (${receipt.customerPhone})`,
-    ...receipt.items.map(
-      (item) => `${item.quantity} x ${rentalItemTypeLabel(item.itemType)}`,
-    ),
-    `Renta inicial: ${currencyFormatter.format(receipt.initialRentAmount)}`,
-    `Depósito: ${currencyFormatter.format(receipt.depositAmount)}`,
-    ...receipt.extras.map(
-      (extra) => `${extra.description}: ${currencyFormatter.format(extra.price)}`,
-    ),
-    `Total: ${currencyFormatter.format(receipt.total)}`,
-  ];
-
-  return lines.join("\n");
+  return formatReceiptLines(receipt).join("\n");
 }
 
 export async function shareReceipt(

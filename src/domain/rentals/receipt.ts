@@ -1,4 +1,5 @@
 import { daysSince } from "@/domain/rentals/dashboard";
+import { rentalItemTypeLabel } from "@/domain/rentals/rental";
 import type { RentalItemType } from "@/domain/rentals/rental";
 
 /**
@@ -105,3 +106,45 @@ export function buildReturnReceipt(
 // Discriminated union: `ReceiptDialog` (task 1.9/3.2) is one shared modal
 // for both flows, per §16.6.
 export type ReceiptData = RentalReceiptData | ReturnReceiptData;
+
+const currencyFormatter = new Intl.NumberFormat("es-MX", {
+  style: "currency",
+  currency: "MXN",
+});
+
+/**
+ * Plain-text line-by-line rendering of a receipt (§22's austere
+ * "comprobante de referencia, no factura fiscal" principle). Shared by
+ * `ShareFallbackPrinter.formatReceiptShareText` (joins with `\n` for
+ * `navigator.share`) and `WebBluetoothPrinter.print` (task 5.3, feeds
+ * each line to `buildTicket`) — extracted here (task 5.3 refactor) so the
+ * receipt content itself has exactly one source of truth, independent of
+ * which printer backend renders it.
+ */
+export function formatReceiptLines(receipt: ReceiptData): string[] {
+  if (receipt.kind === "return") {
+    return [
+      `${receipt.businessName} · ${receipt.businessPhone}`,
+      `Folio: ${receipt.folio}`,
+      `Cliente: ${receipt.customerName} (${receipt.customerPhone})`,
+      `Tiempo rentado: ${receipt.rentedDays} días`,
+      `Monto cobrado: ${currencyFormatter.format(receipt.amountCollected)}`,
+      `Depósito devuelto: ${currencyFormatter.format(receipt.depositReturned)}`,
+    ];
+  }
+
+  return [
+    `${receipt.businessName} · ${receipt.businessPhone}`,
+    `Folio: ${receipt.folio}`,
+    `Cliente: ${receipt.customerName} (${receipt.customerPhone})`,
+    ...receipt.items.map(
+      (item) => `${item.quantity} x ${rentalItemTypeLabel(item.itemType)}`,
+    ),
+    `Renta inicial: ${currencyFormatter.format(receipt.initialRentAmount)}`,
+    `Depósito: ${currencyFormatter.format(receipt.depositAmount)}`,
+    ...receipt.extras.map(
+      (extra) => `${extra.description}: ${currencyFormatter.format(extra.price)}`,
+    ),
+    `Total: ${currencyFormatter.format(receipt.total)}`,
+  ];
+}
