@@ -67,6 +67,19 @@ describe("LoginScreen — real login (§14, §16.6, CU1, gap-fill)", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows an error instead of crashing when the directory resolves with a non-array value (real bug: browser-cache/StrictMode race)", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- reproducing the actual malformed shape found live
+    getLoginDirectory.mockResolvedValue({} as any);
+
+    renderScreen();
+
+    expect(
+      await screen.findByText(
+        "No se pudo cargar la lista de usuarios. Intenta de nuevo.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("reveals a password field after tapping a user, and submits phone+password on confirm", async () => {
     getLoginDirectory.mockResolvedValue([juan]);
     loginWithPassword.mockResolvedValue(undefined);

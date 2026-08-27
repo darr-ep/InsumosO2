@@ -38,6 +38,7 @@ describe("getLoginDirectory (§14, §16.6, gap-fill)", () => {
 
     expect(send).toHaveBeenCalledWith("/api/login-directory", {
       method: "GET",
+      requestKey: null,
     });
     expect(result).toEqual([
       { id: "u1", name: "Juan Pérez", phone: "5512345678" },

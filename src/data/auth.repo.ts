@@ -20,10 +20,21 @@ export interface LoginDirectoryEntry {
  * (task 4.2's "narrow, explicit surface" pattern) — this hits the
  * dedicated public route instead (`pb_hooks/login_directory.pb.js`), never
  * the generic `users` collection endpoint.
+ *
+ * Real bug found live (React StrictMode double-invokes this effect in dev,
+ * firing two near-simultaneous GETs to the same URL): the SDK's default
+ * auto-cancellation aborts one of the two by request-key collision, and the
+ * browser's own HTTP layer can independently race/coalesce the other into a
+ * bodyless 304 — either outcome resolves with a non-array value and crashed
+ * `LoginScreen`'s `directory.map()`. `requestKey: null` disables SDK
+ * auto-cancel for this call (duplicate calls are cheap/idempotent, no need
+ * to cancel), so both StrictMode-driven calls resolve independently on
+ * their own real HTTP outcome instead of fighting each other.
  */
 export async function getLoginDirectory(): Promise<LoginDirectoryEntry[]> {
   return pb.send<LoginDirectoryEntry[]>("/api/login-directory", {
     method: "GET",
+    requestKey: null,
   });
 }
 

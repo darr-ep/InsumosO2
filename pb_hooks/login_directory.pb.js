@@ -33,5 +33,13 @@ routerAdd("GET", "/api/login-directory", (e) => {
     phone: user.get("phone"),
   }));
 
+  // Real bug found live: without this, the browser's HTTP cache can
+  // negotiate a bodyless 304 for one of two near-simultaneous GETs (React
+  // StrictMode double-invokes LoginScreen's fetch effect in dev), which
+  // resolved as a non-array value and crashed `directory.map()` client-side.
+  // This route's data can also change at any time (a business user added),
+  // so it should never be cached anyway.
+  e.response.header().set("Cache-Control", "no-store");
+
   return e.json(200, directory);
 });

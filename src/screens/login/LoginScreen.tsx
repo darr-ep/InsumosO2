@@ -42,8 +42,17 @@ export function LoginScreen() {
 
     getLoginDirectory()
       .then((entries) => {
-        if (!cancelled) {
+        if (cancelled) {
+          return;
+        }
+        // Defensive: a browser-level HTTP cache/StrictMode-duplicate-fetch
+        // race can resolve this with a non-array value (see auth.repo.ts's
+        // getLoginDirectory docblock) — treat that as a load failure instead
+        // of crashing on `.map()`.
+        if (Array.isArray(entries)) {
           setDirectory(entries);
+        } else {
+          setDirectoryError(true);
         }
       })
       .catch(() => {
