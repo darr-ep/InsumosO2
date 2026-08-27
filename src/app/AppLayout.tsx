@@ -1,23 +1,32 @@
-import { NavLink, Outlet, useNavigate } from "react-router";
-import { LayoutDashboard, LogOut, PlusCircle, Search } from "lucide-react";
+import { Link, Outlet, useNavigate } from "react-router";
+import { History, LogOut, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { logout } from "@/data/auth.repo";
-import { cn } from "@/lib/utils";
-
-const TABS = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/nueva-renta", label: "Nueva renta", icon: PlusCircle },
-  { to: "/buscar", label: "Buscar", icon: Search },
-] as const;
 
 /**
- * Root chrome for the 3 authenticated screens (§16.5, §16.6): a fixed bottom
- * tab bar with exactly 3 destinations. Rental detail, customer file, payment
- * and return are never routes — they're Sheets/Dialogs opened on top of one
- * of these 3 screens (§18), not part of this navigation.
+ * Root chrome for the authenticated area. Redesign nav batch
+ * (business-owner brief, round 2) replaced the old fixed bottom 3-tab bar
+ * (Dashboard/Nueva renta/Buscar) entirely: "remove the current 3-tab bottom
+ * bar" (round 1) plus "El Dashboard debe ser el centro de la aplicación...
+ * sin una barra inferior con demasiadas opciones" (round 2). Dashboard is
+ * now the sole hub — Nueva renta is reached from a button on Dashboard
+ * itself, Buscar is folded into Dashboard's own search bar, and Detalle de
+ * renta/pago/devolución/comprobante/selección de cliente/credencial all
+ * stay Sheets/Dialogs, never routes (unchanged from before this batch).
+ *
+ * The only secondary navigation left, per the brief, is "el acceso al
+ * usuario/cerrar sesión y, si resulta necesario, acceso al historial" — one
+ * account `DropdownMenu` trigger in the header with exactly those two
+ * items.
  *
  * §14 "logout manual disponible" — Gap-fill fix (found post-Phase-5): no
- * logout action existed anywhere in the codebase before this. Explicitly
+ * logout action existed anywhere in the codebase before that. Explicitly
  * navigates to `/login` after clearing the session — App.tsx's own
  * `RequireAuth` guard would redirect there anyway on the next render
  * (`pb.authStore.clear()` fires `onChange`), but doing it here too keeps
@@ -34,42 +43,29 @@ export function AppLayout() {
   return (
     <div className="flex min-h-dvh flex-col bg-background text-foreground">
       <header className="flex items-center justify-end border-b p-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label="Cerrar sesión"
-          onClick={handleLogout}
-        >
-          <LogOut aria-hidden="true" className="size-5" />
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" variant="ghost" size="icon" aria-label="Cuenta">
+              <UserRound aria-hidden="true" className="size-5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem asChild>
+              <Link to="/historial">
+                <History aria-hidden="true" />
+                Historial
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={handleLogout}>
+              <LogOut aria-hidden="true" />
+              Cerrar sesión
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </header>
-      <main className="flex-1 overflow-y-auto pb-20">
+      <main className="flex-1 overflow-y-auto">
         <Outlet />
       </main>
-      <nav
-        aria-label="Navegación principal"
-        className="fixed inset-x-0 bottom-0 z-40 flex border-t bg-background"
-      >
-        {TABS.map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) =>
-              cn(
-                "flex flex-1 flex-col items-center justify-center gap-1 py-2 text-xs font-medium",
-                "min-h-[44px]",
-                isActive
-                  ? "text-primary"
-                  : "text-muted-foreground hover:text-foreground",
-              )
-            }
-          >
-            <Icon aria-hidden="true" className="size-5" />
-            <span>{label}</span>
-          </NavLink>
-        ))}
-      </nav>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ClientResponseError } from "pocketbase";
 import { App } from "@/app/App";
@@ -11,6 +11,7 @@ import { STALE_SESSION_MESSAGE } from "@/data/staleSession";
 // screen-level test (those live in each screen's own *.test.tsx).
 const listActiveRentals = vi.fn();
 const searchRentals = vi.fn();
+const listReturnedRentals = vi.fn();
 const getLoginDirectory = vi.fn();
 const createCustomer = vi.fn();
 const searchCustomers = vi.fn();
@@ -18,6 +19,7 @@ const searchCustomers = vi.fn();
 vi.mock("@/data/rentals.repo", () => ({
   listActiveRentals: (...args: unknown[]) => listActiveRentals(...args),
   searchRentals: (...args: unknown[]) => searchRentals(...args),
+  listReturnedRentals: (...args: unknown[]) => listReturnedRentals(...args),
 }));
 
 vi.mock("@/data/customers.repo", () => ({
@@ -63,6 +65,7 @@ describe("App", () => {
   beforeEach(() => {
     listActiveRentals.mockReset().mockResolvedValue([]);
     searchRentals.mockReset().mockResolvedValue([]);
+    listReturnedRentals.mockReset().mockResolvedValue([]);
     getLoginDirectory.mockReset().mockResolvedValue([]);
     createCustomer.mockReset();
     searchCustomers.mockReset();
@@ -71,24 +74,17 @@ describe("App", () => {
   });
 
   describe("authenticated (§14, §16.5)", () => {
-    it("redirects to the Dashboard tab and renders the 3-tab nav", async () => {
+    it("redirects to the Dashboard tab and renders without a bottom tab bar (redesign nav batch)", async () => {
       render(<App />);
 
       expect(
         await screen.findByRole("heading", { name: "Dashboard" }),
       ).toBeInTheDocument();
-      const nav = screen.getByRole("navigation", {
-        name: "Navegación principal",
-      });
-      expect(nav).toBeInTheDocument();
       expect(
-        within(nav).getByRole("link", { name: /Dashboard/ }),
-      ).toBeInTheDocument();
+        screen.queryByRole("navigation", { name: "Navegación principal" }),
+      ).not.toBeInTheDocument();
       expect(
-        within(nav).getByRole("link", { name: /Nueva renta/ }),
-      ).toBeInTheDocument();
-      expect(
-        within(nav).getByRole("link", { name: /Buscar/ }),
+        screen.getByRole("button", { name: "Cuenta" }),
       ).toBeInTheDocument();
     });
 
@@ -101,15 +97,27 @@ describe("App", () => {
       expect(screen.queryByText(/próximamente/)).not.toBeInTheDocument();
     });
 
-    it("wires the Buscar tab's real content, not the Phase 0 placeholder (task 2.6/2.7)", async () => {
+    it("still serves /buscar's real content directly by URL (redesign nav batch: no nav link points here anymore, route removal lands in the next batch)", async () => {
+      window.history.pushState({}, "", "/buscar");
+      render(<App />);
+
+      expect(
+        await screen.findByLabelText("Buscar por folio, nombre o teléfono"),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/próximamente/)).not.toBeInTheDocument();
+    });
+
+    it("navigates to /historial via the account menu and renders the real Historial screen, not a placeholder (redesign nav batch)", async () => {
+      window.history.pushState({}, "", "/dashboard");
       const user = userEvent.setup();
       render(<App />);
 
       await screen.findByText("No hay rentas activas todavía.");
-      await user.click(screen.getByRole("link", { name: /Buscar/ }));
+      await user.click(screen.getByRole("button", { name: "Cuenta" }));
+      await user.click(screen.getByRole("menuitem", { name: "Historial" }));
 
       expect(
-        await screen.findByLabelText("Buscar por folio, nombre o teléfono"),
+        await screen.findByRole("heading", { name: "Historial de rentas" }),
       ).toBeInTheDocument();
       expect(screen.queryByText(/próximamente/)).not.toBeInTheDocument();
     });
@@ -172,6 +180,16 @@ describe("App", () => {
       expect(await screen.findByText("Insumos O2")).toBeInTheDocument();
       expect(
         screen.queryByLabelText("Buscar por folio, nombre o teléfono"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("redirects /historial to /login when there is no valid session (redesign nav batch: new route needs the same RequireAuth coverage)", async () => {
+      window.history.pushState({}, "", "/historial");
+      render(<App />);
+
+      expect(await screen.findByText("Insumos O2")).toBeInTheDocument();
+      expect(
+        screen.queryByRole("heading", { name: "Historial de rentas" }),
       ).not.toBeInTheDocument();
     });
 

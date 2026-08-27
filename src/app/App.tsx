@@ -6,6 +6,7 @@ import { LoginScreen } from "@/screens/login/LoginScreen";
 import { DashboardScreen } from "@/screens/dashboard/DashboardScreen";
 import { RentalNewScreen } from "@/screens/rental-new/RentalNewScreen";
 import { SearchScreen } from "@/screens/search/SearchScreen";
+import { HistorialScreen } from "@/screens/historial/HistorialScreen";
 
 /**
  * SDD.md §14 — Gap-fill fix (found post-Phase-5): `App.tsx` had zero auth
@@ -40,10 +41,13 @@ function LoginRoute() {
 }
 
 /**
- * Only 3 real routes behind the tab bar (Dashboard / Nueva renta / Buscar)
- * plus `/login` (§16.5, §18). Rental detail, customer file, payment and
- * return are Sheets/Dialogs on top of these, never routes of their own —
- * they land alongside the screens that open them in later phases.
+ * Redesign nav batch (business-owner brief, round 2): the authenticated
+ * area is no longer a fixed 3-tab bar — Dashboard is the hub, reached
+ * directly after login, with Nueva renta and Historial one tap away
+ * (a button on Dashboard, and the header's account menu, respectively).
+ * `/buscar` stays temporarily until the next batch folds its behavior into
+ * Dashboard's own search bar. Rental detail, customer file, payment and
+ * return remain Sheets/Dialogs on top of these, never routes of their own.
  */
 /**
  * SDD.md §16.13/§17 (gap-fill finding 4): a single `<Toaster />` mounted
@@ -63,6 +67,7 @@ export function App() {
             <Route path="/dashboard" element={<DashboardScreen />} />
             <Route path="/nueva-renta" element={<RentalNewScreen />} />
             <Route path="/buscar" element={<SearchScreen />} />
+            <Route path="/historial" element={<HistorialScreen />} />
           </Route>
         </Route>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
