@@ -72,6 +72,17 @@ describe("CustomerForm (§7.1, §20)", () => {
     });
   });
 
+  it("shows a 'Guardando…' label on the submit button while isSubmitting is true (§16.13)", () => {
+    render(<CustomerForm onSubmit={vi.fn()} isSubmitting />);
+
+    expect(
+      screen.getByRole("button", { name: "Guardando…" }),
+    ).toBeDisabled();
+    expect(
+      screen.queryByRole("button", { name: "Guardar cliente" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("rejects a credential photo with an unsupported mime type (§20)", async () => {
     // The input has accept="image/*" (native picker hint) — bypass
     // user-event's accept-based filtering so this test can exercise our

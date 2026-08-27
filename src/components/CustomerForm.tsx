@@ -145,7 +145,7 @@ export function CustomerForm({
       </div>
 
       <Button type="submit" disabled={isSubmitting}>
-        {submitLabel}
+        {isSubmitting ? "Guardando…" : submitLabel}
       </Button>
     </form>
   );
