@@ -10,6 +10,7 @@ export default tseslint.config(
     "dist",
     "dev-dist",
     "pb_data",
+    "pb_local",
     "test-pocketbase",
     "test-impresora",
   ]),

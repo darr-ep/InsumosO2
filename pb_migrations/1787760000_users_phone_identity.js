@@ -42,6 +42,17 @@
  * uses), which is how `src/data/testSupport.ts` creates throwaway test
  * users for the live integration test suite now that public
  * self-registration is closed.
+ *
+ * **Gap-fill fix (found post-Phase-5, explicit user request): `email` is
+ * now `required: false`.** `createRule = null` means every one of the
+ * business's 6 real accounts gets created manually by the superuser from
+ * the PocketBase admin panel (§14: "Alta de usuarios: manual, por el
+ * administrador técnico") — a step the business does not need to invent a
+ * throwaway email address for every time. `email` stays in
+ * `passwordAuth.identityFields` alongside `phone` (harmless, unused by the
+ * app — login only ever calls `authWithPassword(phone, password)`) so
+ * PocketBase's own account-recovery/admin tooling still has an identity
+ * field to fall back to if an email IS provided, without forcing one.
  */
 migrate(
   (app) => {
@@ -70,10 +81,18 @@ migrate(
     // Phase 4 task 4.2: close public self-registration (see docblock above).
     users.createRule = null;
 
+    // Gap-fill fix: stop forcing the superuser to invent an email for each
+    // of the 6 manually-created accounts (see docblock above).
+    const emailField = users.fields.getByName("email");
+    emailField.required = false;
+
     app.save(users);
   },
   (app) => {
     const users = app.findCollectionByNameOrId("users");
+
+    const emailField = users.fields.getByName("email");
+    emailField.required = true;
 
     users.createRule = "";
     users.passwordAuth.identityFields = ["email"];

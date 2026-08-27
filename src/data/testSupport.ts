@@ -40,7 +40,13 @@ const SUPERUSER_PASSWORD =
 
 const superuserClientsByUrl = new Map<string, PocketBase>();
 
-async function getSuperuserClient(pbUrl: string): Promise<PocketBase> {
+/**
+ * Exported (Gap-fill fix, §14) so a live-integration test that needs a raw
+ * superuser session — e.g. proving `users.email` is optional by creating a
+ * record with no email field at all — doesn't have to duplicate the
+ * cached-session/credential logic above.
+ */
+export async function getSuperuserClient(pbUrl: string): Promise<PocketBase> {
   const cached = superuserClientsByUrl.get(pbUrl);
   if (cached?.authStore.isValid) {
     return cached;

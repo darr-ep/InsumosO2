@@ -181,6 +181,32 @@ those env vars aren't set, same pattern as every other live-instance
 dependency in this suite. Instance 1 is required for any of the other
 live-integration tests to run instead of skip.
 
+## Gap-fill: Login/Auth (found post-Phase-5, not in original SDD §35 phase breakdown)
+
+`LoginScreen.tsx` was still Phase 0's literal placeholder after Phase 5
+finished -- no phase task ever replaced it. Two migration/backend-side
+pieces of that gap:
+
+- `1787760000_users_phone_identity.js` -- `email` is now `required: false`
+  (explicit user request). `createRule = null` (task 4.2) already means
+  every one of the 6 real accounts is created manually by the superuser
+  from the admin panel; forcing an email value on every one of those
+  manual creations served no purpose. `email` stays in
+  `passwordAuth.identityFields` alongside `phone` (harmless, unused by the
+  app). Edited in place, same justification as every other in-place edit
+  in this file: never applied against a real deployed/persistent instance.
+  See `src/data/login-directory.integration.test.ts` for live proof a
+  superuser can create a user with no `email` field at all.
+- `pb_hooks/login_directory.pb.js` (new) -- `GET /api/login-directory`, a
+  public (unauthenticated) custom route returning only `[{id, name,
+  phone}]` for every `users` record. The real `LoginScreen` needs this to
+  render its user picker BEFORE the visitor is authenticated, and
+  `users.listRule`/`viewRule` stay self-only on purpose (widening them was
+  explicitly rejected -- would over-expose `email`/`avatar`/`verified` and
+  break the "narrow, explicit surface" pattern task 4.2 established). See
+  `src/data/login-directory.integration.test.ts` for live proof: works
+  with zero users authenticated, returns exactly those 3 fields per user.
+
 ## VPS provisioning (task 0.8) -- deliberately not done in this session
 
 Per `HANDOFF-INICIO-DESARROLLO.md`: "Aprovisionar PocketBase (local para
