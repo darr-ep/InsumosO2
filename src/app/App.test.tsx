@@ -5,9 +5,9 @@ import { ClientResponseError } from "pocketbase";
 import { App } from "@/app/App";
 import { STALE_SESSION_MESSAGE } from "@/data/staleSession";
 
-// Both real tabs behind the nav now fetch data on mount (DashboardScreen,
-// task 2.5; SearchScreen, task 2.6) — mocked here so this smoke test stays
-// a fast, network-free check of the route wiring itself (§16.5), not a
+// DashboardScreen fetches active rentals (and, once folded, search results)
+// on mount/query — mocked here so this smoke test stays a fast,
+// network-free check of the route wiring itself (§16.5), not a
 // screen-level test (those live in each screen's own *.test.tsx).
 const listActiveRentals = vi.fn();
 const searchRentals = vi.fn();
@@ -97,16 +97,6 @@ describe("App", () => {
       expect(screen.queryByText(/próximamente/)).not.toBeInTheDocument();
     });
 
-    it("still serves /buscar's real content directly by URL (redesign nav batch: no nav link points here anymore, route removal lands in the next batch)", async () => {
-      window.history.pushState({}, "", "/buscar");
-      render(<App />);
-
-      expect(
-        await screen.findByLabelText("Buscar por folio, nombre o teléfono"),
-      ).toBeInTheDocument();
-      expect(screen.queryByText(/próximamente/)).not.toBeInTheDocument();
-    });
-
     it("navigates to /historial via the account menu and renders the real Historial screen, not a placeholder (redesign nav batch)", async () => {
       window.history.pushState({}, "", "/dashboard");
       const user = userEvent.setup();
@@ -170,16 +160,6 @@ describe("App", () => {
       expect(await screen.findByText("Insumos O2")).toBeInTheDocument();
       expect(
         screen.queryByRole("heading", { name: "Nueva renta" }),
-      ).not.toBeInTheDocument();
-    });
-
-    it("redirects /buscar to /login when there is no valid session", async () => {
-      window.history.pushState({}, "", "/buscar");
-      render(<App />);
-
-      expect(await screen.findByText("Insumos O2")).toBeInTheDocument();
-      expect(
-        screen.queryByLabelText("Buscar por folio, nombre o teléfono"),
       ).not.toBeInTheDocument();
     });
 

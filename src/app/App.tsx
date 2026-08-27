@@ -5,7 +5,6 @@ import { useIsAuthenticated } from "@/app/useIsAuthenticated";
 import { LoginScreen } from "@/screens/login/LoginScreen";
 import { DashboardScreen } from "@/screens/dashboard/DashboardScreen";
 import { RentalNewScreen } from "@/screens/rental-new/RentalNewScreen";
-import { SearchScreen } from "@/screens/search/SearchScreen";
 import { HistorialScreen } from "@/screens/historial/HistorialScreen";
 
 /**
@@ -43,11 +42,12 @@ function LoginRoute() {
 /**
  * Redesign nav batch (business-owner brief, round 2): the authenticated
  * area is no longer a fixed 3-tab bar — Dashboard is the hub, reached
- * directly after login, with Nueva renta and Historial one tap away
- * (a button on Dashboard, and the header's account menu, respectively).
- * `/buscar` stays temporarily until the next batch folds its behavior into
- * Dashboard's own search bar. Rental detail, customer file, payment and
- * return remain Sheets/Dialogs on top of these, never routes of their own.
+ * directly after login, with Nueva renta and Historial one tap away (a
+ * button on Dashboard, and the header's account menu, respectively).
+ * `/buscar` is gone — its behavior is folded into Dashboard's own search
+ * bar (DashboardScreen, redesign nav batch). Rental detail, customer file,
+ * payment and return remain Sheets/Dialogs on top of these, never routes
+ * of their own.
  */
 /**
  * SDD.md §16.13/§17 (gap-fill finding 4): a single `<Toaster />` mounted
@@ -66,7 +66,6 @@ export function App() {
           <Route element={<AppLayout />}>
             <Route path="/dashboard" element={<DashboardScreen />} />
             <Route path="/nueva-renta" element={<RentalNewScreen />} />
-            <Route path="/buscar" element={<SearchScreen />} />
             <Route path="/historial" element={<HistorialScreen />} />
           </Route>
         </Route>
