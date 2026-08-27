@@ -102,6 +102,28 @@ describe("ReceiptDialog (§22)", () => {
     expect(screen.getByText("$3,850.00")).toBeInTheDocument();
   });
 
+  it("renders the business logo at the top of the receipt (§22 — nombre del negocio + logo + teléfono)", () => {
+    vi.stubGlobal("navigator", { share: vi.fn() });
+    render(
+      <ReceiptDialog open onOpenChange={vi.fn()} receipt={receipt} />,
+    );
+
+    const logo = screen.getByRole("img", { name: "Insumos O2" });
+    expect(logo).toBeInTheDocument();
+    expect(logo).toHaveAttribute("src", "/logo.png");
+  });
+
+  it("also renders the business logo for a devolución receipt (§22, task 3.2's shared modal)", () => {
+    vi.stubGlobal("navigator", {});
+    render(
+      <ReceiptDialog open onOpenChange={vi.fn()} receipt={returnReceipt} />,
+    );
+
+    expect(
+      screen.getByRole("img", { name: "Insumos O2" }),
+    ).toBeInTheDocument();
+  });
+
   it("shows a Compartir button only when navigator.share is available", () => {
     vi.stubGlobal("navigator", {});
     render(

@@ -120,6 +120,15 @@ export function ReceiptDialog({
         {receipt && (
           <>
             <DialogHeader>
+              {/* SDD.md §22: "Nombre del negocio + logo (si existe) +
+                  teléfono" — on-screen HTML view only (the thermal ESC/POS
+                  ticket stays text-only per imageEscpos.ts's own docblock
+                  decision, never wired into the Bluetooth print path). */}
+              <img
+                src="/logo.png"
+                alt={receipt.businessName}
+                className="mx-auto size-12"
+              />
               <DialogTitle>
                 {receipt.kind === "return"
                   ? `Comprobante de devolución ${receipt.folio}`
