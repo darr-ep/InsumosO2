@@ -14,5 +14,17 @@ import PocketBase from "pocketbase";
  * request goes through as the signed-in business user, gated by the API
  * Rules (§13) and the pb_hooks/ (§11.1, §19.1) — same principle as before,
  * just no "anon key" concept the way Supabase had one.
+ *
+ * Real bug found live: when `VITE_POCKETBASE_URL` is empty (the LAN/Tailscale
+ * dev setup, where Vite proxies `/api` to PocketBase so both origins are the
+ * same), the SDK's own empty-baseURL fallback resolves against
+ * `window.location.pathname`, not just the origin — so a request made while
+ * on `/login` becomes `/login/api/...` instead of `/api/...`, missing Vite's
+ * proxy match and silently getting the SPA-fallback `index.html` back
+ * instead of JSON. Falling back to `window.location.origin` (no path)
+ * ourselves sidesteps that SDK behavior entirely and is correct regardless
+ * of which route is active.
  */
-export const pb = new PocketBase(import.meta.env.VITE_POCKETBASE_URL);
+export const pb = new PocketBase(
+  import.meta.env.VITE_POCKETBASE_URL || window.location.origin,
+);
