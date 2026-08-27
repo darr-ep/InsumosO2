@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { toast } from "sonner";
 import { PaymentDialog } from "@/components/PaymentDialog";
 
 const createPayment = vi.fn();
@@ -9,9 +10,18 @@ vi.mock("@/data/payments.repo", () => ({
   createPayment: (...args: unknown[]) => createPayment(...args),
 }));
 
+// Gap-fill finding 4 (§16.13/§17): PaymentDialog gave zero success
+// confirmation before this — mocked here so these tests can assert the
+// exact toast call without a real (visually-timed) Sonner render.
+vi.mock("sonner", () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
+}));
+
 describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
   beforeEach(() => {
     createPayment.mockReset();
+    vi.mocked(toast.success).mockReset();
+    vi.mocked(toast.error).mockReset();
   });
 
   it("pre-fills the amount with the suggested value and registers a rent payment", async () => {
@@ -43,6 +53,47 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
     });
     expect(onRegistered).toHaveBeenCalledWith({ id: "p1" });
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("fires a success toast when the payment is registered (§16.13/§17, gap-fill finding 4)", async () => {
+    createPayment.mockResolvedValueOnce({ id: "p1" });
+    const user = userEvent.setup();
+
+    render(
+      <PaymentDialog
+        open
+        onOpenChange={() => {}}
+        rentalId="r1"
+        suggestedAmount={3000}
+        hasPreviousRentPayment
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
+
+    expect(toast.success).toHaveBeenCalledWith("Pago registrado.");
+  });
+
+  it("does NOT fire a success toast when the payment fails to save (§16.13/§17, gap-fill finding 4)", async () => {
+    createPayment.mockRejectedValueOnce(new Error("network down"));
+    const user = userEvent.setup();
+
+    render(
+      <PaymentDialog
+        open
+        onOpenChange={() => {}}
+        rentalId="r1"
+        suggestedAmount={3000}
+        hasPreviousRentPayment
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
+
+    await screen.findByText(
+      "No se pudo registrar el pago. Verifica tu conexión e intenta de nuevo.",
+    );
+    expect(toast.success).not.toHaveBeenCalled();
   });
 
   it("lets the user register a different amount than the suggested one (CU5)", async () => {

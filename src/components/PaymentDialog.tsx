@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -93,6 +94,11 @@ export function PaymentDialog({
       });
 
       onRegistered?.(payment);
+      // §16.13/§17 (gap-fill finding 4): the sheet behind this dialog
+      // updates silently on success — a Toast gives explicit confirmation
+      // ("pago registrado", §17's own example) instead of leaving the user
+      // to notice the change on their own.
+      toast.success("Pago registrado.");
       onOpenChange(false);
     } catch {
       // §21: never show "saved" when the write failed — keep the form as

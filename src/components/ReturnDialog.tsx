@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -127,6 +128,12 @@ export function ReturnDialog({
           depositReturned: parsed.data.deposit_returned,
         }),
       );
+      // §16.13/§17 (gap-fill finding 4): §16.13 explicitly lists
+      // devolución as a state needing its own explicit visual
+      // confirmation — this dialog closes into the Comprobante modal, but
+      // gave zero acknowledgment before it, same silent-success gap
+      // PaymentDialog had.
+      toast.success("Devolución registrada.");
       onOpenChange(false);
     } catch {
       // §21: never show "saved" when the write failed — keep the form as

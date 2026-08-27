@@ -1,12 +1,20 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { toast } from "sonner";
 import { ReturnDialog } from "@/components/ReturnDialog";
 
 const returnRental = vi.fn();
 
 vi.mock("@/data/rentals.repo", () => ({
   returnRental: (...args: unknown[]) => returnRental(...args),
+}));
+
+// Gap-fill finding 4 (§16.13/§17): ReturnDialog gave zero success
+// confirmation before this — mocked here so these tests can assert the
+// exact toast call without a real (visually-timed) Sonner render.
+vi.mock("sonner", () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
 }));
 
 const baseProps = {
@@ -29,6 +37,8 @@ describe("ReturnDialog (§7.3, §16.8, CU6, task 3.2)", () => {
   afterEach(() => {
     returnRental.mockReset();
     baseProps.onOpenChange.mockReset();
+    vi.mocked(toast.success).mockReset();
+    vi.mocked(toast.error).mockReset();
   });
 
   it("shows cliente, productos, fecha de inicio, tiempo transcurrido and depósito, with editable suggested amounts (CU6 first scenario)", () => {
@@ -74,6 +84,37 @@ describe("ReturnDialog (§7.3, §16.8, CU6, task 3.2)", () => {
       }),
     );
     expect(baseProps.onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("fires a success toast when the return is registered (§16.13/§17, gap-fill finding 4)", async () => {
+    returnRental.mockResolvedValueOnce({
+      id: "rental1",
+      returned_at: "2026-08-26T12:00:00.000Z",
+    });
+    const user = userEvent.setup();
+    render(<ReturnDialog {...baseProps} />);
+
+    await user.click(
+      screen.getByRole("button", { name: "Confirmar devolución" }),
+    );
+
+    await waitFor(() => expect(returnRental).toHaveBeenCalledTimes(1));
+    expect(toast.success).toHaveBeenCalledWith("Devolución registrada.");
+  });
+
+  it("does NOT fire a success toast when the return fails to save (§16.13/§17, gap-fill finding 4)", async () => {
+    returnRental.mockRejectedValueOnce(new Error("network"));
+    const user = userEvent.setup();
+    render(<ReturnDialog {...baseProps} />);
+
+    await user.click(
+      screen.getByRole("button", { name: "Confirmar devolución" }),
+    );
+
+    await screen.findByText(
+      "No se pudo registrar la devolución. Verifica tu conexión e intenta de nuevo.",
+    );
+    expect(toast.success).not.toHaveBeenCalled();
   });
 
   it("rejects a negative amount without calling returnRental", async () => {
