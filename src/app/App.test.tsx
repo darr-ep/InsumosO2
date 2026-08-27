@@ -105,6 +105,18 @@ describe("App", () => {
         await screen.findByRole("heading", { name: "Dashboard" }),
       ).toBeInTheDocument();
     });
+
+    it("mounts a single Toaster at the app root (§16.13/§17, gap-fill finding 4)", async () => {
+      render(<App />);
+
+      await screen.findByRole("heading", { name: "Dashboard" });
+
+      // Sonner's own accessible landmark — proves the notification region
+      // is actually mounted in the DOM, not just imported.
+      expect(
+        screen.getByRole("region", { name: /Notifications/ }),
+      ).toBeInTheDocument();
+    });
   });
 
   describe("unauthenticated (gap-fill, §14 — route guard)", () => {

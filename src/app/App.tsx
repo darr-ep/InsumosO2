@@ -1,4 +1,5 @@
 import { Navigate, Outlet, Route, BrowserRouter, Routes } from "react-router";
+import { Toaster } from "@/components/ui/sonner";
 import { AppLayout } from "@/app/AppLayout";
 import { useIsAuthenticated } from "@/app/useIsAuthenticated";
 import { LoginScreen } from "@/screens/login/LoginScreen";
@@ -44,9 +45,17 @@ function LoginRoute() {
  * return are Sheets/Dialogs on top of these, never routes of their own —
  * they land alongside the screens that open them in later phases.
  */
+/**
+ * SDD.md §16.13/§17 (gap-fill finding 4): a single `<Toaster />` mounted
+ * once here, outside `<Routes>` so it survives route changes — §17's
+ * "Toast/Sonner para confirmaciones breves (pago registrado, comprobante
+ * compartido)". Individual screens/dialogs call `toast.success(...)` from
+ * `sonner` directly; this is the only place the container itself mounts.
+ */
 export function App() {
   return (
     <BrowserRouter>
+      <Toaster />
       <Routes>
         <Route path="/login" element={<LoginRoute />} />
         <Route element={<RequireAuth />}>
