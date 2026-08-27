@@ -1,4 +1,5 @@
-import { sleep } from "@/printing/escpos";
+import { buildTicket, chunk, sleep } from "@/printing/escpos";
+import { formatReceiptLines } from "@/domain/rentals/receipt";
 import type { ReceiptData } from "@/domain/rentals/receipt";
 import type { ReceiptPrinter } from "@/printing/ReceiptPrinter";
 
@@ -8,10 +9,11 @@ import type { ReceiptPrinter } from "@/printing/ReceiptPrinter";
  * against real hardware in the `test-impresora` prototype (see
  * `test-impresora/HANDOFF-IMPRESION-BLUETOOTH.md`).
  *
- * This commit adds `gatt.connect()` NetworkError retry (task 5.3 part 2)
- * on top of the device discovery/connection landed in part 1.
- * `print()`'s real chunked-write logic lands in a further commit (task
- * 5.3 part 3).
+ * Device discovery/connection landed in part 1, `gatt.connect()`
+ * NetworkError retry in part 2; this commit (part 3) adds the real
+ * chunked-write `print()` path, reusing `buildTicket`/`chunk` (task 5.2)
+ * and `formatReceiptLines` (domain layer, shared with
+ * `ShareFallbackPrinter`).
  *
  * Web Bluetooth cannot enumerate "every service" of a device by design
  * (browser privacy) — only services declared up-front in
@@ -35,6 +37,8 @@ const CANDIDATE_SERVICE_UUIDS: string[] = [
 // other error name is not transient and rejects immediately.
 const MAX_CONNECT_ATTEMPTS = 3;
 const CONNECT_RETRY_DELAY_MS = 800;
+const WRITE_CHUNK_SIZE = 20; // cheap BLE printers commonly have a ~20-byte effective MTU
+const WRITE_CHUNK_DELAY_MS = 20;
 
 export class WebBluetoothPrinter implements ReceiptPrinter {
   protected device: BluetoothDevice | null = null;
@@ -127,21 +131,34 @@ export class WebBluetoothPrinter implements ReceiptPrinter {
   }
 
   async print(receipt: ReceiptData): Promise<void> {
-    // Real chunked-write logic lands in the next commit (task 5.3 part 2);
-    // `receipt` stays part of the `ReceiptPrinter` contract shape.
-    void receipt;
     if (!this.writeCharacteristic) {
       throw new Error("No hay conexión activa con la impresora. Conecta primero.");
     }
 
-    throw new Error(
-      "WebBluetoothPrinter.print no está implementado todavía (task 5.3 part 2).",
-    );
+    const ticket = buildTicket(formatReceiptLines(receipt));
+    await this.writeBytes(ticket);
   }
 
   async disconnect(): Promise<void> {
     this.device?.gatt?.disconnect();
     this.device = null;
     this.writeCharacteristic = null;
+  }
+
+  private async writeBytes(data: Uint8Array): Promise<void> {
+    const characteristic = this.writeCharacteristic;
+    if (!characteristic) {
+      throw new Error("No hay característica de escritura disponible.");
+    }
+
+    const canWriteWithoutResponse = characteristic.properties.writeWithoutResponse;
+    for (const part of chunk(data, WRITE_CHUNK_SIZE)) {
+      if (canWriteWithoutResponse) {
+        await characteristic.writeValueWithoutResponse(part as BufferSource);
+      } else {
+        await characteristic.writeValue(part as BufferSource);
+      }
+      await sleep(WRITE_CHUNK_DELAY_MS);
+    }
   }
 }

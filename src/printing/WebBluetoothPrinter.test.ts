@@ -3,13 +3,12 @@ import { WebBluetoothPrinter } from "@/printing/WebBluetoothPrinter";
 import type { RentalReceiptData } from "@/domain/rentals/receipt";
 
 /**
- * SDD.md §23.1/§23.3/§23.4 (task 5.3, part 1 — device discovery and
- * connection only). Mocks the Web Bluetooth API surface the way
- * `test-impresora`'s own findings describe it (see
- * `test-impresora/HANDOFF-IMPRESION-BLUETOOTH.md` §3/§4). NetworkError
- * retry resilience and the chunked write path land in later commits.
- * Real hardware verification is task 5.5, explicitly out of scope for
- * this run.
+ * SDD.md §23.1/§23.3/§23.4 (task 5.3, complete). Mocks the Web Bluetooth
+ * API surface the way `test-impresora`'s own findings describe it (see
+ * `test-impresora/HANDOFF-IMPRESION-BLUETOOTH.md` §3/§4): `gatt.connect()`
+ * can transiently fail with `NetworkError` and must be retried; writes
+ * must be chunked with a short pause between each one. Real hardware
+ * verification is task 5.5, explicitly out of scope for this run.
  */
 
 const receipt: RentalReceiptData = {
@@ -242,11 +241,72 @@ describe("WebBluetoothPrinter.connect (§23.1/§23.3)", () => {
   });
 });
 
-describe("WebBluetoothPrinter.print (§22/§23.1 — connection-state contract only; real write logic lands in task 5.3 part 2)", () => {
+describe("WebBluetoothPrinter.print (§22/§23.1)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
   it("throws when not connected", async () => {
     const printer = new WebBluetoothPrinter();
 
     await expect(printer.print(receipt)).rejects.toThrow();
+  });
+
+  it("writes the receipt ticket in chunks via writeValueWithoutResponse when supported", async () => {
+    const writable = makeCharacteristic({ writeWithoutResponse: true });
+    const { device } = makeDevice({ services: [makeService([writable])] });
+    vi.stubGlobal("navigator", {
+      bluetooth: { requestDevice: vi.fn().mockResolvedValue(device) },
+    });
+    vi.stubGlobal("window", { isSecureContext: true });
+    const printer = new WebBluetoothPrinter();
+    await printer.connect();
+
+    const printPromise = printer.print(receipt);
+    await vi.runAllTimersAsync();
+    await printPromise;
+
+    expect(writable.writeValueWithoutResponse).toHaveBeenCalled();
+    expect(writable.writeValue).not.toHaveBeenCalled();
+    // Reassemble every chunk sent and confirm it's a real ESC/POS ticket
+    // for THIS receipt's folio — proves the write path actually carries
+    // the formatted receipt content, not an empty/placeholder buffer.
+    const chunks = writable.writeValueWithoutResponse.mock.calls.map(
+      (call) => call[0] as Uint8Array,
+    );
+    const totalBytes = chunks.reduce((sum, c) => sum + c.length, 0);
+    const sent = new Uint8Array(totalBytes);
+    let offset = 0;
+    for (const c of chunks) {
+      sent.set(c, offset);
+      offset += c.length;
+    }
+    const text = new TextDecoder("latin1").decode(sent);
+    expect(text).toContain("Folio: R-000001");
+    expect(text).toContain("Juan Pérez");
+  });
+
+  it("falls back to writeValue when writeWithoutResponse isn't supported (triangulation)", async () => {
+    const writable = makeCharacteristic({ write: true });
+    const { device } = makeDevice({ services: [makeService([writable])] });
+    vi.stubGlobal("navigator", {
+      bluetooth: { requestDevice: vi.fn().mockResolvedValue(device) },
+    });
+    vi.stubGlobal("window", { isSecureContext: true });
+    const printer = new WebBluetoothPrinter();
+    await printer.connect();
+
+    const printPromise = printer.print(receipt);
+    await vi.runAllTimersAsync();
+    await printPromise;
+
+    expect(writable.writeValue).toHaveBeenCalled();
+    expect(writable.writeValueWithoutResponse).not.toHaveBeenCalled();
   });
 });
 
