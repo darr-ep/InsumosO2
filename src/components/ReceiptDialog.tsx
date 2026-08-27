@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { PrintShareBar } from "@/components/PrintShareBar";
 import { rentalItemTypeLabel } from "@/domain/rentals/rental";
 import type { ReceiptData } from "@/domain/rentals/receipt";
 import {
@@ -240,28 +239,14 @@ export function ReceiptDialog({
               </p>
             )}
 
-            <DialogFooter>
-              {printAvailable && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handlePrint}
-                  disabled={printStatus === "printing"}
-                >
-                  {printStatus === "failed"
-                    ? "Reintentar impresión"
-                    : "Imprimir"}
-                </Button>
-              )}
-              {isShareAvailable() && (
-                <Button type="button" variant="outline" onClick={handleShare}>
-                  Compartir
-                </Button>
-              )}
-              <Button type="button" onClick={() => onOpenChange(false)}>
-                Cerrar
-              </Button>
-            </DialogFooter>
+            <PrintShareBar
+              printAvailable={printAvailable}
+              printStatus={printStatus}
+              onPrint={handlePrint}
+              shareAvailable={isShareAvailable()}
+              onShare={handleShare}
+              onClose={() => onOpenChange(false)}
+            />
           </>
         )}
       </DialogContent>
