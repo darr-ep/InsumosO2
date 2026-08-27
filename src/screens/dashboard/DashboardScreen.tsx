@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { RentalCard } from "@/components/RentalCard";
 import { RentalDetailSheet } from "@/components/RentalDetailSheet";
 import { CustomerDetailSheet } from "@/components/CustomerDetailSheet";
 import {
@@ -100,31 +100,17 @@ export function DashboardScreen() {
             <ul className="flex flex-col gap-3">
               {rentals.map((rental) => (
                 <li key={rental.id}>
-                  <button
-                    type="button"
-                    className="w-full text-left"
+                  <RentalCard
+                    customerName={rental.expand?.customer_id?.name ?? "Cliente"}
                     onClick={() => openRentalDetail(rental.id)}
                   >
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>
-                          {rental.expand?.customer_id?.name ?? "Cliente"}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="flex flex-col gap-1 text-sm text-muted-foreground">
-                        <p>Folio: {rental.folio}</p>
-                        <p>
-                          Desde:{" "}
-                          {new Date(rental.created).toLocaleDateString(
-                            "es-MX",
-                          )}
-                        </p>
-                        <p>
-                          Renta: {formatCurrencyMXN(rental.initial_rent_amount)}
-                        </p>
-                      </CardContent>
-                    </Card>
-                  </button>
+                    <p>Folio: {rental.folio}</p>
+                    <p>
+                      Desde:{" "}
+                      {new Date(rental.created).toLocaleDateString("es-MX")}
+                    </p>
+                    <p>Renta: {formatCurrencyMXN(rental.initial_rent_amount)}</p>
+                  </RentalCard>
                 </li>
               ))}
             </ul>
@@ -136,25 +122,19 @@ export function DashboardScreen() {
               <ul className="flex flex-col gap-3">
                 {staleRentals.map((rental) => (
                   <li key={rental.id}>
-                    <button
-                      type="button"
-                      className="w-full text-left"
+                    <RentalCard
+                      customerName={
+                        rental.expand?.customer_id?.name ?? "Cliente"
+                      }
                       onClick={() => openRentalDetail(rental.id)}
+                      cardClassName="border-amber-500"
+                      contentClassName="text-sm text-muted-foreground"
                     >
-                      <Card className="border-amber-500">
-                        <CardHeader>
-                          <CardTitle>
-                            {rental.expand?.customer_id?.name ?? "Cliente"}
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="text-sm text-muted-foreground">
-                          <p>
-                            {daysSince(new Date(rental.created), now)} días
-                            activa · Revisar renta
-                          </p>
-                        </CardContent>
-                      </Card>
-                    </button>
+                      <p>
+                        {daysSince(new Date(rental.created), now)} días
+                        activa · Revisar renta
+                      </p>
+                    </RentalCard>
                   </li>
                 ))}
               </ul>

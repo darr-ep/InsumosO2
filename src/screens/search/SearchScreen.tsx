@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { SearchBar } from "@/components/SearchBar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { RentalCard } from "@/components/RentalCard";
 import { RentalDetailSheet } from "@/components/RentalDetailSheet";
 import { CustomerDetailSheet } from "@/components/CustomerDetailSheet";
 import { searchRentals, type RentalWithCustomer } from "@/data/rentals.repo";
@@ -103,23 +103,13 @@ export function SearchScreen() {
         <ul className="flex flex-col gap-3">
           {visibleResults.map((rental) => (
             <li key={rental.id}>
-              <button
-                type="button"
-                className="w-full text-left"
+              <RentalCard
+                customerName={rental.expand?.customer_id?.name ?? "Cliente"}
                 onClick={() => openRentalDetail(rental.id)}
               >
-                <Card>
-                  <CardHeader>
-                    <CardTitle>
-                      {rental.expand?.customer_id?.name ?? "Cliente"}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="flex flex-col gap-1 text-sm text-muted-foreground">
-                    <p>Folio: {rental.folio}</p>
-                    <p>Teléfono: {rental.expand?.customer_id?.phone ?? "—"}</p>
-                  </CardContent>
-                </Card>
-              </button>
+                <p>Folio: {rental.folio}</p>
+                <p>Teléfono: {rental.expand?.customer_id?.phone ?? "—"}</p>
+              </RentalCard>
             </li>
           ))}
         </ul>
