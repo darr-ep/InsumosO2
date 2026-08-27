@@ -14,7 +14,7 @@ import { ExtrasList } from "@/components/ExtrasList";
 import { ReceiptDialog } from "@/components/ReceiptDialog";
 import { CustomerDetailSheet } from "@/components/CustomerDetailSheet";
 import type { CustomerRecord } from "@/data/customers.repo";
-import { createRental } from "@/data/rentals.repo";
+import { createRental, RentalPartiallyCreatedError } from "@/data/rentals.repo";
 import { handleIfStaleSession } from "@/data/staleSession";
 import { rentalFormSchema, type RentalExtraFormValues } from "@/domain/rentals/rental";
 import { buildRentalReceipt, type RentalReceiptData } from "@/domain/rentals/receipt";
@@ -105,10 +105,29 @@ export function RentalNewScreen() {
       setReceiptOpen(true);
       resetForm();
     } catch (error) {
+      // Gap-fill (Deposit Payment Creation Failure): `createRental` wraps a
+      // rental_items/payment step failure in `RentalPartiallyCreatedError`
+      // when the rental record itself DID save — check its `.cause` for a
+      // stale session (the original write may have failed mid-sequence
+      // because the session went stale between steps, not because of the
+      // race this gap-fill actually fixes) before falling through to the
+      // §14 stale-session check on the raw error below.
+      const isPartialFailure = error instanceof RentalPartiallyCreatedError;
       // §14 gap-fill: a rotated/expired session (still locally "valid" per
       // `pb.authStore.isValid`) surfaces here as this exact generic
       // save-error — redirect to `/login` instead.
-      if (handleIfStaleSession(error)) {
+      if (handleIfStaleSession(isPartialFailure ? error.cause : error)) {
+        return;
+      }
+      if (isPartialFailure) {
+        // Same principle as `src/data/staleSession.ts`: never lump a known,
+        // distinct failure class into the generic message. The rental
+        // record already exists (server-confirmed) — saying "no se pudo
+        // guardar la renta" here would be false. Show the real folio so the
+        // renta can be found and finished manually instead.
+        setFormError(
+          `La renta ${error.rental.folio} ya se guardó, pero hubo un problema al registrar sus productos o el depósito. Anota el folio y revísala antes de reintentar.`,
+        );
         return;
       }
       // §21: never show "saved" when the write failed — keep the form

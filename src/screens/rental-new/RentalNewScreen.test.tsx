@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router";
 import { ClientResponseError } from "pocketbase";
 import { RentalNewScreen } from "@/screens/rental-new/RentalNewScreen";
 import { consumeSessionMessage, STALE_SESSION_MESSAGE } from "@/data/staleSession";
+import { RentalPartiallyCreatedError } from "@/data/rentals.repo";
 
 const searchCustomers = vi.fn();
 const createCustomer = vi.fn();
@@ -27,10 +28,19 @@ vi.mock("@/data/customers.repo", () => ({
   getCustomer: (...args: unknown[]) => getCustomer(...args),
 }));
 
-vi.mock("@/data/rentals.repo", () => ({
-  createRental: (...args: unknown[]) => createRental(...args),
-  listRentalsForCustomer: (...args: unknown[]) => listRentalsForCustomer(...args),
-}));
+vi.mock("@/data/rentals.repo", async () => {
+  const actual =
+    await vi.importActual<typeof import("@/data/rentals.repo")>(
+      "@/data/rentals.repo",
+    );
+  return {
+    // `RentalPartiallyCreatedError` is real (not mocked) so `instanceof`
+    // checks in both this file and `RentalNewScreen.tsx` keep working.
+    RentalPartiallyCreatedError: actual.RentalPartiallyCreatedError,
+    createRental: (...args: unknown[]) => createRental(...args),
+    listRentalsForCustomer: (...args: unknown[]) => listRentalsForCustomer(...args),
+  };
+});
 
 vi.mock("react-router", async () => {
   const actual = await vi.importActual<typeof import("react-router")>(
@@ -173,6 +183,75 @@ describe("RentalNewScreen (§7.1, §16.7, CU4)", () => {
     // Customer selection survives the failed attempt (§21 — no recapturing).
     expect(screen.getByText("Juan Pérez")).toBeInTheDocument();
     expect(clear).not.toHaveBeenCalled();
+  });
+
+  it("gap-fill (deposit payment race): shows an honest message with the real folio — never the generic 'no se pudo guardar' — when createRental rejects with RentalPartiallyCreatedError (the rental itself DID save)", async () => {
+    searchCustomers.mockResolvedValue([juan]);
+    const partialError = new RentalPartiallyCreatedError(
+      { id: "r1", folio: "R-000042" } as never,
+      [],
+      new Error("aborted"),
+    );
+    createRental.mockRejectedValue(partialError);
+
+    const user = userEvent.setup();
+    renderScreen();
+
+    await user.type(
+      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
+      "Juan",
+    );
+    await user.click(
+      await screen.findByRole("button", { name: /Juan Pérez/ }),
+    );
+    await user.click(screen.getByLabelText("Agregar un tanque"));
+    await user.type(screen.getByLabelText("Renta"), "1500");
+    await user.type(screen.getByLabelText("Depósito"), "12000");
+
+    await user.click(screen.getByRole("button", { name: "Confirmar renta" }));
+
+    expect(await screen.findByText(/R-000042/)).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "No se pudo guardar la renta. Verifica tu conexión e intenta de nuevo.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(clear).not.toHaveBeenCalled();
+  });
+
+  it("gap-fill (deposit payment race): still redirects to /login instead of showing the partial-save message when a RentalPartiallyCreatedError wraps a stale-session-shaped cause", async () => {
+    searchCustomers.mockResolvedValue([juan]);
+    const staleCause = new ClientResponseError({
+      status: 400,
+      response: { message: "Failed to create record.", data: {} },
+    });
+    createRental.mockRejectedValue(
+      new RentalPartiallyCreatedError(
+        { id: "r1", folio: "R-000043" } as never,
+        [],
+        staleCause,
+      ),
+    );
+
+    const user = userEvent.setup();
+    renderScreen();
+
+    await user.type(
+      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
+      "Juan",
+    );
+    await user.click(
+      await screen.findByRole("button", { name: /Juan Pérez/ }),
+    );
+    await user.click(screen.getByLabelText("Agregar un tanque"));
+    await user.type(screen.getByLabelText("Renta"), "1500");
+    await user.type(screen.getByLabelText("Depósito"), "12000");
+
+    await user.click(screen.getByRole("button", { name: "Confirmar renta" }));
+
+    await waitFor(() => expect(clear).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText(/R-000043/)).not.toBeInTheDocument();
+    expect(consumeSessionMessage()).toBe(STALE_SESSION_MESSAGE);
   });
 
   it("clears the session instead of showing the generic save-error message when confirming fails with a stale-session-shaped error (§14 gap-fill)", async () => {
