@@ -121,6 +121,17 @@ migrate(
       // created_by/updated_by — those are forced server-side by
       // pb_hooks/rentals_folio.pb.js (create) and
       // pb_hooks/rentals_return.pb.js (return, Phase 3).
+      //
+      // Gap-fill finding 1 (fresh full SDD-vs-codebase audit, post-Login/Auth
+      // gap-fill): `deposit_returned_amount` is documented in §11 as
+      // server-computed ("se llena al devolver", same category as the
+      // fields already guarded above), filled only by
+      // `pb_hooks/rentals_return.pb.js` — but it never got the matching
+      // `:isset = false` guard on create/update. Confirmed live as a real
+      // gap before this fix: any authenticated user could set/overwrite
+      // `deposit_returned_amount` directly via
+      // `pb.collection('rentals').create/update(...)`, bypassing the return
+      // endpoint entirely.
       createRule:
         "@request.auth.id != '' && " +
         "@request.body.folio:isset = false && " +
@@ -128,7 +139,8 @@ migrate(
         "@request.body.returned_at:isset = false && " +
         "@request.body.returned_by:isset = false && " +
         "@request.body.created_by:isset = false && " +
-        "@request.body.updated_by:isset = false",
+        "@request.body.updated_by:isset = false && " +
+        "@request.body.deposit_returned_amount:isset = false",
       // Phase 4 task 4.2: `created_by`/`updated_by` are also blocked on
       // Update, not just Create — §13's closing paragraph ("también se
       // bloquean en el body por el mismo motivo, sección 26") and §26's own
@@ -147,7 +159,8 @@ migrate(
         "@request.body.returned_by:isset = false && " +
         "@request.body.folio:isset = false && " +
         "@request.body.created_by:isset = false && " +
-        "@request.body.updated_by:isset = false",
+        "@request.body.updated_by:isset = false && " +
+        "@request.body.deposit_returned_amount:isset = false",
       deleteRule: null,
     });
 
