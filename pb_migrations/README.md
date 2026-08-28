@@ -207,6 +207,64 @@ pieces of that gap:
   `src/data/login-directory.integration.test.ts` for live proof: works
   with zero users authenticated, returns exactly those 3 fields per user.
 
+## Feature: Runtime-Editable Total Stock (business owner request, post-MVP+redesign, not SDD.md-sourced)
+
+- `1787760070_business_settings_collection.js` -- new `business_settings`
+  collection, a SINGLETON (exactly one row, ever, seeded by this migration
+  with `total_concentradores: 0, total_tanques: 0`). Replaces the old
+  `VITE_TOTAL_CONCENTRADORES`/`VITE_TOTAL_TANQUES` build-time env vars
+  (Redesign Round 2 Batch 4) -- the business owner can now edit both totals
+  herself, at runtime, directly from the Dashboard's availability tiles
+  (`DashboardStats.tsx`'s tap-to-edit dialog), no file edit or server
+  restart needed. `listRule`/`viewRule`/`updateRule` follow section 13's
+  generic authenticated-user pattern; `createRule`/`deleteRule` are `null`
+  (superuser/admin-panel-only), same reasoning `users.createRule = null`
+  (task 4.2) already established -- nobody should ever be able to spawn a
+  second row or delete the only one.
+  **Real finding, confirmed live:** both fields are `required: false`, not
+  `true` -- a PocketBase `NumberField` with `required: true` rejects `0` as
+  "cannot be blank" (confirmed live: this migration's own seed step failed
+  to apply with that error when first tried as `required: true`). Since `0`
+  is a real, valid "nothing configured yet" state for this field (not an
+  error), `required: true` is the wrong constraint here -- `min: 0` +
+  `onlyInt: true` already provide the real server-side guard. See the
+  migration file's own docblock for the full story, and
+  `src/data/business-settings.integration.test.ts` for the live proof (run
+  against an ISOLATED scratch instance, see below -- not port 8090).
+
+### Running the business_settings integration test on an isolated scratch instance
+
+Unlike most of this suite (which defaults to the shared port-8090
+instance), `business-settings.integration.test.ts` targets a DEDICATED
+`VITE_PB_TEST_BUSINESS_SETTINGS_URL` and skips gracefully if unset -- same
+optional-second-instance pattern as `rate-limiting.integration.test.ts`/
+`backups-settings.integration.test.ts`. This keeps it safe to run without
+ever touching a developer's live port-8090 instance/`pb_data/`:
+
+```
+mkdir -p /path/to/scratch/data
+PB_TEST_MODE=1 ./pocketbase.exe serve --http=127.0.0.1:8095 \
+  --dir=/path/to/scratch/data \
+  --migrationsDir="$(pwd)/pb_migrations" --hooksDir="$(pwd)/pb_hooks"
+./pocketbase.exe superuser upsert phase4-test-superuser@insumoso2.local Passw0rd!2026Super \
+  --dir=/path/to/scratch/data
+
+VITE_PB_TEST_BUSINESS_SETTINGS_URL=http://127.0.0.1:8095 \
+npm test -- src/data/business-settings.integration
+```
+
+**Real gotcha found while setting this up, worth documenting for next
+time:** `pocketbase.exe serve --dir=<scratch-dir>` alone does NOT pick up
+this repo's `pb_migrations`/`pb_hooks` the way the "Local development"
+section above assumes -- confirmed live: a scratch instance started with
+only `--dir` (no explicit `--migrationsDir`/`--hooksDir`) came up with ONLY
+PocketBase's built-in system collections and the default `users` table,
+none of this repo's own collections/fields applied at all. Passing
+`--migrationsDir`/`--hooksDir` explicitly (both pointed at this repo's
+folders, `--dir` pointed at the isolated scratch location) is what actually
+applies the real migration chain while keeping all data writes fully
+isolated from the repo's own `pb_data/`.
+
 ## VPS provisioning (task 0.8) -- deliberately not done in this session
 
 Per `HANDOFF-INICIO-DESARROLLO.md`: "Aprovisionar PocketBase (local para
