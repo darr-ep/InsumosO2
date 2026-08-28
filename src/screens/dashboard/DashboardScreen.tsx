@@ -212,10 +212,10 @@ export function DashboardScreen() {
     showStaleOnly && staleRentals.length > 0 ? staleRentals : rentals ?? [];
 
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="flex flex-1 min-h-full flex-col">
       <AppHeader title={import.meta.env.VITE_BUSINESS_NAME || "Inicio"} />
 
-      <div className="flex flex-col gap-6 p-4 pb-20">
+      <div className="flex flex-1 flex-col gap-6 px-4 pt-2 pb-20">
         <SearchBar value={query} onChange={setQuery} />
 
         {isSearchActive ? (
@@ -348,8 +348,8 @@ export function DashboardScreen() {
         />
       </div>
 
-      <div className="sticky bottom-0 mt-auto shrink-0 border-t bg-background p-4">
-        <Button asChild size="lg" className="w-full">
+      <div className="sticky bottom-0 z-10 mt-auto shrink-0 p-4 pointer-events-none">
+        <Button asChild size="lg" className="w-full pointer-events-auto">
           <Link to="/nueva-renta">Nueva renta</Link>
         </Button>
       </div>

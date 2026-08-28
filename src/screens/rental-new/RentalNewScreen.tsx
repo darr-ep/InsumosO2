@@ -159,7 +159,7 @@ export function RentalNewScreen() {
     <>
       <AppHeader title="Nueva renta" showBack />
 
-      <div className="flex flex-col gap-6 p-4 pb-8">
+      <div className="flex flex-col gap-6 px-4 pt-2 pb-8">
         <section className="flex flex-col gap-2">
           <h2 className="text-sm font-semibold text-muted-foreground">
             Cliente

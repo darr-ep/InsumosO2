@@ -47,12 +47,12 @@ const TABS = [
 export function AppLayout() {
   return (
     <div className="flex min-h-dvh flex-col bg-background text-foreground">
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex flex-1 flex-col overflow-y-auto">
         <Outlet />
       </main>
       <nav
         aria-label="Navegación principal"
-        className="flex shrink-0 border-t bg-background"
+        className="flex shrink-0 border-t bg-background py-1.5"
       >
         {TABS.map(({ to, label, icon: Icon }) => (
           <NavLink
@@ -60,10 +60,10 @@ export function AppLayout() {
             to={to}
             className={({ isActive }) =>
               cn(
-                "flex flex-1 flex-col items-center justify-center gap-1 py-2 text-xs font-medium",
+                "flex flex-1 flex-col items-center justify-center gap-1 py-1 text-xs font-medium",
                 "min-h-[44px]",
                 isActive
-                  ? "text-primary"
+                  ? "text-primary font-bold"
                   : "text-muted-foreground hover:text-foreground",
               )
             }

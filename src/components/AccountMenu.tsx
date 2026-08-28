@@ -36,7 +36,7 @@ export function AccountMenu() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button type="button" variant="ghost" size="icon" aria-label="Cuenta">
-          <UserRound aria-hidden="true" className="size-5" />
+          <UserRound aria-hidden="true" className="!size-[22px]" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">

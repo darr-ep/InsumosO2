@@ -39,7 +39,7 @@ function SheetOverlay({
 }
 
 const sheetVariants = cva(
-  "bg-background fixed z-50 flex flex-col gap-4 border shadow-lg",
+  "bg-background fixed z-50 flex flex-col gap-4 border",
   {
     variants: {
       side: {

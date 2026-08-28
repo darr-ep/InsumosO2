@@ -68,7 +68,7 @@ export function HistorialScreen() {
     <>
       <AppHeader title="Historial de rentas" showBack />
 
-      <div className="flex flex-col gap-4 p-4 pb-8">
+      <div className="flex flex-col gap-4 px-4 pt-2 pb-8">
         {error && <p className="text-destructive text-sm">{error}</p>}
 
         {rentals === null && !error && (

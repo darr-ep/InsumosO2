@@ -25,7 +25,7 @@ export function AppHeader({ title, showBack = false }: AppHeaderProps) {
 
   if (showBack) {
     return (
-      <header className="flex items-center gap-2 border-b p-2">
+      <header className="flex items-center gap-2 px-4 py-2">
         <Button
           type="button"
           variant="ghost"
@@ -33,16 +33,16 @@ export function AppHeader({ title, showBack = false }: AppHeaderProps) {
           aria-label="Volver"
           onClick={() => navigate(-1)}
         >
-          <ArrowLeft aria-hidden="true" className="size-5" />
+          <ArrowLeft aria-hidden="true" className="!size-[22px]" />
         </Button>
-        <h1 className="text-lg font-semibold">{title}</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
       </header>
     );
   }
 
   return (
-    <header className="flex items-center justify-between border-b p-2">
-      <h1 className="text-lg font-semibold">{title}</h1>
+    <header className="flex items-center justify-between px-4 py-2">
+      <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
       <AccountMenu />
     </header>
   );

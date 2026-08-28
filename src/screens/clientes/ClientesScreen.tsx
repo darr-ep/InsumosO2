@@ -132,8 +132,12 @@ export function ClientesScreen() {
     <>
       <AppHeader title="Clientes" />
 
-      <div className="flex flex-col gap-4 p-4 pb-8">
-        <SearchBar value={query} onChange={setQuery} />
+      <div className="flex flex-col gap-4 px-4 pt-2 pb-8">
+        <SearchBar
+          value={query}
+          onChange={setQuery}
+          placeholder="Nombre del cliente"
+        />
 
         {isSearchActive ? (
           <>
