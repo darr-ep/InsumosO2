@@ -31,6 +31,14 @@ import { formatCurrencyMXN } from "@/lib/currency";
  * Opened from `RentalDetailSheet` (§18) or from `CustomerPicker` inside
  * "Nueva renta" (§16.6) — wiring is task 3.5, this component only needs a
  * `customerId`.
+ *
+ * Real bug fix (Redesign Round 2, Batch 2 — Clientes screen): the rentals
+ * list used to be one mislabeled "Historial de rentas" section mixing
+ * ACTIVE and RETURNED rentals together, contradicting the business owner's
+ * own principle stated in this same round's brief ("Diferenciar claramente
+ * 'rentas activas' del 'historial de rentas'"). Now split into two
+ * sections filtered client-side over the already-fetched `rentals` array —
+ * zero new fetches, pure display fix.
  */
 
 export interface CustomerDetailSheetProps {
@@ -162,6 +170,17 @@ export function CustomerDetailSheet({
     ? isCredentialPending(customer.credential_photo)
     : false;
 
+  // Real bug fix (Redesign Round 2, Batch 2): this section used to be one
+  // "Historial de rentas" list mixing ACTIVE and RETURNED rentals together
+  // — mislabeled, and a direct contradiction of the business owner's own
+  // explicit principle ("Diferenciar claramente 'rentas activas' del
+  // 'historial de rentas'"). Pure client-side filter over the
+  // already-fetched `rentals` array — zero new fetches.
+  const activeRentals = rentals.filter((rental) => rental.status === "ACTIVE");
+  const historialRentals = rentals.filter(
+    (rental) => rental.status !== "ACTIVE",
+  );
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent>
@@ -237,28 +256,35 @@ export function CustomerDetailSheet({
 
             <section className="flex flex-col gap-2">
               <h2 className="text-sm font-semibold text-muted-foreground">
-                Historial de rentas
+                Rentas activas
               </h2>
 
-              {rentals.length === 0 ? (
+              {activeRentals.length === 0 ? (
                 <p className="text-muted-foreground text-sm">
-                  Sin rentas todavía.
+                  Sin rentas activas.
                 </p>
               ) : (
                 <ul className="flex flex-col gap-2">
-                  {rentals.map((rental) => (
-                    <li
-                      key={rental.id}
-                      className="flex items-center justify-between rounded-md border p-3"
-                    >
-                      <div>
-                        <p className="font-medium">{rental.folio}</p>
-                        <p className="text-muted-foreground text-sm">
-                          {formatCurrencyMXN(rental.initial_rent_amount)}
-                        </p>
-                      </div>
-                      <RentalStatusBadge status={rental.status} />
-                    </li>
+                  {activeRentals.map((rental) => (
+                    <RentalRow key={rental.id} rental={rental} />
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            <section className="flex flex-col gap-2">
+              <h2 className="text-sm font-semibold text-muted-foreground">
+                Historial
+              </h2>
+
+              {historialRentals.length === 0 ? (
+                <p className="text-muted-foreground text-sm">
+                  Sin historial.
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-2">
+                  {historialRentals.map((rental) => (
+                    <RentalRow key={rental.id} rental={rental} />
                   ))}
                 </ul>
               )}
@@ -267,5 +293,22 @@ export function CustomerDetailSheet({
         )}
       </SheetContent>
     </Sheet>
+  );
+}
+
+// Shared row markup for both the "Rentas activas" and "Historial" lists —
+// identical visual output to what the single mixed list rendered before
+// this split, just reused across the two sections instead of duplicated.
+function RentalRow({ rental }: { rental: RentalRecord }) {
+  return (
+    <li className="flex items-center justify-between rounded-md border p-3">
+      <div>
+        <p className="font-medium">{rental.folio}</p>
+        <p className="text-muted-foreground text-sm">
+          {formatCurrencyMXN(rental.initial_rent_amount)}
+        </p>
+      </div>
+      <RentalStatusBadge status={rental.status} />
+    </li>
   );
 }

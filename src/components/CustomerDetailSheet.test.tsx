@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CustomerDetailSheet } from "@/components/CustomerDetailSheet";
 
@@ -45,7 +45,7 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
     listRentalsForCustomer.mockReset();
   });
 
-  it("shows the customer's 4 rentals with their status (CU7 first scenario)", async () => {
+  it("splits rentals into 'Rentas activas' and 'Historial' sections, never mixed together (real bug fix — business owner's own principle: 'Diferenciar claramente rentas activas del historial de rentas')", async () => {
     getCustomer.mockResolvedValue(customerWithPhoto);
     listRentalsForCustomer.mockResolvedValue([
       { id: "r1", folio: "R-000004", status: "ACTIVE", initial_rent_amount: 2800 },
@@ -59,12 +59,45 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
     );
 
     expect(await screen.findByText("Juan Pérez")).toBeInTheDocument();
-    expect(screen.getByText("R-000004")).toBeInTheDocument();
-    expect(screen.getByText("R-000003")).toBeInTheDocument();
-    expect(screen.getByText("R-000002")).toBeInTheDocument();
-    expect(screen.getByText("R-000001")).toBeInTheDocument();
-    expect(screen.getByText("Activa")).toBeInTheDocument();
-    expect(screen.getAllByText("Devuelta")).toHaveLength(3);
+
+    const activeSection = screen
+      .getByRole("heading", { name: "Rentas activas" })
+      .closest("section")!;
+    const historialSection = screen
+      .getByRole("heading", { name: "Historial" })
+      .closest("section")!;
+
+    // ACTIVE rental only inside "Rentas activas".
+    expect(within(activeSection).getByText("R-000004")).toBeInTheDocument();
+    expect(within(activeSection).getByText("Activa")).toBeInTheDocument();
+    expect(
+      within(activeSection).queryByText("R-000003"),
+    ).not.toBeInTheDocument();
+
+    // RETURNED rentals only inside "Historial" — never mixed with the
+    // active one, and never both shown under one ambiguous heading.
+    expect(within(historialSection).getByText("R-000003")).toBeInTheDocument();
+    expect(within(historialSection).getByText("R-000002")).toBeInTheDocument();
+    expect(within(historialSection).getByText("R-000001")).toBeInTheDocument();
+    expect(within(historialSection).getAllByText("Devuelta")).toHaveLength(3);
+    expect(
+      within(historialSection).queryByText("R-000004"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows a per-section empty state when a customer has no active rentals or no historial", async () => {
+    getCustomer.mockResolvedValue(customerWithPhoto);
+    listRentalsForCustomer.mockResolvedValue([
+      { id: "r1", folio: "R-000001", status: "RETURNED", initial_rent_amount: 2800 },
+    ]);
+
+    render(
+      <CustomerDetailSheet open onOpenChange={vi.fn()} customerId="c1" />,
+    );
+
+    expect(await screen.findByText("Juan Pérez")).toBeInTheDocument();
+    expect(screen.getByText("Sin rentas activas.")).toBeInTheDocument();
+    expect(screen.queryByText("Sin historial.")).not.toBeInTheDocument();
   });
 
   it("requests a file token and shows the credential image only after 'Ver credencial' is pressed (CU7 second scenario)", async () => {
