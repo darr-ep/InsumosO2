@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { DashboardStats } from "@/components/DashboardStats";
 
 /**
@@ -13,17 +14,47 @@ import { DashboardStats } from "@/components/DashboardStats";
  * stays neutral-weighted (`text-foreground`) regardless of its value — it
  * never gets promoted to `text-success`, since it's neither a good nor a
  * bad state.
+ *
+ * Feature: Runtime-Editable Total Stock (business owner's UX request, post-
+ * MVP+redesign, not SDD.md-sourced): the two availability tiles are now
+ * tap-to-edit — tapping either opens a Dialog pre-filled with the current
+ * CONFIGURED TOTAL (not the computed availability number shown on the
+ * tile), calling `updateBusinessSettings` on save. Both increasing and
+ * decreasing go through the exact same code path (business owner,
+ * verbatim: "tanto para aumentar como disminuir") — both get a real test
+ * below. "Rentas activas" stays a plain, non-tappable count.
  */
 
+const updateBusinessSettings = vi.fn();
+vi.mock("@/data/settings.repo", () => ({
+  updateBusinessSettings: (...args: unknown[]) => updateBusinessSettings(...args),
+}));
+
+function renderStats(
+  overrides: Partial<React.ComponentProps<typeof DashboardStats>> = {},
+) {
+  const onSettingsUpdated = vi.fn();
+  render(
+    <DashboardStats
+      activeRentalsCount={3}
+      concentradoresDisponibles={5}
+      tanquesDisponibles={2}
+      totalConcentradores={8}
+      totalTanques={2}
+      onSettingsUpdated={onSettingsUpdated}
+      {...overrides}
+    />,
+  );
+  return { onSettingsUpdated };
+}
+
 describe("DashboardStats (compact 3-tile stats row)", () => {
+  beforeEach(() => {
+    updateBusinessSettings.mockReset();
+  });
+
   it("renders all three tiles with their labels", () => {
-    render(
-      <DashboardStats
-        activeRentalsCount={3}
-        concentradoresDisponibles={5}
-        tanquesDisponibles={2}
-      />,
-    );
+    renderStats();
 
     expect(screen.getByText("Rentas activas")).toBeInTheDocument();
     expect(screen.getByText("Concentradores disponibles")).toBeInTheDocument();
@@ -31,13 +62,7 @@ describe("DashboardStats (compact 3-tile stats row)", () => {
   });
 
   it("shows a zero availability value in neutral gray, not as an error", () => {
-    render(
-      <DashboardStats
-        activeRentalsCount={0}
-        concentradoresDisponibles={0}
-        tanquesDisponibles={4}
-      />,
-    );
+    renderStats({ concentradoresDisponibles: 0, tanquesDisponibles: 4 });
 
     const concentradoresTile = screen.getByRole("group", {
       name: "Concentradores disponibles: 0",
@@ -49,13 +74,11 @@ describe("DashboardStats (compact 3-tile stats row)", () => {
   });
 
   it("shows a non-zero availability value with the --success token", () => {
-    render(
-      <DashboardStats
-        activeRentalsCount={0}
-        concentradoresDisponibles={0}
-        tanquesDisponibles={4}
-      />,
-    );
+    renderStats({
+      activeRentalsCount: 0,
+      concentradoresDisponibles: 0,
+      tanquesDisponibles: 4,
+    });
 
     const tanquesTile = screen.getByRole("group", {
       name: "Tanques disponibles: 4",
@@ -67,13 +90,11 @@ describe("DashboardStats (compact 3-tile stats row)", () => {
   });
 
   it("keeps 'Rentas activas' neutral-weighted regardless of value — never green, even when non-zero", () => {
-    render(
-      <DashboardStats
-        activeRentalsCount={7}
-        concentradoresDisponibles={1}
-        tanquesDisponibles={1}
-      />,
-    );
+    renderStats({
+      activeRentalsCount: 7,
+      concentradoresDisponibles: 1,
+      tanquesDisponibles: 1,
+    });
 
     const activeTile = screen.getByRole("group", {
       name: "Rentas activas: 7",
@@ -86,13 +107,11 @@ describe("DashboardStats (compact 3-tile stats row)", () => {
   });
 
   it("keeps 'Rentas activas' the exact same neutral class when it's zero too — no error/muted treatment either", () => {
-    render(
-      <DashboardStats
-        activeRentalsCount={0}
-        concentradoresDisponibles={1}
-        tanquesDisponibles={1}
-      />,
-    );
+    renderStats({
+      activeRentalsCount: 0,
+      concentradoresDisponibles: 1,
+      tanquesDisponibles: 1,
+    });
 
     const activeTile = screen.getByRole("group", {
       name: "Rentas activas: 0",
@@ -101,5 +120,167 @@ describe("DashboardStats (compact 3-tile stats row)", () => {
 
     expect(value).toHaveClass("text-foreground");
     expect(value).not.toHaveClass("text-muted-foreground");
+  });
+});
+
+describe("DashboardStats tap-to-edit (Feature: Runtime-Editable Total Stock)", () => {
+  beforeEach(() => {
+    updateBusinessSettings.mockReset();
+  });
+
+  it("does not make the Rentas activas tile tappable — it's a derived count, not a settable total", () => {
+    renderStats();
+
+    const tile = screen.getByRole("group", { name: "Rentas activas: 3" });
+    expect(within(tile).queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("opens an edit dialog pre-filled with the current total when the Concentradores tile is tapped", async () => {
+    const user = userEvent.setup();
+    renderStats();
+
+    const tile = screen.getByRole("group", {
+      name: "Concentradores disponibles: 5",
+    });
+    await user.click(within(tile).getByRole("button"));
+
+    expect(
+      screen.getByRole("heading", { name: "Editar total de concentradores" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Total de concentradores")).toHaveValue(8);
+  });
+
+  it("opens an edit dialog pre-filled with the current total when the Tanques tile is tapped", async () => {
+    const user = userEvent.setup();
+    renderStats();
+
+    const tile = screen.getByRole("group", {
+      name: "Tanques disponibles: 2",
+    });
+    await user.click(within(tile).getByRole("button"));
+
+    expect(
+      screen.getByRole("heading", { name: "Editar total de tanques" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Total de tanques")).toHaveValue(2);
+  });
+
+  it("INCREASES the total concentradores and calls onSettingsUpdated with the new value", async () => {
+    updateBusinessSettings.mockResolvedValueOnce({
+      id: "s1",
+      total_concentradores: 12,
+      total_tanques: 2,
+    });
+    const user = userEvent.setup();
+    const { onSettingsUpdated } = renderStats();
+
+    const tile = screen.getByRole("group", {
+      name: "Concentradores disponibles: 5",
+    });
+    await user.click(within(tile).getByRole("button"));
+
+    const input = screen.getByLabelText("Total de concentradores");
+    await user.clear(input);
+    await user.type(input, "12");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    expect(updateBusinessSettings).toHaveBeenCalledWith({
+      totalConcentradores: 12,
+    });
+    expect(onSettingsUpdated).toHaveBeenCalledWith({
+      id: "s1",
+      total_concentradores: 12,
+      total_tanques: 2,
+    });
+    // Dialog closes after a successful save.
+    expect(
+      screen.queryByRole("heading", { name: "Editar total de concentradores" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("DECREASES the total tanques and calls onSettingsUpdated with the new value (business owner: 'tanto para aumentar como disminuir')", async () => {
+    updateBusinessSettings.mockResolvedValueOnce({
+      id: "s1",
+      total_concentradores: 8,
+      total_tanques: 0,
+    });
+    const user = userEvent.setup();
+    const { onSettingsUpdated } = renderStats();
+
+    const tile = screen.getByRole("group", {
+      name: "Tanques disponibles: 2",
+    });
+    await user.click(within(tile).getByRole("button"));
+
+    const input = screen.getByLabelText("Total de tanques");
+    await user.clear(input);
+    await user.type(input, "0");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    expect(updateBusinessSettings).toHaveBeenCalledWith({ totalTanques: 0 });
+    expect(onSettingsUpdated).toHaveBeenCalledWith({
+      id: "s1",
+      total_concentradores: 8,
+      total_tanques: 0,
+    });
+  });
+
+  it("rejects a negative total with a clear Spanish error message and does not call updateBusinessSettings", async () => {
+    const user = userEvent.setup();
+    renderStats();
+
+    const tile = screen.getByRole("group", {
+      name: "Concentradores disponibles: 5",
+    });
+    await user.click(within(tile).getByRole("button"));
+
+    const input = screen.getByLabelText("Total de concentradores");
+    await user.clear(input);
+    await user.type(input, "-3");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    expect(
+      await screen.findByText("El total no puede ser negativo."),
+    ).toBeInTheDocument();
+    expect(updateBusinessSettings).not.toHaveBeenCalled();
+  });
+
+  it("shows the Guardando… loading label while the save request is in flight", async () => {
+    let resolveUpdate: (value: unknown) => void = () => {};
+    updateBusinessSettings.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveUpdate = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+    renderStats();
+
+    const tile = screen.getByRole("group", {
+      name: "Concentradores disponibles: 5",
+    });
+    await user.click(within(tile).getByRole("button"));
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    expect(
+      await screen.findByRole("button", { name: "Guardando…" }),
+    ).toBeInTheDocument();
+
+    resolveUpdate({ id: "s1", total_concentradores: 8, total_tanques: 2 });
+  });
+
+  it("closes the dialog without saving when Cancelar is tapped", async () => {
+    const user = userEvent.setup();
+    renderStats();
+
+    const tile = screen.getByRole("group", {
+      name: "Concentradores disponibles: 5",
+    });
+    await user.click(within(tile).getByRole("button"));
+    await user.click(screen.getByRole("button", { name: "Cancelar" }));
+
+    expect(
+      screen.queryByRole("heading", { name: "Editar total de concentradores" }),
+    ).not.toBeInTheDocument();
+    expect(updateBusinessSettings).not.toHaveBeenCalled();
   });
 });
