@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ClientResponseError } from "pocketbase";
 import { App } from "@/app/App";
@@ -83,18 +83,59 @@ describe("App", () => {
   });
 
   describe("authenticated (§14, §16.5)", () => {
-    it("redirects to the Dashboard tab and renders without a bottom tab bar (redesign nav batch)", async () => {
+    it("redirects to the Dashboard tab and renders the 2-item bottom nav (Inicio/Clientes only — Redesign Round 2, Batch 3)", async () => {
       render(<App />);
 
       expect(
         await screen.findByRole("heading", { name: "Inicio" }),
       ).toBeInTheDocument();
+      const nav = screen.getByRole("navigation", {
+        name: "Navegación principal",
+      });
+      expect(within(nav).getAllByRole("link")).toHaveLength(2);
       expect(
-        screen.queryByRole("navigation", { name: "Navegación principal" }),
-      ).not.toBeInTheDocument();
+        within(nav).getByRole("link", { name: "Inicio" }),
+      ).toHaveAttribute("aria-current", "page");
+      expect(
+        within(nav).getByRole("link", { name: "Clientes" }),
+      ).toBeInTheDocument();
       expect(
         screen.getByRole("button", { name: "Cuenta" }),
       ).toBeInTheDocument();
+    });
+
+    it("navigates via the bottom nav from Inicio to Clientes and back, updating the active tab each time (Redesign Round 2, Batch 3)", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+
+      await screen.findByRole("heading", { name: "Inicio" });
+      const nav = screen.getByRole("navigation", {
+        name: "Navegación principal",
+      });
+
+      await user.click(within(nav).getByRole("link", { name: "Clientes" }));
+
+      expect(
+        await screen.findByRole("heading", { name: "Clientes" }),
+      ).toBeInTheDocument();
+      expect(
+        within(nav).getByRole("link", { name: "Clientes" }),
+      ).toHaveAttribute("aria-current", "page");
+      expect(
+        within(nav).getByRole("link", { name: "Inicio" }),
+      ).not.toHaveAttribute("aria-current");
+
+      await user.click(within(nav).getByRole("link", { name: "Inicio" }));
+
+      expect(
+        await screen.findByRole("heading", { name: "Inicio" }),
+      ).toBeInTheDocument();
+      expect(
+        within(nav).getByRole("link", { name: "Inicio" }),
+      ).toHaveAttribute("aria-current", "page");
+      expect(
+        within(nav).getByRole("link", { name: "Clientes" }),
+      ).not.toHaveAttribute("aria-current");
     });
 
     it("wires the Dashboard tab's real content, not the Phase 0 placeholder (task 2.5/2.7)", async () => {

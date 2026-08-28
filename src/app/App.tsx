@@ -49,6 +49,12 @@ function LoginRoute() {
  * bar (DashboardScreen, redesign nav batch). Rental detail, customer file,
  * payment and return remain Sheets/Dialogs on top of these, never routes
  * of their own.
+ *
+ * Redesign Round 2, Batch 3 (Bottom Nav Wiring): `AppLayout` reintroduces
+ * a minimal, non-fixed 2-item bottom nav (Inicio, Clientes only — see
+ * `AppLayout.tsx`'s own docblock). Nueva renta and Buscar are deliberately
+ * NOT nav items — reached via Dashboard's CTA and search bar respectively,
+ * per the business owner's explicit brief for this batch.
  */
 /**
  * SDD.md §16.13/§17 (gap-fill finding 4): a single `<Toaster />` mounted
