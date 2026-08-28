@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AppHeader } from "@/components/AppHeader";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import {
   ItemQuantityPicker,
@@ -16,8 +17,14 @@ import { CustomerDetailSheet } from "@/components/CustomerDetailSheet";
 import type { CustomerRecord } from "@/data/customers.repo";
 import { createRental, RentalPartiallyCreatedError } from "@/data/rentals.repo";
 import { handleIfStaleSession } from "@/data/staleSession";
-import { rentalFormSchema, type RentalExtraFormValues } from "@/domain/rentals/rental";
-import { buildRentalReceipt, type RentalReceiptData } from "@/domain/rentals/receipt";
+import {
+  rentalFormSchema,
+  type RentalExtraFormValues,
+} from "@/domain/rentals/rental";
+import {
+  buildRentalReceipt,
+  type RentalReceiptData,
+} from "@/domain/rentals/receipt";
 
 /**
  * SDD.md §7.1 (flujo Nueva renta) + §16.7 (orden de campos, pantalla
@@ -26,6 +33,11 @@ import { buildRentalReceipt, type RentalReceiptData } from "@/domain/rentals/rec
  * server (task 1.1/1.2) is the only source of truth for those. §16.6:
  * "Ficha de cliente — abierta desde... el buscador de cliente en Nueva
  * renta" — wired here (task 3.5) via `CustomerPicker`'s `onViewCustomer`.
+ *
+ * Redesign Round 2, Batch 1 (Header Pattern, business-owner brief,
+ * verbatim): "En pantallas secundarias: flecha ← + título en el navbar."
+ * Replaced the inline `<h1>Nueva renta</h1>` with `AppHeader`'s secondary
+ * variant (`showBack`).
  */
 
 export function RentalNewScreen() {
@@ -68,7 +80,9 @@ export function RentalNewScreen() {
     });
 
     if (!parsed.success) {
-      setFormError(parsed.error.issues[0]?.message ?? "Revisa los datos de la renta.");
+      setFormError(
+        parsed.error.issues[0]?.message ?? "Revisa los datos de la renta.",
+      );
       return;
     }
 
@@ -142,83 +156,88 @@ export function RentalNewScreen() {
   }
 
   return (
-    <div className="flex flex-col gap-6 p-4 pb-8">
-      <h1 className="text-lg font-semibold">Nueva renta</h1>
+    <>
+      <AppHeader title="Nueva renta" showBack />
 
-      <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-muted-foreground">
-          Cliente
-        </h2>
-        <CustomerPicker
-          selectedCustomer={selectedCustomer}
-          onSelect={setSelectedCustomer}
-          onViewCustomer={() => setCustomerDetailOpen(true)}
+      <div className="flex flex-col gap-6 p-4 pb-8">
+        <section className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold text-muted-foreground">
+            Cliente
+          </h2>
+          <CustomerPicker
+            selectedCustomer={selectedCustomer}
+            onSelect={setSelectedCustomer}
+            onViewCustomer={() => setCustomerDetailOpen(true)}
+          />
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold text-muted-foreground">
+            Qué se renta
+          </h2>
+          <ItemQuantityPicker
+            value={itemQuantities}
+            onChange={setItemQuantities}
+          />
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <Label htmlFor="rental-initial-amount">Renta</Label>
+          <Input
+            id="rental-initial-amount"
+            type="number"
+            min={0}
+            inputMode="decimal"
+            value={initialRentAmount}
+            onChange={(event) => setInitialRentAmount(event.target.value)}
+          />
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <Label htmlFor="rental-deposit-amount">Depósito</Label>
+          <Input
+            id="rental-deposit-amount"
+            type="number"
+            min={0}
+            inputMode="decimal"
+            value={depositAmount}
+            onChange={(event) => setDepositAmount(event.target.value)}
+          />
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold text-muted-foreground">Otros</h2>
+          <ExtrasList value={extras} onChange={setExtras} />
+        </section>
+
+        {formError && <p className="text-destructive text-sm">{formError}</p>}
+
+        <Button
+          type="button"
+          size="lg"
+          disabled={isSubmitting}
+          onClick={() => void handleConfirm()}
+        >
+          {isSubmitting ? "Guardando…" : "Confirmar renta"}
+        </Button>
+
+        <ReceiptDialog
+          open={receiptOpen}
+          onOpenChange={(open) => {
+            setReceiptOpen(open);
+            if (!open) {
+              navigate("/dashboard");
+            }
+          }}
+          receipt={receipt}
         />
-      </section>
 
-      <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-muted-foreground">
-          Qué se renta
-        </h2>
-        <ItemQuantityPicker
-          value={itemQuantities}
-          onChange={setItemQuantities}
+        <CustomerDetailSheet
+          open={customerDetailOpen}
+          onOpenChange={setCustomerDetailOpen}
+          customerId={selectedCustomer?.id ?? null}
         />
-      </section>
-
-      <section className="flex flex-col gap-2">
-        <Label htmlFor="rental-initial-amount">Renta</Label>
-        <Input
-          id="rental-initial-amount"
-          type="number"
-          min={0}
-          inputMode="decimal"
-          value={initialRentAmount}
-          onChange={(event) => setInitialRentAmount(event.target.value)}
-        />
-      </section>
-
-      <section className="flex flex-col gap-2">
-        <Label htmlFor="rental-deposit-amount">Depósito</Label>
-        <Input
-          id="rental-deposit-amount"
-          type="number"
-          min={0}
-          inputMode="decimal"
-          value={depositAmount}
-          onChange={(event) => setDepositAmount(event.target.value)}
-        />
-      </section>
-
-      <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-muted-foreground">
-          Otros
-        </h2>
-        <ExtrasList value={extras} onChange={setExtras} />
-      </section>
-
-      {formError && <p className="text-destructive text-sm">{formError}</p>}
-
-      <Button type="button" size="lg" disabled={isSubmitting} onClick={() => void handleConfirm()}>
-        {isSubmitting ? "Guardando…" : "Confirmar renta"}
-      </Button>
-
-      <ReceiptDialog
-        open={receiptOpen}
-        onOpenChange={(open) => {
-          setReceiptOpen(open);
-          if (!open) {
-            navigate("/dashboard");
-          }
-        }}
-        receipt={receipt}
-      />
-
-      <CustomerDetailSheet
-        open={customerDetailOpen}
-        onOpenChange={setCustomerDetailOpen}
-        customerId={selectedCustomer?.id ?? null}
-      />
-    </div>
+      </div>
+    </>
   );
 }
