@@ -6,6 +6,7 @@ import { LoginScreen } from "@/screens/login/LoginScreen";
 import { DashboardScreen } from "@/screens/dashboard/DashboardScreen";
 import { RentalNewScreen } from "@/screens/rental-new/RentalNewScreen";
 import { HistorialScreen } from "@/screens/historial/HistorialScreen";
+import { ClientesScreen } from "@/screens/clientes/ClientesScreen";
 
 /**
  * SDD.md §14 — Gap-fill fix (found post-Phase-5): `App.tsx` had zero auth
@@ -67,6 +68,7 @@ export function App() {
             <Route path="/dashboard" element={<DashboardScreen />} />
             <Route path="/nueva-renta" element={<RentalNewScreen />} />
             <Route path="/historial" element={<HistorialScreen />} />
+            <Route path="/clientes" element={<ClientesScreen />} />
           </Route>
         </Route>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />

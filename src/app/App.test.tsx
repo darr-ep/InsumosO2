@@ -21,6 +21,7 @@ const listReturnedRentals = vi.fn();
 const getLoginDirectory = vi.fn();
 const createCustomer = vi.fn();
 const searchCustomers = vi.fn();
+const listCustomers = vi.fn();
 
 vi.mock("@/data/rentals.repo", () => ({
   listActiveRentals: (...args: unknown[]) => listActiveRentals(...args),
@@ -31,6 +32,7 @@ vi.mock("@/data/rentals.repo", () => ({
 vi.mock("@/data/customers.repo", () => ({
   createCustomer: (...args: unknown[]) => createCustomer(...args),
   searchCustomers: (...args: unknown[]) => searchCustomers(...args),
+  listCustomers: (...args: unknown[]) => listCustomers(...args),
 }));
 
 vi.mock("@/data/auth.repo", () => ({
@@ -75,6 +77,7 @@ describe("App", () => {
     getLoginDirectory.mockReset().mockResolvedValue([]);
     createCustomer.mockReset();
     searchCustomers.mockReset();
+    listCustomers.mockReset().mockResolvedValue([]);
     isValidState = true;
     changeListener = null;
   });
@@ -116,6 +119,18 @@ describe("App", () => {
         await screen.findByRole("heading", { name: "Historial de rentas" }),
       ).toBeInTheDocument();
       expect(screen.queryByText(/próximamente/)).not.toBeInTheDocument();
+    });
+
+    it("renders the real Clientes screen at /clientes (Redesign Round 2, Batch 2 — reachable by URL, bottom-nav wiring is a later batch)", async () => {
+      window.history.pushState({}, "", "/clientes");
+      render(<App />);
+
+      expect(
+        await screen.findByRole("heading", { name: "Clientes" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Volver" }),
+      ).not.toBeInTheDocument();
     });
 
     it("redirects /login to /dashboard when already authenticated (gap-fill, §14)", async () => {
@@ -176,6 +191,16 @@ describe("App", () => {
       expect(await screen.findByText("Insumos O2")).toBeInTheDocument();
       expect(
         screen.queryByRole("heading", { name: "Historial de rentas" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("redirects /clientes to /login when there is no valid session (Redesign Round 2, Batch 2: new route needs the same RequireAuth coverage)", async () => {
+      window.history.pushState({}, "", "/clientes");
+      render(<App />);
+
+      expect(await screen.findByText("Insumos O2")).toBeInTheDocument();
+      expect(
+        screen.queryByRole("heading", { name: "Clientes" }),
       ).not.toBeInTheDocument();
     });
 
