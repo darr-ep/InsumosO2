@@ -1,15 +1,11 @@
-import { useState, type ChangeEvent } from "react";
+import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  customerFormSchema,
-  isAcceptedCredentialPhotoType,
-  isCredentialPhotoWithinSizeLimit,
-  type CustomerFormValues,
-} from "@/domain/customers/customer";
+import { CredentialCameraCapture } from "@/components/CredentialCameraCapture";
+import { customerFormSchema, type CustomerFormValues } from "@/domain/customers/customer";
 
 /**
  * SDD.md §7.1 (cliente nuevo: nombre, teléfono, foto de credencial) + §20
@@ -23,6 +19,21 @@ import {
  * pendiente" (domain/customers/customer.ts#isCredentialPending). Before
  * this fix the form hard-blocked submission without a photo, which made
  * A.5's fallback impossible to reach from the UI at all.
+ *
+ * Feature: Credential Photo Camera + Compression (Batch 3a) — the plain
+ * `<input type="file">` was replaced with `CredentialCameraCapture`
+ * (business owner's UX request). `CredentialCameraCapture` already
+ * compresses and re-encodes every photo it produces (both its live-capture
+ * and its own native-file-picker fallback path always run through
+ * `compressImage` before calling `onCapture`, and never call `onCapture` if
+ * that fails — see its own tests), so this form's former
+ * `isAcceptedCredentialPhotoType`/`isCredentialPhotoWithinSizeLimit`
+ * defense-in-depth checks are dropped here as dead weight: every `File`
+ * this form can now receive is already a compressed `image/jpeg` blob well
+ * under the size limit by construction. `onCancel` (declining/skipping the
+ * camera) is treated the same as never having taken a photo — still a
+ * valid, non-blocking "credencial pendiente" submission per Anexo A.5, not
+ * an error.
  */
 
 export interface CustomerFormSubmitValues extends CustomerFormValues {
@@ -41,7 +52,7 @@ export function CustomerForm({
   isSubmitting = false,
 }: CustomerFormProps) {
   const [photo, setPhoto] = useState<File | null>(null);
-  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [showCamera, setShowCamera] = useState(true);
 
   const {
     register,
@@ -52,35 +63,26 @@ export function CustomerForm({
     defaultValues: { name: "", phone: "" },
   });
 
-  function handlePhotoChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0] ?? null;
-
-    if (!file) {
-      setPhoto(null);
-      return;
-    }
-
-    if (!isAcceptedCredentialPhotoType(file.type)) {
-      setPhotoError("Formato de imagen no válido. Usa JPG, PNG o WEBP.");
-      setPhoto(null);
-      return;
-    }
-
-    if (!isCredentialPhotoWithinSizeLimit(file.size)) {
-      setPhotoError("La imagen no puede pesar más de 8MB.");
-      setPhoto(null);
-      return;
-    }
-
-    setPhotoError(null);
+  function handleCapture(file: File) {
     setPhoto(file);
+    setShowCamera(false);
+  }
+
+  function handleCameraCancel() {
+    // §21/Anexo A.5: skipping/declining the camera is not an error — the
+    // customer still gets created "credencial pendiente" if the form is
+    // submitted from here.
+    setShowCamera(false);
+  }
+
+  function handleRetakePhoto() {
+    setPhoto(null);
+    setShowCamera(true);
   }
 
   async function submit(values: CustomerFormValues) {
     // §21/Anexo A.5: no photo is not a blocking error — the customer gets
-    // created "credencial pendiente" instead. `photoError` here can only be
-    // a real validation problem (wrong type/too big), set by
-    // `handlePhotoChange`, never "you forgot the photo".
+    // created "credencial pendiente" instead.
     await onSubmit({ ...values, credentialPhoto: photo });
   }
 
@@ -119,28 +121,39 @@ export function CustomerForm({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="customer-credential-photo">Foto de credencial</Label>
-        <Input
-          id="customer-credential-photo"
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          onChange={handlePhotoChange}
-        />
-        {photoError && (
-          <p className="text-destructive text-sm">{photoError}</p>
-        )}
-        {photo && !photoError && (
-          <p className="text-muted-foreground text-sm">
-            Foto seleccionada: {photo.name}
-          </p>
-        )}
-        {!photo && !photoError && (
-          // §16.13's "credencial pendiente" state, made visible at the
-          // point of creation too — not just later in CustomerDetailSheet.
-          <p className="text-muted-foreground text-sm">
-            Sin foto, el cliente se guardará con "credencial pendiente" y
-            podrás agregarla después.
-          </p>
+        <Label>Foto de credencial</Label>
+        {photo ? (
+          <div className="flex flex-col gap-1.5">
+            <p className="text-muted-foreground text-sm">
+              Foto seleccionada: {photo.name}
+            </p>
+            <Button type="button" variant="outline" onClick={handleRetakePhoto}>
+              Cambiar foto
+            </Button>
+          </div>
+        ) : (
+          <>
+            {showCamera ? (
+              <CredentialCameraCapture
+                onCapture={handleCapture}
+                onCancel={handleCameraCancel}
+              />
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowCamera(true)}
+              >
+                Tomar foto
+              </Button>
+            )}
+            {/* §16.13's "credencial pendiente" state, made visible at the
+                point of creation too — not just later in CustomerDetailSheet. */}
+            <p className="text-muted-foreground text-sm">
+              Sin foto, el cliente se guardará con "credencial pendiente" y
+              podrás agregarla después.
+            </p>
+          </>
         )}
       </div>
 
