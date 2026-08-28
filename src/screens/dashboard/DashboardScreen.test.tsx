@@ -10,6 +10,8 @@ const searchRentals = vi.fn();
 const getRental = vi.fn();
 const listItemsForRental = vi.fn();
 const listPaymentsForRental = vi.fn();
+const getBusinessSettings = vi.fn();
+const updateBusinessSettings = vi.fn();
 
 vi.mock("@/data/rentals.repo", () => ({
   listActiveRentals: (...args: unknown[]) => listActiveRentals(...args),
@@ -21,6 +23,13 @@ vi.mock("@/data/rentals.repo", () => ({
 
 vi.mock("@/data/payments.repo", () => ({
   listPaymentsForRental: (...args: unknown[]) => listPaymentsForRental(...args),
+}));
+
+// Feature: Runtime-Editable Total Stock — replaces the old
+// VITE_TOTAL_CONCENTRADORES/VITE_TOTAL_TANQUES env-var stubbing below.
+vi.mock("@/data/settings.repo", () => ({
+  getBusinessSettings: (...args: unknown[]) => getBusinessSettings(...args),
+  updateBusinessSettings: (...args: unknown[]) => updateBusinessSettings(...args),
 }));
 
 function renderScreen() {
@@ -41,11 +50,16 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
     getRental.mockReset();
     listItemsForRental.mockReset();
     listPaymentsForRental.mockReset();
+    // Feature: Runtime-Editable Total Stock — matches the migration's own
+    // seeded default (0/0). Most tests below don't care about stock; tests
+    // that need real math override this explicitly.
+    getBusinessSettings.mockReset().mockResolvedValue({
+      id: "s1",
+      total_concentradores: 0,
+      total_tanques: 0,
+    });
+    updateBusinessSettings.mockReset();
     vi.stubEnv("VITE_STALE_RENTAL_DAYS", "30");
-    // VITE_TOTAL_CONCENTRADORES/VITE_TOTAL_TANQUES deliberately NOT stubbed
-    // here — most tests below exercise the real "totally unset" default
-    // (Redesign Round 2, Batch 4), see the dedicated test for that. Tests
-    // that need real math stub them explicitly.
   });
 
   afterEach(() => {
@@ -89,13 +103,19 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
    * Redesign Round 2, Batch 4 (Dashboard Restructure). Business owner
    * (verbatim, confirmed): "Concentradores disponibles"/"Tanques
    * disponibles" means REAL availability (total configured stock − active
-   * rentals of that type). Proves the full wiring end-to-end: env vars →
-   * `listActiveRentalItems` → `availability.ts` → `DashboardStats`'
-   * `--success`/neutral-gray styling.
+   * rentals of that type). Proves the full wiring end-to-end: Feature:
+   * Runtime-Editable Total Stock — `getBusinessSettings` (business_settings
+   * collection) → `listActiveRentalItems` → `availability.ts` →
+   * `DashboardStats`' `--success`/neutral-gray styling. Replaces this same
+   * test's prior env-var-stubbing version (Redesign Round 2, Batch 4's
+   * original `VITE_TOTAL_CONCENTRADORES`/`VITE_TOTAL_TANQUES`).
    */
-  it("computes real availability from total-stock env vars minus active item quantities (business-owner confirmed rule)", async () => {
-    vi.stubEnv("VITE_TOTAL_CONCENTRADORES", "5");
-    vi.stubEnv("VITE_TOTAL_TANQUES", "0");
+  it("computes real availability from business_settings totals (getBusinessSettings) minus active item quantities (business-owner confirmed rule)", async () => {
+    getBusinessSettings.mockResolvedValue({
+      id: "s1",
+      total_concentradores: 5,
+      total_tanques: 0,
+    });
     listActiveRentals.mockResolvedValue([]);
     listActiveRentalItems.mockResolvedValue([
       { id: "i1", rental_id: "r1", item_type: "concentrator", quantity: 2 },
@@ -122,13 +142,13 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
   });
 
   /**
-   * Redesign Round 2, Batch 4. Confirms the exact default behavior when the
-   * business owner hasn't configured stock yet: `VITE_TOTAL_CONCENTRADORES`/
-   * `VITE_TOTAL_TANQUES` are completely unset (not stubbed at all here,
-   * unlike the test above) — availability must default to 0, shown in
-   * neutral gray, never as an error state.
+   * Feature: Runtime-Editable Total Stock. Confirms the exact default
+   * behavior when the business owner hasn't configured stock yet —
+   * `business_settings`' seeded default (0/0, matching the migration) is
+   * what `beforeEach` above already stubs by default — availability must
+   * show 0, in neutral gray, never as an error state.
    */
-  it("defaults availability to 0 (neutral gray, not an error) when the total-stock env vars are completely unset", async () => {
+  it("shows 0 availability (neutral gray, not an error) when business_settings' totals are still at their seeded default (0/0)", async () => {
     listActiveRentals.mockResolvedValue([]);
     listActiveRentalItems.mockResolvedValue([
       { id: "i1", rental_id: "r1", item_type: "concentrator", quantity: 2 },
@@ -152,6 +172,55 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
     expect(within(tanquesTile).getByText("0")).toHaveClass(
       "text-muted-foreground",
     );
+  });
+
+  /**
+   * Feature: Runtime-Editable Total Stock — end-to-end proof that editing
+   * the total from the Dashboard's tap-to-edit dialog
+   * (`DashboardStats.tsx`) actually persists (`updateBusinessSettings`) AND
+   * updates the DISPLAYED availability number immediately, with no full
+   * page reload — the business owner's core requirement for this feature.
+   */
+  it("editing the total concentradores from the tap-to-edit dialog updates the displayed availability immediately, no page reload", async () => {
+    getBusinessSettings.mockResolvedValue({
+      id: "s1",
+      total_concentradores: 5,
+      total_tanques: 0,
+    });
+    listActiveRentals.mockResolvedValue([]);
+    listActiveRentalItems.mockResolvedValue([
+      { id: "i1", rental_id: "r1", item_type: "concentrator", quantity: 2 },
+    ]);
+    updateBusinessSettings.mockResolvedValue({
+      id: "s1",
+      total_concentradores: 10,
+      total_tanques: 0,
+    });
+    const user = userEvent.setup();
+
+    renderScreen();
+
+    // 5 total − 2 active = 3 disponibles, before the edit.
+    const tile = await screen.findByRole("group", {
+      name: "Concentradores disponibles: 3",
+    });
+    await user.click(within(tile).getByRole("button"));
+
+    const input = screen.getByLabelText("Total de concentradores");
+    await user.clear(input);
+    await user.type(input, "10");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    expect(updateBusinessSettings).toHaveBeenCalledWith({
+      totalConcentradores: 10,
+    });
+    // 10 total − 2 active = 8 disponibles, after the edit — same React tree,
+    // no re-fetch of rentals/items, no full reload.
+    expect(
+      await screen.findByRole("group", {
+        name: "Concentradores disponibles: 8",
+      }),
+    ).toBeInTheDocument();
   });
 
   /**

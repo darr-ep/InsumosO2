@@ -23,12 +23,21 @@ const getLoginDirectory = vi.fn();
 const createCustomer = vi.fn();
 const searchCustomers = vi.fn();
 const listCustomers = vi.fn();
+// Feature: Runtime-Editable Total Stock — DashboardScreen now also fetches
+// business_settings alongside active rentals/items (same shared Promise.all
+// this smoke test already mocks the rest of).
+const getBusinessSettings = vi.fn();
 
 vi.mock("@/data/rentals.repo", () => ({
   listActiveRentals: (...args: unknown[]) => listActiveRentals(...args),
   listActiveRentalItems: (...args: unknown[]) => listActiveRentalItems(...args),
   searchRentals: (...args: unknown[]) => searchRentals(...args),
   listReturnedRentals: (...args: unknown[]) => listReturnedRentals(...args),
+}));
+
+vi.mock("@/data/settings.repo", () => ({
+  getBusinessSettings: (...args: unknown[]) => getBusinessSettings(...args),
+  updateBusinessSettings: vi.fn(),
 }));
 
 vi.mock("@/data/customers.repo", () => ({
@@ -73,8 +82,14 @@ vi.mock("@/data/pocketbaseClient", () => ({
 
 describe("App", () => {
   beforeEach(() => {
+    vi.stubEnv("VITE_BUSINESS_NAME", "");
     listActiveRentals.mockReset().mockResolvedValue([]);
     listActiveRentalItems.mockReset().mockResolvedValue([]);
+    getBusinessSettings.mockReset().mockResolvedValue({
+      id: "s1",
+      total_concentradores: 0,
+      total_tanques: 0,
+    });
     searchRentals.mockReset().mockResolvedValue([]);
     listReturnedRentals.mockReset().mockResolvedValue([]);
     getLoginDirectory.mockReset().mockResolvedValue([]);
@@ -83,6 +98,10 @@ describe("App", () => {
     listCustomers.mockReset().mockResolvedValue([]);
     isValidState = true;
     changeListener = null;
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   describe("authenticated (§14, §16.5)", () => {

@@ -15,13 +15,16 @@ import {
   type RentalWithCustomer,
 } from "@/data/rentals.repo";
 import {
+  getBusinessSettings,
+  type BusinessSettingsRecord,
+} from "@/data/settings.repo";
+import {
   isStaleRental,
   staleRentalDaysThreshold,
 } from "@/domain/rentals/dashboard";
 import {
   availableStock,
   countActiveQuantityByType,
-  totalStockFromEnv,
 } from "@/domain/rentals/availability";
 import { formatCurrencyMXN } from "@/lib/currency";
 
@@ -86,12 +89,22 @@ import { formatCurrencyMXN } from "@/lib/currency";
  *
  * "Concentradores/Tanques disponibles" = REAL availability (total
  * configured stock − active rentals of that type), confirmed by the
- * business owner — `domain/rentals/availability.ts` + the
- * `VITE_TOTAL_CONCENTRADORES`/`VITE_TOTAL_TANQUES` env vars (same fixed-
- * env-var pattern as `VITE_STALE_RENTAL_DAYS`, Anexo A.3 precedent).
+ * business owner — `domain/rentals/availability.ts`.
  * `listActiveRentalItems()` is fetched alongside `listActiveRentals()` in
  * the same initial load (shared loading/error state — no new surface for a
  * second independent fetch to fail differently).
+ *
+ * Feature: Runtime-Editable Total Stock (business owner's UX request, post-
+ * MVP+redesign, not SDD.md-sourced): total stock used to be two build-time
+ * env vars (`VITE_TOTAL_CONCENTRADORES`/`VITE_TOTAL_TANQUES`) — now it's
+ * `getBusinessSettings()` (PocketBase's `business_settings` singleton
+ * collection), fetched in the SAME initial `Promise.all` as
+ * `listActiveRentals`/`listActiveRentalItems` (still one shared loading/
+ * error state, no new failure surface). `DashboardStats.tsx` owns the
+ * tap-to-edit dialog and calls `updateBusinessSettings` itself — its
+ * `onSettingsUpdated` callback just updates this screen's own
+ * `businessSettings` state so the displayed availability recomputes
+ * immediately, no re-fetch of rentals/items and no full page reload.
  */
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -99,6 +112,8 @@ const SEARCH_DEBOUNCE_MS = 300;
 export function DashboardScreen() {
   const [rentals, setRentals] = useState<RentalWithCustomer[] | null>(null);
   const [activeItems, setActiveItems] = useState<RentalItemRecord[]>([]);
+  const [businessSettings, setBusinessSettings] =
+    useState<BusinessSettingsRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [query, setQuery] = useState("");
@@ -117,11 +132,16 @@ export function DashboardScreen() {
   useEffect(() => {
     let cancelled = false;
 
-    Promise.all([listActiveRentals(), listActiveRentalItems()])
-      .then(([activeRentals, items]) => {
+    Promise.all([
+      listActiveRentals(),
+      listActiveRentalItems(),
+      getBusinessSettings(),
+    ])
+      .then(([activeRentals, items, settings]) => {
         if (!cancelled) {
           setRentals(activeRentals);
           setActiveItems(items);
+          setBusinessSettings(settings);
         }
       })
       .catch(() => {
@@ -190,12 +210,14 @@ export function DashboardScreen() {
   );
 
   const activeQuantities = countActiveQuantityByType(activeItems);
+  const totalConcentradores = businessSettings?.total_concentradores ?? 0;
+  const totalTanques = businessSettings?.total_tanques ?? 0;
   const concentradoresDisponibles = availableStock(
-    totalStockFromEnv(import.meta.env.VITE_TOTAL_CONCENTRADORES),
+    totalConcentradores,
     activeQuantities.concentrator,
   );
   const tanquesDisponibles = availableStock(
-    totalStockFromEnv(import.meta.env.VITE_TOTAL_TANQUES),
+    totalTanques,
     activeQuantities.tank,
   );
 
@@ -265,6 +287,9 @@ export function DashboardScreen() {
                   activeRentalsCount={rentals.length}
                   concentradoresDisponibles={concentradoresDisponibles}
                   tanquesDisponibles={tanquesDisponibles}
+                  totalConcentradores={totalConcentradores}
+                  totalTanques={totalTanques}
+                  onSettingsUpdated={setBusinessSettings}
                 />
 
                 {staleRentals.length > 0 && (
