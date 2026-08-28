@@ -32,6 +32,16 @@ import { formatCurrencyMXN } from "@/lib/currency";
  * active-rentals list and "Requiere revisión" section entirely (one clear
  * list at a time, not two stacked) — matching the original SearchScreen's
  * exact debounce/derived-empty-on-clear behavior.
+ *
+ * Redesign layout-reorder batch (business-owner brief, round 3): the "5-10
+ * segundos" rule for this screen specifically requires this content order
+ * — "1. Buscador prominente 2. CTA 'Nueva renta' 3. Resumen compacto de
+ * rentas activas 4. Indicador de rentas antiguas 5. Lista de rentas
+ * activas/recientes". The CTA sits above the search/summary conditional so
+ * it stays reachable in both the searching and idle states ("¿Puedo
+ * registrar una nueva renta?" must always be answerable). No new
+ * data-fetching was added — the active-rentals count is derived from
+ * `rentals` (already fetched by the existing effect below).
  */
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -139,14 +149,13 @@ export function DashboardScreen() {
 
   return (
     <div className="flex flex-col gap-6 p-4 pb-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Dashboard</h1>
-        <Button asChild size="sm">
-          <Link to="/nueva-renta">Nueva renta</Link>
-        </Button>
-      </div>
+      <h1 className="text-lg font-semibold">Dashboard</h1>
 
       <SearchBar value={query} onChange={setQuery} />
+
+      <Button asChild size="lg" className="w-full">
+        <Link to="/nueva-renta">Nueva renta</Link>
+      </Button>
 
       {isSearchActive ? (
         <>
@@ -197,6 +206,31 @@ export function DashboardScreen() {
                 </p>
               </div>
 
+              {staleRentals.length > 0 && (
+                <section className="flex flex-col gap-2">
+                  <h2 className="text-sm font-semibold">Requiere revisión</h2>
+                  <ul className="flex flex-col gap-3">
+                    {staleRentals.map((rental) => (
+                      <li key={rental.id}>
+                        <RentalCard
+                          customerName={
+                            rental.expand?.customer_id?.name ?? "Cliente"
+                          }
+                          onClick={() => openRentalDetail(rental.id)}
+                          cardClassName="border-amber-500"
+                          contentClassName="text-sm text-muted-foreground"
+                        >
+                          <p>
+                            {daysSince(new Date(rental.created), now)} días
+                            activa · Revisar renta
+                          </p>
+                        </RentalCard>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
               {rentals.length === 0 ? (
                 <p className="text-muted-foreground text-sm">
                   No hay rentas activas todavía.
@@ -225,31 +259,6 @@ export function DashboardScreen() {
                     </li>
                   ))}
                 </ul>
-              )}
-
-              {staleRentals.length > 0 && (
-                <section className="flex flex-col gap-2">
-                  <h2 className="text-sm font-semibold">Requiere revisión</h2>
-                  <ul className="flex flex-col gap-3">
-                    {staleRentals.map((rental) => (
-                      <li key={rental.id}>
-                        <RentalCard
-                          customerName={
-                            rental.expand?.customer_id?.name ?? "Cliente"
-                          }
-                          onClick={() => openRentalDetail(rental.id)}
-                          cardClassName="border-amber-500"
-                          contentClassName="text-sm text-muted-foreground"
-                        >
-                          <p>
-                            {daysSince(new Date(rental.created), now)} días
-                            activa · Revisar renta
-                          </p>
-                        </RentalCard>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
               )}
             </>
           )}

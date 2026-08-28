@@ -169,6 +169,52 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
   });
 
   /**
+   * Redesign layout-reorder batch (business-owner brief, round 3 — Dashboard
+   * "5-10 segundos" content order): "1. Buscador prominente 2. CTA 'Nueva
+   * renta' 3. Resumen compacto de rentas activas 4. Indicador de rentas
+   * antiguas 5. Lista de rentas activas/recientes". Verifies DOM order via
+   * `compareDocumentPosition` since these elements don't share a common
+   * text node (`textContent` alone can't see an `<input>`'s value/label).
+   */
+  it("orders content as: buscador, CTA Nueva renta, resumen de activas, indicador de antiguas, lista (business-owner brief)", async () => {
+    const oldDate = new Date();
+    oldDate.setDate(oldDate.getDate() - 45);
+
+    listActiveRentals.mockResolvedValue([
+      {
+        id: "r1",
+        folio: "R-000001",
+        created: oldDate.toISOString(),
+        initial_rent_amount: 2800,
+        expand: { customer_id: juan },
+      },
+    ]);
+
+    renderScreen();
+
+    const searchInput = await screen.findByLabelText(
+      "Buscar por folio, nombre o teléfono",
+    );
+    const ctaLink = screen.getByRole("link", { name: "Nueva renta" });
+    const summary = screen.getByText("Rentas activas");
+    const staleHeading = await screen.findByRole("heading", {
+      name: "Requiere revisión",
+    });
+    const listItem = screen.getByText("Folio: R-000001");
+
+    function isBefore(a: Node, b: Node) {
+      return Boolean(
+        a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+    }
+
+    expect(isBefore(searchInput, ctaLink)).toBe(true);
+    expect(isBefore(ctaLink, summary)).toBe(true);
+    expect(isBefore(summary, staleHeading)).toBe(true);
+    expect(isBefore(staleHeading, listItem)).toBe(true);
+  });
+
+  /**
    * Redesign nav batch (business-owner brief, round 2): Buscar is no
    * longer its own route/screen — it's folded into Dashboard's own search
    * bar. Every test case below is ported verbatim (same assertions) from
