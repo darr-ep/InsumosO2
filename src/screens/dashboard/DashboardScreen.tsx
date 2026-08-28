@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
+import { AppHeader } from "@/components/AppHeader";
 import { SearchBar } from "@/components/SearchBar";
 import { RentalCard } from "@/components/RentalCard";
 import { RentalDetailSheet } from "@/components/RentalDetailSheet";
@@ -42,6 +43,16 @@ import { formatCurrencyMXN } from "@/lib/currency";
  * registrar una nueva renta?" must always be answerable). No new
  * data-fetching was added — the active-rentals count is derived from
  * `rentals` (already fetched by the existing effect below).
+ *
+ * Redesign Round 2, Batch 1 (Header Pattern, business-owner brief,
+ * verbatim): "El título 'Dashboard' debe desaparecer del contenido y pasar
+ * al navbar... En Dashboard: O2 Insumos/título a la izquierda y perfil a
+ * la derecha." Replaced the inline `<h1>Dashboard</h1>` with `AppHeader`'s
+ * home variant, titled with the existing `VITE_BUSINESS_NAME` env var
+ * (already used for receipts/branding elsewhere — `RentalNewScreen.tsx`,
+ * `RentalDetailSheet.tsx`) instead of a new hardcoded literal, for
+ * consistency. Falls back to "Inicio" if that env var is ever empty/unset
+ * at runtime, so the header is never blank.
  */
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -55,9 +66,7 @@ export function DashboardScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
-  const [selectedRentalId, setSelectedRentalId] = useState<string | null>(
-    null,
-  );
+  const [selectedRentalId, setSelectedRentalId] = useState<string | null>(null);
   const [rentalDetailOpen, setRentalDetailOpen] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(
     null,
@@ -148,70 +157,101 @@ export function DashboardScreen() {
   const visibleResults = isSearchActive ? results : [];
 
   return (
-    <div className="flex flex-col gap-6 p-4 pb-8">
-      <h1 className="text-lg font-semibold">Dashboard</h1>
+    <>
+      <AppHeader title={import.meta.env.VITE_BUSINESS_NAME || "Inicio"} />
 
-      <SearchBar value={query} onChange={setQuery} />
+      <div className="flex flex-col gap-6 p-4 pb-8">
+        <SearchBar value={query} onChange={setQuery} />
 
-      <Button asChild size="lg" className="w-full">
-        <Link to="/nueva-renta">Nueva renta</Link>
-      </Button>
+        <Button asChild size="lg" className="w-full">
+          <Link to="/nueva-renta">Nueva renta</Link>
+        </Button>
 
-      {isSearchActive ? (
-        <>
-          {searchError && (
-            <p className="text-destructive text-sm">{searchError}</p>
-          )}
-          {isSearching && (
-            <p className="text-muted-foreground text-sm">Buscando…</p>
-          )}
-          {!isSearching &&
-            !searchError &&
-            visibleResults.length === 0 && (
+        {isSearchActive ? (
+          <>
+            {searchError && (
+              <p className="text-destructive text-sm">{searchError}</p>
+            )}
+            {isSearching && (
+              <p className="text-muted-foreground text-sm">Buscando…</p>
+            )}
+            {!isSearching && !searchError && visibleResults.length === 0 && (
               <p className="text-muted-foreground text-sm">Sin resultados.</p>
             )}
 
-          {visibleResults.length > 0 && (
-            <ul className="flex flex-col gap-3">
-              {visibleResults.map((rental) => (
-                <li key={rental.id}>
-                  <RentalCard
-                    customerName={
-                      rental.expand?.customer_id?.name ?? "Cliente"
-                    }
-                    status={rental.status}
-                    folio={rental.folio}
-                    onClick={() => openRentalDetail(rental.id)}
-                  >
-                    <p>Teléfono: {rental.expand?.customer_id?.phone ?? "—"}</p>
-                  </RentalCard>
-                </li>
-              ))}
-            </ul>
-          )}
-        </>
-      ) : (
-        <>
-          {error && <p className="text-destructive text-sm">{error}</p>}
+            {visibleResults.length > 0 && (
+              <ul className="flex flex-col gap-3">
+                {visibleResults.map((rental) => (
+                  <li key={rental.id}>
+                    <RentalCard
+                      customerName={
+                        rental.expand?.customer_id?.name ?? "Cliente"
+                      }
+                      status={rental.status}
+                      folio={rental.folio}
+                      onClick={() => openRentalDetail(rental.id)}
+                    >
+                      <p>
+                        Teléfono: {rental.expand?.customer_id?.phone ?? "—"}
+                      </p>
+                    </RentalCard>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        ) : (
+          <>
+            {error && <p className="text-destructive text-sm">{error}</p>}
 
-          {rentals === null && !error && (
-            <p className="text-muted-foreground text-sm">Cargando…</p>
-          )}
+            {rentals === null && !error && (
+              <p className="text-muted-foreground text-sm">Cargando…</p>
+            )}
 
-          {rentals !== null && (
-            <>
-              <div>
-                <p className="text-sm text-muted-foreground">Rentas activas</p>
-                <p className="text-foreground text-3xl font-semibold">
-                  {rentals.length}
-                </p>
-              </div>
+            {rentals !== null && (
+              <>
+                <div>
+                  <p className="text-sm text-muted-foreground">
+                    Rentas activas
+                  </p>
+                  <p className="text-foreground text-3xl font-semibold">
+                    {rentals.length}
+                  </p>
+                </div>
 
-              {staleRentals.length > 0 && (
-                <section className="flex flex-col gap-2">
-                  <h2 className="text-sm font-semibold">Requiere revisión</h2>
+                {staleRentals.length > 0 && (
+                  <section className="flex flex-col gap-2">
+                    <h2 className="text-sm font-semibold">Requiere revisión</h2>
+                    <ul className="flex flex-col gap-3">
+                      {staleRentals.map((rental) => (
+                        <li key={rental.id}>
+                          <RentalCard
+                            customerName={
+                              rental.expand?.customer_id?.name ?? "Cliente"
+                            }
+                            status={rental.status}
+                            folio={rental.folio}
+                            onClick={() => openRentalDetail(rental.id)}
+                            cardClassName="border-warning"
+                          >
+                            <p>
+                              {daysSince(new Date(rental.created), now)} días
+                              activa · Revisar renta
+                            </p>
+                          </RentalCard>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
+
+                {rentals.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">
+                    No hay rentas activas todavía.
+                  </p>
+                ) : (
                   <ul className="flex flex-col gap-3">
-                    {staleRentals.map((rental) => (
+                    {rentals.map((rental) => (
                       <li key={rental.id}>
                         <RentalCard
                           customerName={
@@ -220,68 +260,42 @@ export function DashboardScreen() {
                           status={rental.status}
                           folio={rental.folio}
                           onClick={() => openRentalDetail(rental.id)}
-                          cardClassName="border-warning"
                         >
                           <p>
-                            {daysSince(new Date(rental.created), now)} días
-                            activa · Revisar renta
+                            Desde:{" "}
+                            {new Date(rental.created).toLocaleDateString(
+                              "es-MX",
+                            )}
+                          </p>
+                          <p>
+                            Renta:{" "}
+                            {formatCurrencyMXN(rental.initial_rent_amount)}
                           </p>
                         </RentalCard>
                       </li>
                     ))}
                   </ul>
-                </section>
-              )}
+                )}
+              </>
+            )}
+          </>
+        )}
 
-              {rentals.length === 0 ? (
-                <p className="text-muted-foreground text-sm">
-                  No hay rentas activas todavía.
-                </p>
-              ) : (
-                <ul className="flex flex-col gap-3">
-                  {rentals.map((rental) => (
-                    <li key={rental.id}>
-                      <RentalCard
-                        customerName={
-                          rental.expand?.customer_id?.name ?? "Cliente"
-                        }
-                        status={rental.status}
-                        folio={rental.folio}
-                        onClick={() => openRentalDetail(rental.id)}
-                      >
-                        <p>
-                          Desde:{" "}
-                          {new Date(rental.created).toLocaleDateString(
-                            "es-MX",
-                          )}
-                        </p>
-                        <p>
-                          Renta: {formatCurrencyMXN(rental.initial_rent_amount)}
-                        </p>
-                      </RentalCard>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </>
-          )}
-        </>
-      )}
-
-      <RentalDetailSheet
-        open={rentalDetailOpen}
-        onOpenChange={setRentalDetailOpen}
-        rentalId={selectedRentalId}
-        onViewCustomer={(customerId) => {
-          setSelectedCustomerId(customerId);
-          setCustomerDetailOpen(true);
-        }}
-      />
-      <CustomerDetailSheet
-        open={customerDetailOpen}
-        onOpenChange={setCustomerDetailOpen}
-        customerId={selectedCustomerId}
-      />
-    </div>
+        <RentalDetailSheet
+          open={rentalDetailOpen}
+          onOpenChange={setRentalDetailOpen}
+          rentalId={selectedRentalId}
+          onViewCustomer={(customerId) => {
+            setSelectedCustomerId(customerId);
+            setCustomerDetailOpen(true);
+          }}
+        />
+        <CustomerDetailSheet
+          open={customerDetailOpen}
+          onOpenChange={setCustomerDetailOpen}
+          customerId={selectedCustomerId}
+        />
+      </div>
+    </>
   );
 }

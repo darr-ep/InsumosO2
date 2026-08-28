@@ -9,6 +9,12 @@ import { STALE_SESSION_MESSAGE } from "@/data/staleSession";
 // on mount/query — mocked here so this smoke test stays a fast,
 // network-free check of the route wiring itself (§16.5), not a
 // screen-level test (those live in each screen's own *.test.tsx).
+//
+// Redesign Round 2, Batch 1 (Header Pattern): DashboardScreen's own <h1>
+// text is now literally the `VITE_BUSINESS_NAME` env var (falling back to
+// "Inicio" when unset) instead of a hardcoded "Dashboard" — the test env
+// has no `VITE_BUSINESS_NAME`, so every "Dashboard" heading assertion
+// below was updated to "Inicio" to match what actually renders.
 const listActiveRentals = vi.fn();
 const searchRentals = vi.fn();
 const listReturnedRentals = vi.fn();
@@ -78,7 +84,7 @@ describe("App", () => {
       render(<App />);
 
       expect(
-        await screen.findByRole("heading", { name: "Dashboard" }),
+        await screen.findByRole("heading", { name: "Inicio" }),
       ).toBeInTheDocument();
       expect(
         screen.queryByRole("navigation", { name: "Navegación principal" }),
@@ -117,14 +123,14 @@ describe("App", () => {
       render(<App />);
 
       expect(
-        await screen.findByRole("heading", { name: "Dashboard" }),
+        await screen.findByRole("heading", { name: "Inicio" }),
       ).toBeInTheDocument();
     });
 
     it("mounts a single Toaster at the app root (§16.13/§17, gap-fill finding 4)", async () => {
       render(<App />);
 
-      await screen.findByRole("heading", { name: "Dashboard" });
+      await screen.findByRole("heading", { name: "Inicio" });
 
       // Sonner's own accessible landmark — proves the notification region
       // is actually mounted in the DOM, not just imported.
@@ -146,7 +152,7 @@ describe("App", () => {
       // LoginScreen's own scaffold heading proves we actually landed there.
       expect(await screen.findByText("Insumos O2")).toBeInTheDocument();
       expect(
-        screen.queryByRole("heading", { name: "Dashboard" }),
+        screen.queryByRole("heading", { name: "Inicio" }),
       ).not.toBeInTheDocument();
       expect(
         screen.queryByRole("navigation", { name: "Navegación principal" }),
@@ -185,7 +191,7 @@ describe("App", () => {
       });
 
       expect(
-        await screen.findByRole("heading", { name: "Dashboard" }),
+        await screen.findByRole("heading", { name: "Inicio" }),
       ).toBeInTheDocument();
     });
   });
