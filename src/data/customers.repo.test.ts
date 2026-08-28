@@ -22,7 +22,35 @@ const {
   updateCustomerCredentialPhoto,
   getCustomer,
   getCredentialPhotoUrl,
+  listCustomers,
 } = await import("@/data/customers.repo");
+
+describe("listCustomers (Redesign Round 2, Batch 2 — Clientes screen)", () => {
+  beforeEach(() => {
+    getList.mockReset();
+    collection.mockClear();
+  });
+
+  it("lists every customer, sorted by name, with no filter", async () => {
+    getList.mockResolvedValueOnce({
+      items: [
+        { id: "c1", name: "Ana", phone: "5511111111" },
+        { id: "c2", name: "Beto", phone: "5522222222" },
+      ],
+    });
+
+    const result = await listCustomers();
+
+    expect(collection).toHaveBeenCalledWith("customers");
+    expect(getList).toHaveBeenCalledWith(1, expect.any(Number), {
+      sort: "name",
+    });
+    expect(result).toEqual([
+      { id: "c1", name: "Ana", phone: "5511111111" },
+      { id: "c2", name: "Beto", phone: "5522222222" },
+    ]);
+  });
+});
 
 describe("searchCustomers (§7.1 buscar/crear cliente)", () => {
   beforeEach(() => {

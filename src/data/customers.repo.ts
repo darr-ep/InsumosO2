@@ -27,6 +27,23 @@ export interface CreateCustomerInput {
 
 const CUSTOMERS_COLLECTION = "customers";
 const CUSTOMER_SEARCH_PAGE_SIZE = 20;
+const CUSTOMER_LIST_PAGE_SIZE = 200;
+
+// Redesign Round 2, Batch 2 (Clientes screen, business-owner brief,
+// verbatim): "Debe ser una lista simple con búsqueda." The idle-state list
+// (before a search query is typed) needs every customer, sorted by name —
+// no filter, same pure-I/O-plumbing category as `listReturnedRentals`
+// (rentals.repo.ts): not a new business concept, just a different query
+// shape over a collection that already exists.
+export async function listCustomers(): Promise<CustomerRecord[]> {
+  const result = await pb
+    .collection(CUSTOMERS_COLLECTION)
+    .getList<CustomerRecord>(1, CUSTOMER_LIST_PAGE_SIZE, {
+      sort: "name",
+    });
+
+  return result.items;
+}
 
 // §7.4/§16.9-style match (name/phone contains) scoped to the customer
 // picker inside "Nueva renta" (§7.1) — full rentals-aware search (folio
