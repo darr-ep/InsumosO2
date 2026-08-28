@@ -220,6 +220,29 @@ export async function listItemsForRental(
   return result.items;
 }
 
+// Redesign Round 2, Batch 4 (Dashboard Restructure): `DashboardStats`'
+// "Concentradores disponibles"/"Tanques disponibles" tiles need
+// `rental_items` scoped to ONLY currently-active rentals, across ALL
+// rentals — unlike `listItemsForRental` (one rental) or `listActiveRentals`
+// (the `rentals` records themselves, not their line items). PocketBase
+// supports dot-notation relation filters on a nested field of a relation
+// (`rental_id.status`) the exact same way `searchRentals` already proves
+// live for `customer_id.name`/`customer_id.phone` — confirmed live against
+// a scratch PocketBase v0.40.1 instance
+// (`src/data/rentals-active-items.integration.test.ts`) rather than assumed.
+// One query, not "fetch active rentals then N follow-up item queries".
+export async function listActiveRentalItems(): Promise<RentalItemRecord[]> {
+  const result = await pb
+    .collection(RENTAL_ITEMS_COLLECTION)
+    .getList<RentalItemRecord>(1, ACTIVE_RENTALS_PAGE_SIZE, {
+      filter: pb.filter("rental_id.status = {:status}", {
+        status: "ACTIVE" satisfies RentalStatus,
+      }),
+    });
+
+  return result.items;
+}
+
 /**
  * SDD.md §19.1 (endpoint custom de devolución) + §7.3 + CU6. The client
  * NEVER calls `pb.collection('rentals').update(id, { status: 'RETURNED' })`
