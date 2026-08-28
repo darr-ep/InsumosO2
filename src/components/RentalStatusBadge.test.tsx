@@ -12,4 +12,24 @@ describe("RentalStatusBadge (§16.4, task 3.3)", () => {
     render(<RentalStatusBadge status="RETURNED" />);
     expect(screen.getByText("Devuelta")).toBeInTheDocument();
   });
+
+  // Redesign Round 2, Batch 5 (Color Increase Pass): the business owner's
+  // color legend reserves --primary (blue) for actions and --success
+  // (green) for positive/ongoing states. An ACTIVE rental is a state, not
+  // an action, so it must use --success, not --primary.
+  it("uses the --success token for ACTIVE (a state, not an action) — never --primary", () => {
+    render(<RentalStatusBadge status="ACTIVE" />);
+    const badge = screen.getByText("Activa");
+    expect(badge).toHaveClass("bg-success/10");
+    expect(badge).toHaveClass("text-success");
+    expect(badge).not.toHaveClass("bg-primary/10");
+    expect(badge).not.toHaveClass("text-primary");
+  });
+
+  it("keeps RETURNED muted/neutral (a closed-out state, correctly not color-coded)", () => {
+    render(<RentalStatusBadge status="RETURNED" />);
+    const badge = screen.getByText("Devuelta");
+    expect(badge).toHaveClass("bg-muted");
+    expect(badge).toHaveClass("text-muted-foreground");
+  });
 });
