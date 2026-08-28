@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router";
 import { DashboardScreen } from "@/screens/dashboard/DashboardScreen";
 
 const listActiveRentals = vi.fn();
+const listActiveRentalItems = vi.fn();
 const searchRentals = vi.fn();
 const getRental = vi.fn();
 const listItemsForRental = vi.fn();
@@ -12,6 +13,7 @@ const listPaymentsForRental = vi.fn();
 
 vi.mock("@/data/rentals.repo", () => ({
   listActiveRentals: (...args: unknown[]) => listActiveRentals(...args),
+  listActiveRentalItems: (...args: unknown[]) => listActiveRentalItems(...args),
   searchRentals: (...args: unknown[]) => searchRentals(...args),
   getRental: (...args: unknown[]) => getRental(...args),
   listItemsForRental: (...args: unknown[]) => listItemsForRental(...args),
@@ -34,11 +36,16 @@ const juan = { id: "c1", name: "Juan Pérez", phone: "5512345678" };
 describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
   beforeEach(() => {
     listActiveRentals.mockReset().mockResolvedValue([]);
+    listActiveRentalItems.mockReset().mockResolvedValue([]);
     searchRentals.mockReset();
     getRental.mockReset();
     listItemsForRental.mockReset();
     listPaymentsForRental.mockReset();
     vi.stubEnv("VITE_STALE_RENTAL_DAYS", "30");
+    // VITE_TOTAL_CONCENTRADORES/VITE_TOTAL_TANQUES deliberately NOT stubbed
+    // here — most tests below exercise the real "totally unset" default
+    // (Redesign Round 2, Batch 4), see the dedicated test for that. Tests
+    // that need real math stub them explicitly.
   });
 
   afterEach(() => {
@@ -60,8 +67,10 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
     renderScreen();
 
     expect(await screen.findByText("Juan Pérez")).toBeInTheDocument();
-    expect(screen.getByText("Rentas activas")).toBeInTheDocument();
-    expect(screen.getByText("1")).toBeInTheDocument();
+    const activeTile = await screen.findByRole("group", {
+      name: "Rentas activas: 1",
+    });
+    expect(within(activeTile).getByText("1")).toBeInTheDocument();
     expect(screen.getByText("Folio: R-000001")).toBeInTheDocument();
     expect(screen.getByText("Activa")).toBeInTheDocument();
   });
@@ -76,36 +85,82 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
     ).toBeInTheDocument();
   });
 
-  it("lists a rental older than the threshold under 'Requiere revisión' (CU2, Anexo A.3)", async () => {
-    const oldDate = new Date();
-    oldDate.setDate(oldDate.getDate() - 45);
-
-    listActiveRentals.mockResolvedValue([
-      {
-        id: "r2",
-        folio: "R-000002",
-        status: "ACTIVE",
-        created: oldDate.toISOString(),
-        initial_rent_amount: 1500,
-        expand: { customer_id: juan },
-      },
+  /**
+   * Redesign Round 2, Batch 4 (Dashboard Restructure). Business owner
+   * (verbatim, confirmed): "Concentradores disponibles"/"Tanques
+   * disponibles" means REAL availability (total configured stock − active
+   * rentals of that type). Proves the full wiring end-to-end: env vars →
+   * `listActiveRentalItems` → `availability.ts` → `DashboardStats`'
+   * `--success`/neutral-gray styling.
+   */
+  it("computes real availability from total-stock env vars minus active item quantities (business-owner confirmed rule)", async () => {
+    vi.stubEnv("VITE_TOTAL_CONCENTRADORES", "5");
+    vi.stubEnv("VITE_TOTAL_TANQUES", "0");
+    listActiveRentals.mockResolvedValue([]);
+    listActiveRentalItems.mockResolvedValue([
+      { id: "i1", rental_id: "r1", item_type: "concentrator", quantity: 2 },
+      { id: "i2", rental_id: "r2", item_type: "tank", quantity: 3 },
     ]);
 
     renderScreen();
 
-    expect(
-      await screen.findByRole("heading", { name: "Requiere revisión" }),
-    ).toBeInTheDocument();
+    const concentradoresTile = await screen.findByRole("group", {
+      name: "Concentradores disponibles: 3",
+    });
+    expect(within(concentradoresTile).getByText("3")).toHaveClass(
+      "text-success",
+    );
+
+    // Total tanques = 0 → available is clamped to 0 regardless of active
+    // count, and 0 always renders neutral gray, never as an error.
+    const tanquesTile = screen.getByRole("group", {
+      name: "Tanques disponibles: 0",
+    });
+    expect(within(tanquesTile).getByText("0")).toHaveClass(
+      "text-muted-foreground",
+    );
   });
 
   /**
-   * Redesign Batch D (business-owner brief, round 4): "las rentas antiguas
-   * deben destacar visualmente de forma moderada mediante color/indicador
-   * de estado" — the stale-rental border now sources its color from the
-   * `--warning` design token (`border-warning`) instead of a hardcoded
-   * Tailwind color (`border-amber-500`).
+   * Redesign Round 2, Batch 4. Confirms the exact default behavior when the
+   * business owner hasn't configured stock yet: `VITE_TOTAL_CONCENTRADORES`/
+   * `VITE_TOTAL_TANQUES` are completely unset (not stubbed at all here,
+   * unlike the test above) — availability must default to 0, shown in
+   * neutral gray, never as an error state.
    */
-  it("marks a stale rental card with the --warning border token, not a hardcoded color", async () => {
+  it("defaults availability to 0 (neutral gray, not an error) when the total-stock env vars are completely unset", async () => {
+    listActiveRentals.mockResolvedValue([]);
+    listActiveRentalItems.mockResolvedValue([
+      { id: "i1", rental_id: "r1", item_type: "concentrator", quantity: 2 },
+    ]);
+
+    renderScreen();
+
+    const concentradoresTile = await screen.findByRole("group", {
+      name: "Concentradores disponibles: 0",
+    });
+    expect(within(concentradoresTile).getByText("0")).toHaveClass(
+      "text-muted-foreground",
+    );
+    expect(
+      within(concentradoresTile).queryByText(/error/i),
+    ).not.toBeInTheDocument();
+
+    const tanquesTile = screen.getByRole("group", {
+      name: "Tanques disponibles: 0",
+    });
+    expect(within(tanquesTile).getByText("0")).toHaveClass(
+      "text-muted-foreground",
+    );
+  });
+
+  /**
+   * Redesign Round 2, Batch 4: the previous full "Requiere revisión"
+   * section (duplicated RentalCards) is replaced with a single compact,
+   * tappable banner — business owner's explicit go-ahead to simplify this
+   * existing behavior, not just a color tweak.
+   */
+  it("shows a compact, tappable stale-rentals banner instead of a duplicated card section (CU2, Anexo A.3)", async () => {
     const oldDate = new Date();
     oldDate.setDate(oldDate.getDate() - 45);
 
@@ -122,20 +177,84 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
 
     renderScreen();
 
-    // The same rental is also stale enough to appear in the plain active
-    // list below (pre-existing behavior, unrelated to this batch) — scope
-    // to the "Requiere revisión" section so this only asserts on the stale
-    // card's own border, not a duplicate "Juan Pérez" match.
-    const staleHeading = await screen.findByRole("heading", {
-      name: "Requiere revisión",
+    const banner = await screen.findByRole("button", {
+      name: /1 renta requiere revisión/i,
     });
-    const staleSection = staleHeading.closest("section");
-    const name = within(staleSection as HTMLElement).getByText("Juan Pérez");
+    expect(banner).toBeInTheDocument();
+    // No more duplicated section/heading and no more duplicated card.
+    expect(
+      screen.queryByRole("heading", { name: "Requiere revisión" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByText("Juan Pérez")).toHaveLength(1);
+  });
+
+  it("marks a stale rental's card with the --warning border token in the single unified list, not a hardcoded color", async () => {
+    const oldDate = new Date();
+    oldDate.setDate(oldDate.getDate() - 45);
+
+    listActiveRentals.mockResolvedValue([
+      {
+        id: "r2",
+        folio: "R-000002",
+        status: "ACTIVE",
+        created: oldDate.toISOString(),
+        initial_rent_amount: 1500,
+        expand: { customer_id: juan },
+      },
+    ]);
+
+    renderScreen();
+
+    const name = await screen.findByText("Juan Pérez");
     expect(name.closest(".border-warning")).not.toBeNull();
     expect(name.closest(".border-amber-500")).toBeNull();
   });
 
-  it("does not show 'Requiere revisión' when no rental is stale", async () => {
+  it("tapping the stale-rentals banner filters the list to only stale rentals; tapping again shows all again", async () => {
+    const oldDate = new Date();
+    oldDate.setDate(oldDate.getDate() - 45);
+    const recent = { id: "c2", name: "Ana López", phone: "5599998888" };
+
+    listActiveRentals.mockResolvedValue([
+      {
+        id: "r-stale",
+        folio: "R-000002",
+        status: "ACTIVE",
+        created: oldDate.toISOString(),
+        initial_rent_amount: 1500,
+        expand: { customer_id: juan },
+      },
+      {
+        id: "r-fresh",
+        folio: "R-000003",
+        status: "ACTIVE",
+        created: new Date().toISOString(),
+        initial_rent_amount: 2000,
+        expand: { customer_id: recent },
+      },
+    ]);
+    const user = userEvent.setup();
+
+    renderScreen();
+
+    await screen.findByText("Ana López");
+    expect(screen.getByText("Juan Pérez")).toBeInTheDocument();
+
+    const banner = await screen.findByRole("button", {
+      name: /1 renta requiere revisión/i,
+    });
+    await user.click(banner);
+
+    expect(screen.getByText("Juan Pérez")).toBeInTheDocument();
+    expect(screen.queryByText("Ana López")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /ver todas/i }));
+
+    expect(screen.getByText("Juan Pérez")).toBeInTheDocument();
+    expect(await screen.findByText("Ana López")).toBeInTheDocument();
+  });
+
+  it("does not show the stale-rentals banner when no rental is stale", async () => {
     listActiveRentals.mockResolvedValue([
       {
         id: "r3",
@@ -151,7 +270,7 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
 
     await screen.findByText("Juan Pérez");
     expect(
-      screen.queryByRole("heading", { name: "Requiere revisión" }),
+      screen.queryByRole("button", { name: /requiere revisión/i }),
     ).not.toBeInTheDocument();
   });
 
@@ -211,14 +330,67 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
   });
 
   /**
-   * Redesign layout-reorder batch (business-owner brief, round 3 — Dashboard
-   * "5-10 segundos" content order): "1. Buscador prominente 2. CTA 'Nueva
-   * renta' 3. Resumen compacto de rentas activas 4. Indicador de rentas
-   * antiguas 5. Lista de rentas activas/recientes". Verifies DOM order via
-   * `compareDocumentPosition` since these elements don't share a common
-   * text node (`textContent` alone can't see an `<input>`'s value/label).
+   * Redesign Round 2, Batch 4 (business-owner brief, verbatim, decision
+   * already confirmed — see this batch's own docblock in DashboardScreen):
+   * the CTA is a pinned, always-visible bottom bar (not an inline scroll-
+   * flow element) — this takes priority over the brief's literal DOM-order
+   * wording for the CTA specifically. This is the presentational-change
+   * exception this batch's own scope note allows: structural class
+   * assertions, since there's genuinely nothing else to unit-test about a
+   * CSS-only sticky/pinned layout.
    */
-  it("orders content as: buscador, CTA Nueva renta, resumen de activas, indicador de antiguas, lista (business-owner brief)", async () => {
+  it("renders 'Nueva renta' as a pinned, always-visible bottom bar (sticky bottom-0), separate from the scrollable content", async () => {
+    listActiveRentals.mockResolvedValue([]);
+
+    const { container } = renderScreen();
+
+    await screen.findByText("No hay rentas activas todavía.");
+
+    const ctaBar = container.querySelector(".sticky.bottom-0");
+    expect(ctaBar).not.toBeNull();
+    expect(
+      within(ctaBar as HTMLElement).getByRole("link", { name: "Nueva renta" }),
+    ).toBeInTheDocument();
+  });
+
+  it("gives the scrollable content enough bottom padding to clear the pinned CTA bar over the last RentalCard", async () => {
+    listActiveRentals.mockResolvedValue([
+      {
+        id: "r1",
+        folio: "R-000001",
+        status: "ACTIVE",
+        created: "2026-08-20 10:00:00.000Z",
+        initial_rent_amount: 2800,
+        expand: { customer_id: juan },
+      },
+    ]);
+
+    const { container } = renderScreen();
+
+    const searchInput = await screen.findByLabelText(
+      "Buscar por folio, nombre o teléfono",
+    );
+
+    // pb-20 (80px) exactly clears the CTA bar's own rendered height: a
+    // size="lg" Button (h-12 = 48px) inside a p-4 (16px×2 = 32px) wrapper =
+    // 80px total. Not guessed — computed from the real Button/wrapper
+    // classes below.
+    const scrollableContent = container.querySelector(".pb-20");
+    expect(scrollableContent).not.toBeNull();
+    expect(scrollableContent?.contains(searchInput)).toBe(true);
+    expect(scrollableContent?.className).not.toContain("sticky");
+  });
+
+  /**
+   * Redesign layout-reorder batch (business-owner brief) content order,
+   * updated for Batch 4: "1. Buscador prominente 2. Estadísticas compactas
+   * 3. Indicador de rentas antiguas 4. Lista de rentas activas." The CTA is
+   * deliberately NOT part of this in-flow order any more (see the pinned
+   * bar test above) — decision #1, already confirmed by the business
+   * owner, takes priority over the brief's literal DOM-order wording for
+   * the CTA specifically.
+   */
+  it("orders content as: buscador, estadísticas, indicador de antiguas, lista (business-owner brief, Batch 4)", async () => {
     const oldDate = new Date();
     oldDate.setDate(oldDate.getDate() - 45);
 
@@ -238,19 +410,13 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
     const searchInput = await screen.findByLabelText(
       "Buscar por folio, nombre o teléfono",
     );
-    const ctaLink = screen.getByRole("link", { name: "Nueva renta" });
-    const summary = screen.getByText("Rentas activas");
-    const staleHeading = await screen.findByRole("heading", {
-      name: "Requiere revisión",
+    const statsTile = await screen.findByRole("group", {
+      name: "Rentas activas: 1",
     });
-    // This rental is stale enough to render in BOTH the "Requiere revisión"
-    // section and the plain list below (pre-existing behavior) — since
-    // RentalCard now always shows its folio (Redesign Batch D), "Folio:
-    // R-000001" matches twice. The last match is the one in "lista de
-    // rentas activas/recientes" (item 5 of the brief's order), which is
-    // what this assertion cares about.
-    const folioMatches = screen.getAllByText("Folio: R-000001");
-    const listItem = folioMatches[folioMatches.length - 1];
+    const banner = screen.getByRole("button", {
+      name: /1 renta requiere revisión/i,
+    });
+    const listItem = screen.getByText("Folio: R-000001");
 
     function isBefore(a: Node, b: Node) {
       return Boolean(
@@ -258,10 +424,9 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
       );
     }
 
-    expect(isBefore(searchInput, ctaLink)).toBe(true);
-    expect(isBefore(ctaLink, summary)).toBe(true);
-    expect(isBefore(summary, staleHeading)).toBe(true);
-    expect(isBefore(staleHeading, listItem)).toBe(true);
+    expect(isBefore(searchInput, statsTile)).toBe(true);
+    expect(isBefore(statsTile, banner)).toBe(true);
+    expect(isBefore(banner, listItem)).toBe(true);
   });
 
   /**
@@ -401,7 +566,7 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
       ).toBeInTheDocument();
     });
 
-    it("hides the active-rentals list and 'Requiere revisión' while a search query is active — one clear list at a time, not two stacked", async () => {
+    it("hides the stats row, stale banner, and active-rentals list while a search query is active — one clear list at a time, not two stacked", async () => {
       const oldDate = new Date();
       oldDate.setDate(oldDate.getDate() - 45);
       listActiveRentals.mockResolvedValue([
@@ -425,9 +590,9 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
       const user = userEvent.setup();
 
       renderScreen();
-      await screen.findByText("Rentas activas");
+      await screen.findByRole("group", { name: "Rentas activas: 1" });
       expect(
-        await screen.findByRole("heading", { name: "Requiere revisión" }),
+        await screen.findByRole("button", { name: /1 renta requiere revisión/i }),
       ).toBeInTheDocument();
 
       await user.type(
@@ -436,10 +601,12 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
       );
 
       expect(await screen.findByText("Folio: R-000184")).toBeInTheDocument();
-      expect(screen.queryByText("Rentas activas")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("group", { name: "Rentas activas: 1" }),
+      ).not.toBeInTheDocument();
       expect(screen.queryByText("Folio: R-000001")).not.toBeInTheDocument();
       expect(
-        screen.queryByRole("heading", { name: "Requiere revisión" }),
+        screen.queryByRole("button", { name: /requiere revisión/i }),
       ).not.toBeInTheDocument();
     });
   });

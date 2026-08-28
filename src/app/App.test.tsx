@@ -16,6 +16,7 @@ import { STALE_SESSION_MESSAGE } from "@/data/staleSession";
 // has no `VITE_BUSINESS_NAME`, so every "Dashboard" heading assertion
 // below was updated to "Inicio" to match what actually renders.
 const listActiveRentals = vi.fn();
+const listActiveRentalItems = vi.fn();
 const searchRentals = vi.fn();
 const listReturnedRentals = vi.fn();
 const getLoginDirectory = vi.fn();
@@ -25,6 +26,7 @@ const listCustomers = vi.fn();
 
 vi.mock("@/data/rentals.repo", () => ({
   listActiveRentals: (...args: unknown[]) => listActiveRentals(...args),
+  listActiveRentalItems: (...args: unknown[]) => listActiveRentalItems(...args),
   searchRentals: (...args: unknown[]) => searchRentals(...args),
   listReturnedRentals: (...args: unknown[]) => listReturnedRentals(...args),
 }));
@@ -72,6 +74,7 @@ vi.mock("@/data/pocketbaseClient", () => ({
 describe("App", () => {
   beforeEach(() => {
     listActiveRentals.mockReset().mockResolvedValue([]);
+    listActiveRentalItems.mockReset().mockResolvedValue([]);
     searchRentals.mockReset().mockResolvedValue([]);
     listReturnedRentals.mockReset().mockResolvedValue([]);
     getLoginDirectory.mockReset().mockResolvedValue([]);
