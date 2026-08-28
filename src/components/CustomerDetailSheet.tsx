@@ -1,7 +1,5 @@
-import { useEffect, useState, type ChangeEvent } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Sheet,
   SheetContent,
@@ -9,6 +7,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { RentalStatusBadge } from "@/components/RentalStatusBadge";
+import { CredentialCameraCapture } from "@/components/CredentialCameraCapture";
+import { ID_CARD_ASPECT_RATIO } from "@/lib/credentialCameraCrop";
 import {
   getCredentialPhotoUrl,
   getCustomer,
@@ -16,11 +16,7 @@ import {
   type CustomerRecord,
 } from "@/data/customers.repo";
 import { listRentalsForCustomer, type RentalRecord } from "@/data/rentals.repo";
-import {
-  isAcceptedCredentialPhotoType,
-  isCredentialPending,
-  isCredentialPhotoWithinSizeLimit,
-} from "@/domain/customers/customer";
+import { isCredentialPending } from "@/domain/customers/customer";
 import { formatCurrencyMXN } from "@/lib/currency";
 
 /**
@@ -39,6 +35,26 @@ import { formatCurrencyMXN } from "@/lib/currency";
  * 'rentas activas' del 'historial de rentas'"). Now split into two
  * sections filtered client-side over the already-fetched `rentals` array —
  * zero new fetches, pure display fix.
+ *
+ * Feature: Credential Photo Camera + Compression (Batch 3b) — two real UX
+ * changes, business owner's explicit request:
+ * 1. Eager fetch + blur-and-reveal: as soon as the sheet opens for a
+ *    non-pending customer, `getCredentialPhotoUrl` is called automatically
+ *    (still gated behind opening this one customer's own detail sheet —
+ *    never a bulk listing, so §15's "no aparece en listados" still holds).
+ *    The image renders immediately inside a fixed ID-card-shaped box
+ *    (reusing `CredentialCameraCapture`'s own `ID_CARD_ASPECT_RATIO`) with
+ *    a CSS blur and a "Ver credencial" overlay button. Revealing is a
+ *    client-side toggle (`revealed` state) — no re-fetch.
+ * 2. The retry-upload flow ("credencial pendiente") now uses
+ *    `CredentialCameraCapture` directly, wired straight to
+ *    `updateCustomerCredentialPhoto` — capture already IS a compressed,
+ *    correctly-shaped `File` (see that component's own tests), so the
+ *    former two-step `retryFile` state + separate "Guardar credencial"
+ *    confirm button is gone; `onCapture` firing goes straight to the
+ *    upload call, keeping the "Guardando…" loading-state pattern already
+ *    established elsewhere in this project (`CustomerForm`, other write
+ *    dialogs).
  */
 
 export interface CustomerDetailSheetProps {
@@ -59,8 +75,8 @@ export function CustomerDetailSheet({
   const [credentialUrl, setCredentialUrl] = useState<string | null>(null);
   const [credentialError, setCredentialError] = useState<string | null>(null);
   const [isLoadingCredential, setIsLoadingCredential] = useState(false);
+  const [revealed, setRevealed] = useState(false);
 
-  const [retryFile, setRetryFile] = useState<File | null>(null);
   const [retryError, setRetryError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -81,14 +97,39 @@ export function CustomerDetailSheet({
 
     fetchCustomerDetail(customerId)
       .then(([customerResult, rentalsResult]) => {
-        if (!cancelled) {
-          setError(null);
-          setCustomer(customerResult);
-          setRentals(rentalsResult);
-          setCredentialUrl(null);
-          setCredentialError(null);
-          setRetryFile(null);
-          setRetryError(null);
+        if (cancelled) {
+          return;
+        }
+
+        setError(null);
+        setCustomer(customerResult);
+        setRentals(rentalsResult);
+        setCredentialUrl(null);
+        setCredentialError(null);
+        setRevealed(false);
+        setRetryError(null);
+
+        // Eager fetch: fires as soon as the sheet opens for a customer who
+        // already has a credential photo — no button tap needed. Still
+        // gated behind this one customer's own sheet, never a listing.
+        if (!isCredentialPending(customerResult.credential_photo)) {
+          setIsLoadingCredential(true);
+          getCredentialPhotoUrl(customerResult)
+            .then((url) => {
+              if (!cancelled) {
+                setCredentialUrl(url);
+              }
+            })
+            .catch(() => {
+              if (!cancelled) {
+                setCredentialError("No se pudo cargar la credencial.");
+              }
+            })
+            .finally(() => {
+              if (!cancelled) {
+                setIsLoadingCredential(false);
+              }
+            });
         }
       })
       .catch(() => {
@@ -102,50 +143,8 @@ export function CustomerDetailSheet({
     };
   }, [open, customerId]);
 
-  async function handleViewCredential() {
+  async function handleRetryCapture(file: File) {
     if (!customer) {
-      return;
-    }
-
-    setIsLoadingCredential(true);
-    setCredentialError(null);
-
-    try {
-      const url = await getCredentialPhotoUrl(customer);
-      setCredentialUrl(url);
-    } catch {
-      setCredentialError("No se pudo cargar la credencial.");
-    } finally {
-      setIsLoadingCredential(false);
-    }
-  }
-
-  function handleRetryFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0] ?? null;
-
-    if (!file) {
-      setRetryFile(null);
-      return;
-    }
-
-    if (!isAcceptedCredentialPhotoType(file.type)) {
-      setRetryError("Formato de imagen no válido. Usa JPG, PNG o WEBP.");
-      setRetryFile(null);
-      return;
-    }
-
-    if (!isCredentialPhotoWithinSizeLimit(file.size)) {
-      setRetryError("La imagen no puede pesar más de 8MB.");
-      setRetryFile(null);
-      return;
-    }
-
-    setRetryError(null);
-    setRetryFile(file);
-  }
-
-  async function handleRetryUpload() {
-    if (!customer || !retryFile) {
       return;
     }
 
@@ -153,12 +152,24 @@ export function CustomerDetailSheet({
     setRetryError(null);
 
     try {
-      const updated = await updateCustomerCredentialPhoto(
-        customer.id,
-        retryFile,
-      );
+      const updated = await updateCustomerCredentialPhoto(customer.id, file);
       setCustomer(updated);
-      setRetryFile(null);
+      setCredentialUrl(null);
+      setRevealed(false);
+
+      // Same eager-fetch behavior as on sheet open — the freshly uploaded
+      // photo shows up blurred immediately, no extra tap required.
+      if (!isCredentialPending(updated.credential_photo)) {
+        setIsLoadingCredential(true);
+        try {
+          const url = await getCredentialPhotoUrl(updated);
+          setCredentialUrl(url);
+        } catch {
+          setCredentialError("No se pudo cargar la credencial.");
+        } finally {
+          setIsLoadingCredential(false);
+        }
+      }
     } catch {
       setRetryError("No se pudo subir la foto. Intenta de nuevo.");
     } finally {
@@ -210,44 +221,47 @@ export function CustomerDetailSheet({
                   <p className="text-muted-foreground text-sm">
                     Credencial pendiente. Puedes agregarla ahora.
                   </p>
-                  <Label htmlFor="customer-retry-credential-photo">
-                    Foto de credencial
-                  </Label>
-                  <Input
-                    id="customer-retry-credential-photo"
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={handleRetryFileChange}
-                  />
+                  {isUploading ? (
+                    <p className="text-muted-foreground text-sm">
+                      Guardando…
+                    </p>
+                  ) : (
+                    <CredentialCameraCapture
+                      onCapture={(file) => void handleRetryCapture(file)}
+                    />
+                  )}
                   {retryError && (
                     <p className="text-destructive text-sm">{retryError}</p>
                   )}
-                  {retryFile && !retryError && (
-                    <Button
-                      type="button"
-                      disabled={isUploading}
-                      onClick={() => void handleRetryUpload()}
-                    >
-                      Guardar credencial
-                    </Button>
-                  )}
                 </div>
               ) : credentialUrl ? (
-                <img
-                  src={credentialUrl}
-                  alt="Credencial del cliente"
-                  className="max-h-64 rounded-md border object-contain"
-                />
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={isLoadingCredential}
-                  onClick={() => void handleViewCredential()}
+                <div
+                  className="relative w-48 overflow-hidden rounded-md border bg-black"
+                  style={{ aspectRatio: ID_CARD_ASPECT_RATIO }}
                 >
-                  Ver credencial
-                </Button>
-              )}
+                  <img
+                    src={credentialUrl}
+                    alt="Credencial del cliente"
+                    className={`h-full w-full object-cover transition-[filter] duration-200 ${
+                      revealed ? "" : "blur-md"
+                    }`}
+                  />
+                  {!revealed && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="bg-background/80"
+                        onClick={() => setRevealed(true)}
+                      >
+                        Ver credencial
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ) : isLoadingCredential ? (
+                <p className="text-muted-foreground text-sm">Cargando…</p>
+              ) : null}
 
               {credentialError && (
                 <p className="text-destructive text-sm">{credentialError}</p>
