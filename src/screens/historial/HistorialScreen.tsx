@@ -81,9 +81,10 @@ export function HistorialScreen() {
               <li key={rental.id}>
                 <RentalCard
                   customerName={rental.expand?.customer_id?.name ?? "Cliente"}
+                  status={rental.status}
+                  folio={rental.folio}
                   onClick={() => openRentalDetail(rental.id)}
                 >
-                  <p>Folio: {rental.folio}</p>
                   <p>
                     Devuelta:{" "}
                     {new Date(rental.returned_at).toLocaleDateString("es-MX")}

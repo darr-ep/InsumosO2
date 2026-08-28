@@ -179,9 +179,10 @@ export function DashboardScreen() {
                     customerName={
                       rental.expand?.customer_id?.name ?? "Cliente"
                     }
+                    status={rental.status}
+                    folio={rental.folio}
                     onClick={() => openRentalDetail(rental.id)}
                   >
-                    <p>Folio: {rental.folio}</p>
                     <p>Teléfono: {rental.expand?.customer_id?.phone ?? "—"}</p>
                   </RentalCard>
                 </li>
@@ -216,9 +217,10 @@ export function DashboardScreen() {
                           customerName={
                             rental.expand?.customer_id?.name ?? "Cliente"
                           }
+                          status={rental.status}
+                          folio={rental.folio}
                           onClick={() => openRentalDetail(rental.id)}
-                          cardClassName="border-amber-500"
-                          contentClassName="text-sm text-muted-foreground"
+                          cardClassName="border-warning"
                         >
                           <p>
                             {daysSince(new Date(rental.created), now)} días
@@ -243,9 +245,10 @@ export function DashboardScreen() {
                         customerName={
                           rental.expand?.customer_id?.name ?? "Cliente"
                         }
+                        status={rental.status}
+                        folio={rental.folio}
                         onClick={() => openRentalDetail(rental.id)}
                       >
-                        <p>Folio: {rental.folio}</p>
                         <p>
                           Desde:{" "}
                           {new Date(rental.created).toLocaleDateString(

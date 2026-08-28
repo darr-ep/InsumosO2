@@ -44,7 +44,7 @@ describe("HistorialScreen (redesign nav batch — new route)", () => {
     listPaymentsForRental.mockReset();
   });
 
-  it("shows a card per returned rental, including customer and folio", async () => {
+  it("shows a card per returned rental, including customer, folio, and status (Redesign Batch D)", async () => {
     listReturnedRentals.mockResolvedValue([
       {
         id: "r1",
@@ -61,6 +61,7 @@ describe("HistorialScreen (redesign nav batch — new route)", () => {
 
     expect(await screen.findByText("Juan Pérez")).toBeInTheDocument();
     expect(screen.getByText("Folio: R-000001")).toBeInTheDocument();
+    expect(screen.getByText("Devuelta")).toBeInTheDocument();
   });
 
   it("shows an empty state when there are no returned rentals", async () => {

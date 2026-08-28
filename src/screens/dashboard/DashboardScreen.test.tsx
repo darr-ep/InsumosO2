@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { DashboardScreen } from "@/screens/dashboard/DashboardScreen";
@@ -45,11 +45,12 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
     vi.unstubAllEnvs();
   });
 
-  it("shows the active rental count and a card per rental, including customer and start date", async () => {
+  it("shows the active rental count and a card per rental, including customer, start date, and status (Redesign Batch D)", async () => {
     listActiveRentals.mockResolvedValue([
       {
         id: "r1",
         folio: "R-000001",
+        status: "ACTIVE",
         created: "2026-08-20 10:00:00.000Z",
         initial_rent_amount: 2800,
         expand: { customer_id: juan },
@@ -62,6 +63,7 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
     expect(screen.getByText("Rentas activas")).toBeInTheDocument();
     expect(screen.getByText("1")).toBeInTheDocument();
     expect(screen.getByText("Folio: R-000001")).toBeInTheDocument();
+    expect(screen.getByText("Activa")).toBeInTheDocument();
   });
 
   it("shows an empty state when there are no active rentals (CU2)", async () => {
@@ -82,6 +84,7 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
       {
         id: "r2",
         folio: "R-000002",
+        status: "ACTIVE",
         created: oldDate.toISOString(),
         initial_rent_amount: 1500,
         expand: { customer_id: juan },
@@ -95,11 +98,49 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
     ).toBeInTheDocument();
   });
 
+  /**
+   * Redesign Batch D (business-owner brief, round 4): "las rentas antiguas
+   * deben destacar visualmente de forma moderada mediante color/indicador
+   * de estado" — the stale-rental border now sources its color from the
+   * `--warning` design token (`border-warning`) instead of a hardcoded
+   * Tailwind color (`border-amber-500`).
+   */
+  it("marks a stale rental card with the --warning border token, not a hardcoded color", async () => {
+    const oldDate = new Date();
+    oldDate.setDate(oldDate.getDate() - 45);
+
+    listActiveRentals.mockResolvedValue([
+      {
+        id: "r2",
+        folio: "R-000002",
+        status: "ACTIVE",
+        created: oldDate.toISOString(),
+        initial_rent_amount: 1500,
+        expand: { customer_id: juan },
+      },
+    ]);
+
+    renderScreen();
+
+    // The same rental is also stale enough to appear in the plain active
+    // list below (pre-existing behavior, unrelated to this batch) — scope
+    // to the "Requiere revisión" section so this only asserts on the stale
+    // card's own border, not a duplicate "Juan Pérez" match.
+    const staleHeading = await screen.findByRole("heading", {
+      name: "Requiere revisión",
+    });
+    const staleSection = staleHeading.closest("section");
+    const name = within(staleSection as HTMLElement).getByText("Juan Pérez");
+    expect(name.closest(".border-warning")).not.toBeNull();
+    expect(name.closest(".border-amber-500")).toBeNull();
+  });
+
   it("does not show 'Requiere revisión' when no rental is stale", async () => {
     listActiveRentals.mockResolvedValue([
       {
         id: "r3",
         folio: "R-000003",
+        status: "ACTIVE",
         created: new Date().toISOString(),
         initial_rent_amount: 1500,
         expand: { customer_id: juan },
@@ -129,6 +170,7 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
       {
         id: "r1",
         folio: "R-000001",
+        status: "ACTIVE",
         created: "2026-08-20 10:00:00.000Z",
         initial_rent_amount: 2800,
         expand: { customer_id: juan },
@@ -184,6 +226,7 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
       {
         id: "r1",
         folio: "R-000001",
+        status: "ACTIVE",
         created: oldDate.toISOString(),
         initial_rent_amount: 2800,
         expand: { customer_id: juan },
@@ -200,7 +243,14 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
     const staleHeading = await screen.findByRole("heading", {
       name: "Requiere revisión",
     });
-    const listItem = screen.getByText("Folio: R-000001");
+    // This rental is stale enough to render in BOTH the "Requiere revisión"
+    // section and the plain list below (pre-existing behavior) — since
+    // RentalCard now always shows its folio (Redesign Batch D), "Folio:
+    // R-000001" matches twice. The last match is the one in "lista de
+    // rentas activas/recientes" (item 5 of the brief's order), which is
+    // what this assertion cares about.
+    const folioMatches = screen.getAllByText("Folio: R-000001");
+    const listItem = folioMatches[folioMatches.length - 1];
 
     function isBefore(a: Node, b: Node) {
       return Boolean(
@@ -235,6 +285,7 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
         {
           id: "r1",
           folio: "R-000184",
+          status: "ACTIVE",
           expand: { customer_id: juan },
         },
       ]);
@@ -250,6 +301,35 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
 
       expect(await screen.findByText("Juan Pérez")).toBeInTheDocument();
       expect(screen.getByText("Folio: R-000184")).toBeInTheDocument();
+    });
+
+    /**
+     * Redesign Batch D (business-owner brief, round 4): `searchRentals`
+     * (§7.4) matches across ALL statuses, not just ACTIVE — before this
+     * batch, a search-result card never showed status at all, so a
+     * returned rental was visually indistinguishable from an active one in
+     * the results list. This is the regression this batch closes.
+     */
+    it("shows the real status on a search result, including a returned rental (searchRentals matches all statuses)", async () => {
+      searchRentals.mockResolvedValue([
+        {
+          id: "r1",
+          folio: "R-000184",
+          status: "RETURNED",
+          expand: { customer_id: juan },
+        },
+      ]);
+      const user = userEvent.setup();
+
+      renderScreen();
+      await screen.findByText("No hay rentas activas todavía.");
+
+      await user.type(
+        screen.getByLabelText("Buscar por folio, nombre o teléfono"),
+        "184",
+      );
+
+      expect(await screen.findByText("Devuelta")).toBeInTheDocument();
     });
 
     it("shows 'sin resultados' when nothing matches (CU3's last scenario)", async () => {
@@ -286,7 +366,12 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
 
     it("opens Detalle de renta as a Sheet when a result is tapped (§18)", async () => {
       searchRentals.mockResolvedValue([
-        { id: "r1", folio: "R-000184", expand: { customer_id: juan } },
+        {
+          id: "r1",
+          folio: "R-000184",
+          status: "ACTIVE",
+          expand: { customer_id: juan },
+        },
       ]);
       getRental.mockResolvedValue({
         id: "r1",
@@ -323,13 +408,19 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
         {
           id: "r1",
           folio: "R-000001",
+          status: "ACTIVE",
           created: oldDate.toISOString(),
           initial_rent_amount: 2800,
           expand: { customer_id: juan },
         },
       ]);
       searchRentals.mockResolvedValue([
-        { id: "r2", folio: "R-000184", expand: { customer_id: juan } },
+        {
+          id: "r2",
+          folio: "R-000184",
+          status: "ACTIVE",
+          expand: { customer_id: juan },
+        },
       ]);
       const user = userEvent.setup();
 
