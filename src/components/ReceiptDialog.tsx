@@ -223,7 +223,15 @@ export function ReceiptDialog({
               </p>
             )}
             {shareStatus === "shared" && (
-              <p className="text-muted-foreground text-sm">
+              // Redesign Batch F: this is the confirmation point of the
+              // primary "Nueva renta → Registrar → Comprobante" flow — uses
+              // the `--success` token (registered by Batch E, never
+              // consumed until now) instead of neutral
+              // `text-muted-foreground`, so a successful share/print is
+              // visually distinct from an idle/loading state. Same
+              // "un-consumed token → real first consumer" pattern Batch D
+              // already established for `--warning`.
+              <p className="text-success text-sm">
                 Comprobante compartido.
               </p>
             )}
@@ -234,7 +242,7 @@ export function ReceiptDialog({
               </p>
             )}
             {printStatus === "printed" && (
-              <p className="text-muted-foreground text-sm">
+              <p className="text-success text-sm">
                 Comprobante impreso.
               </p>
             )}

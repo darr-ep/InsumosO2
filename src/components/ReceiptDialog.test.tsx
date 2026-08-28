@@ -145,9 +145,14 @@ describe("ReceiptDialog (§22)", () => {
 
     await user.click(screen.getByRole("button", { name: "Compartir" }));
 
-    expect(
-      await screen.findByText("Comprobante compartido."),
-    ).toBeInTheDocument();
+    const confirmation = await screen.findByText("Comprobante compartido.");
+    expect(confirmation).toBeInTheDocument();
+    // Redesign Batch F: this is the confirmation point of the primary
+    // "Nueva renta → Registrar → Comprobante" flow — uses the `--success`
+    // token (registered by Batch E, first real consumer here) instead of
+    // neutral `text-muted-foreground`, same "un-consumed token → real
+    // consumer" pattern Batch D established for `--warning`.
+    expect(confirmation).toHaveClass("text-success");
   });
 
   it("shows an error message when sharing fails, without closing the dialog", async () => {
@@ -244,7 +249,12 @@ describe("ReceiptDialog Bluetooth printing (§23.2/§23.3/§23.4, CU8, task 5.4)
 
     await user.click(await screen.findByRole("button", { name: "Imprimir" }));
 
-    expect(await screen.findByText("Comprobante impreso.")).toBeInTheDocument();
+    const confirmation = await screen.findByText("Comprobante impreso.");
+    expect(confirmation).toBeInTheDocument();
+    // Redesign Batch F: same `--success`-token treatment as the share
+    // confirmation above — a printed receipt is the same "important action"
+    // confirmation point.
+    expect(confirmation).toHaveClass("text-success");
     expect(webBluetoothPrinter.connect).toHaveBeenCalled();
     expect(webBluetoothPrinter.print).toHaveBeenCalledWith(receipt);
   });
