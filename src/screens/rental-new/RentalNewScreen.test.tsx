@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { ClientResponseError } from "pocketbase";
@@ -88,6 +88,26 @@ describe("RentalNewScreen (§7.1, §16.7, CU4)", () => {
     expect(createRental).not.toHaveBeenCalled();
   });
 
+  it("shows a live 'Total a cobrar' summing Renta + Depósito + Otros conceptos, never a fixed/autofilled price (Redesign — UX/UI pass)", async () => {
+    const user = userEvent.setup();
+    renderScreen();
+
+    const totalRow = screen.getByText("Total a cobrar").closest("div")!;
+    expect(within(totalRow).getByText("$0.00")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Renta"), "2800");
+    await user.type(screen.getByLabelText("Depósito"), "1000");
+
+    expect(within(totalRow).getByText("$3,800.00")).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Agregar otro concepto" }),
+    );
+    await user.type(screen.getByLabelText("Precio"), "150");
+
+    expect(within(totalRow).getByText("$3,950.00")).toBeInTheDocument();
+  });
+
   it("creates the rental (CU4: cliente existente) and opens the receipt with the server-assigned folio", async () => {
     searchCustomers.mockResolvedValue([juan]);
     createRental.mockResolvedValue({
@@ -130,8 +150,55 @@ describe("RentalNewScreen (§7.1, §16.7, CU4)", () => {
     });
 
     expect(
+      await screen.findByRole("heading", { name: "Renta creada ✓" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Folio R-000001")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Ver comprobante" }));
+
+    expect(
       await screen.findByRole("heading", { name: "Comprobante R-000001" }),
     ).toBeInTheDocument();
+    // Redesign Round 3 fix: "Ver comprobante" must close the short
+    // confirmation, not leave it open underneath the full receipt.
+    expect(
+      screen.queryByRole("heading", { name: "Renta creada ✓" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("navigates to /dashboard when Continuar is pressed on the short confirmation (Redesign Round 3)", async () => {
+    searchCustomers.mockResolvedValue([juan]);
+    createRental.mockResolvedValue({
+      rental: {
+        id: "r1",
+        folio: "R-000001",
+        created: "2026-08-26 10:00:00.000Z",
+      },
+      items: [{ id: "i1" }],
+      depositPayment: { id: "p1" },
+    });
+
+    const user = userEvent.setup();
+    renderScreen();
+
+    await user.type(
+      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
+      "Juan",
+    );
+    await user.click(
+      await screen.findByRole("button", { name: /Juan Pérez/ }),
+    );
+    await user.click(screen.getByLabelText("Agregar un concentrador"));
+    await user.type(screen.getByLabelText("Renta"), "2800");
+    await user.type(screen.getByLabelText("Depósito"), "1000");
+
+    await user.click(screen.getByRole("button", { name: "Confirmar renta" }));
+
+    await user.click(
+      await screen.findByRole("button", { name: "Continuar" }),
+    );
+
+    expect(navigate).toHaveBeenCalledWith("/dashboard");
   });
 
   it("opens Ficha de cliente from the customer picker once a customer is selected (§16.6, task 3.5)", async () => {
@@ -326,7 +393,146 @@ describe("RentalNewScreen (§7.1, §16.7, CU4)", () => {
     });
 
     expect(
-      await screen.findByRole("heading", { name: "Comprobante R-000001" }),
+      await screen.findByRole("heading", { name: "Renta creada ✓" }),
     ).toBeInTheDocument();
+  });
+
+  it("stages a customer draft via the unified search-or-create field (typed live, no button), then creates it (and only then the rental) at confirm time", async () => {
+    searchCustomers.mockResolvedValue([]);
+    createCustomer.mockResolvedValue(juan);
+    createRental.mockResolvedValue({
+      rental: {
+        id: "r1",
+        folio: "R-000001",
+        created: "2026-08-26 10:00:00.000Z",
+      },
+      items: [{ id: "i1" }],
+      depositPayment: { id: "p1" },
+    });
+
+    const user = userEvent.setup();
+    renderScreen();
+
+    await user.type(
+      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
+      "Juan Pérez",
+    );
+    await user.click(
+      await screen.findByRole("button", { name: /Crear cliente nuevo/ }),
+    );
+    // "Nombre" arrives pre-filled from the search query.
+    expect(screen.getByLabelText("Nombre")).toHaveValue("Juan Pérez");
+    await user.type(screen.getByLabelText("Teléfono"), "5512345678");
+
+    // Typing alone stages the draft (`CustomerForm`'s `liveReport` mode) —
+    // no "Continuar"/submit button exists in this flow anymore.
+    expect(
+      screen.queryByRole("button", { name: "Continuar" }),
+    ).not.toBeInTheDocument();
+    // Staging the draft must not hit the network at all.
+    expect(createCustomer).not.toHaveBeenCalled();
+
+    await user.click(screen.getByLabelText("Agregar un concentrador"));
+    await user.type(screen.getByLabelText("Renta"), "2800");
+    await user.type(screen.getByLabelText("Depósito"), "1000");
+
+    await user.click(screen.getByRole("button", { name: "Confirmar renta" }));
+
+    await waitFor(() => expect(createRental).toHaveBeenCalledTimes(1));
+    expect(createCustomer).toHaveBeenCalledTimes(1);
+    // The customer must be created before the rental, using its real id.
+    expect(createCustomer.mock.invocationCallOrder[0]).toBeLessThan(
+      createRental.mock.invocationCallOrder[0],
+    );
+    expect(createRental).toHaveBeenCalledWith(
+      expect.objectContaining({ customerId: "c1" }),
+    );
+  });
+
+  it("shows the generic save-error message and never calls createRental when createCustomer fails for a 'Cliente nuevo' draft", async () => {
+    searchCustomers.mockResolvedValue([]);
+    createCustomer.mockRejectedValueOnce(new Error("network down"));
+
+    const user = userEvent.setup();
+    renderScreen();
+
+    await user.type(
+      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
+      "Juan Pérez",
+    );
+    await user.click(
+      await screen.findByRole("button", { name: /Crear cliente nuevo/ }),
+    );
+    await user.type(screen.getByLabelText("Teléfono"), "5512345678");
+
+    await user.click(screen.getByLabelText("Agregar un concentrador"));
+    await user.type(screen.getByLabelText("Renta"), "2800");
+
+    await user.click(screen.getByRole("button", { name: "Confirmar renta" }));
+
+    expect(
+      await screen.findByText("No se pudo guardar el cliente. Intenta de nuevo."),
+    ).toBeInTheDocument();
+    expect(createRental).not.toHaveBeenCalled();
+  });
+
+  it("shows a validation error and never calls createCustomer when 'Confirmar renta' is pressed with an incomplete 'Cliente nuevo' draft", async () => {
+    searchCustomers.mockResolvedValue([]);
+    const user = userEvent.setup();
+    renderScreen();
+
+    // Only the name (from the search query) is filled — phone is left empty.
+    await user.type(
+      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
+      "Juan Pérez",
+    );
+    await user.click(
+      await screen.findByRole("button", { name: /Crear cliente nuevo/ }),
+    );
+    expect(screen.getByLabelText("Nombre")).toHaveValue("Juan Pérez");
+
+    await user.click(screen.getByLabelText("Agregar un concentrador"));
+    await user.type(screen.getByLabelText("Renta"), "2800");
+
+    await user.click(screen.getByRole("button", { name: "Confirmar renta" }));
+
+    expect(
+      await screen.findByText("El teléfono debe tener 10 dígitos."),
+    ).toBeInTheDocument();
+    expect(createCustomer).not.toHaveBeenCalled();
+    expect(createRental).not.toHaveBeenCalled();
+  });
+
+  it("promotes a 'Cliente nuevo' draft to a real selected customer as soon as it's saved, even if createRental then fails — so retrying never creates a duplicate customer", async () => {
+    searchCustomers.mockResolvedValue([]);
+    createCustomer.mockResolvedValue(juan);
+    createRental.mockRejectedValue(new Error("network down"));
+
+    const user = userEvent.setup();
+    renderScreen();
+
+    await user.type(
+      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
+      "Juan Pérez",
+    );
+    await user.click(
+      await screen.findByRole("button", { name: /Crear cliente nuevo/ }),
+    );
+    await user.type(screen.getByLabelText("Teléfono"), "5512345678");
+
+    await user.click(screen.getByLabelText("Agregar un concentrador"));
+    await user.type(screen.getByLabelText("Renta"), "2800");
+
+    await user.click(screen.getByRole("button", { name: "Confirmar renta" }));
+
+    await waitFor(() => expect(createRental).toHaveBeenCalledTimes(1));
+    expect(createCustomer).toHaveBeenCalledTimes(1);
+    // Promoted to a real, selected customer — no longer the pending draft.
+    expect(screen.getByText("Juan Pérez")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Confirmar renta" }));
+
+    await waitFor(() => expect(createRental).toHaveBeenCalledTimes(2));
+    expect(createCustomer).toHaveBeenCalledTimes(1); // still only once
   });
 });

@@ -13,10 +13,13 @@ import {
 } from "@/components/ItemQuantityPicker";
 import { ExtrasList } from "@/components/ExtrasList";
 import { ReceiptDialog } from "@/components/ReceiptDialog";
+import { RentalCreatedSummary } from "@/components/RentalCreatedSummary";
 import { CustomerDetailSheet } from "@/components/CustomerDetailSheet";
-import type { CustomerRecord } from "@/data/customers.repo";
+import { type CustomerFormSubmitValues } from "@/components/CustomerForm";
+import { createCustomer, type CustomerRecord } from "@/data/customers.repo";
 import { createRental, RentalPartiallyCreatedError } from "@/data/rentals.repo";
 import { handleIfStaleSession } from "@/data/staleSession";
+import { customerFormSchema } from "@/domain/customers/customer";
 import {
   rentalFormSchema,
   type RentalExtraFormValues,
@@ -25,6 +28,7 @@ import {
   buildRentalReceipt,
   type RentalReceiptData,
 } from "@/domain/rentals/receipt";
+import { formatCurrencyMXN } from "@/lib/currency";
 
 /**
  * SDD.md §7.1 (flujo Nueva renta) + §16.7 (orden de campos, pantalla
@@ -45,6 +49,8 @@ export function RentalNewScreen() {
 
   const [selectedCustomer, setSelectedCustomer] =
     useState<CustomerRecord | null>(null);
+  const [pendingNewCustomer, setPendingNewCustomer] =
+    useState<CustomerFormSubmitValues | null>(null);
   const [customerDetailOpen, setCustomerDetailOpen] = useState(false);
   const [itemQuantities, setItemQuantities] =
     useState<ItemQuantities>(emptyItemQuantities);
@@ -54,11 +60,13 @@ export function RentalNewScreen() {
 
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [receipt, setReceipt] = useState<RentalReceiptData | null>(null);
 
   function resetForm() {
     setSelectedCustomer(null);
+    setPendingNewCustomer(null);
     setItemQuantities(emptyItemQuantities);
     setInitialRentAmount("");
     setDepositAmount("");
@@ -68,8 +76,62 @@ export function RentalNewScreen() {
   async function handleConfirm() {
     setFormError(null);
 
+    if (!selectedCustomer && !pendingNewCustomer) {
+      setFormError("Selecciona o crea un cliente.");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    // Resolve a real, saved customer before validating/creating the rental.
+    // A "Cliente nuevo" draft is only ever persisted here, at confirm time —
+    // never earlier. On success the draft is immediately promoted to
+    // `selectedCustomer` (even if the rental step below then fails) so a
+    // retry never creates a duplicate customer record.
+    let customer: CustomerRecord;
+    if (selectedCustomer) {
+      customer = selectedCustomer;
+    } else {
+      const draft = pendingNewCustomer;
+      if (!draft) {
+        // Unreachable given the guard above, but keeps this branch type-safe.
+        setIsSubmitting(false);
+        setFormError("Selecciona o crea un cliente.");
+        return;
+      }
+      // `draft` is live-reported by `CustomerForm`'s `liveReport` mode (see
+      // `CustomerPicker.tsx`) — it can be incomplete (e.g. empty name/phone,
+      // reported the instant "Cliente nuevo" is opened, before typing
+      // anything) since there's no submit button gating it anymore. Validate
+      // here, before ever calling `createCustomer`.
+      const parsedCustomer = customerFormSchema.safeParse({
+        name: draft.name,
+        phone: draft.phone,
+      });
+      if (!parsedCustomer.success) {
+        setIsSubmitting(false);
+        setFormError(
+          parsedCustomer.error.issues[0]?.message ??
+            "Revisa el nombre y teléfono del cliente.",
+        );
+        return;
+      }
+      try {
+        customer = await createCustomer(draft);
+        setSelectedCustomer(customer);
+        setPendingNewCustomer(null);
+      } catch (error) {
+        setIsSubmitting(false);
+        if (handleIfStaleSession(error)) {
+          return;
+        }
+        setFormError("No se pudo guardar el cliente. Intenta de nuevo.");
+        return;
+      }
+    }
+
     const parsed = rentalFormSchema.safeParse({
-      customer_id: selectedCustomer?.id ?? "",
+      customer_id: customer.id,
       items: itemQuantitiesToList(itemQuantities).map((item) => ({
         item_type: item.itemType,
         quantity: item.quantity,
@@ -80,13 +142,12 @@ export function RentalNewScreen() {
     });
 
     if (!parsed.success) {
+      setIsSubmitting(false);
       setFormError(
         parsed.error.issues[0]?.message ?? "Revisa los datos de la renta.",
       );
       return;
     }
-
-    setIsSubmitting(true);
 
     try {
       const items = parsed.data.items.map((item) => ({
@@ -108,15 +169,15 @@ export function RentalNewScreen() {
           businessPhone: import.meta.env.VITE_BUSINESS_PHONE,
           folio: result.rental.folio,
           date: new Date(result.rental.created),
-          customerName: selectedCustomer?.name ?? "",
-          customerPhone: selectedCustomer?.phone ?? "",
+          customerName: customer.name,
+          customerPhone: customer.phone,
           items,
           initialRentAmount: parsed.data.initial_rent_amount,
           depositAmount: parsed.data.deposit_amount,
           extras: parsed.data.extras,
         }),
       );
-      setReceiptOpen(true);
+      setSummaryOpen(true);
       resetForm();
     } catch (error) {
       // Gap-fill (Deposit Payment Creation Failure): `createRental` wraps a
@@ -155,89 +216,135 @@ export function RentalNewScreen() {
     }
   }
 
+  // Redesign — UX/UI pass: "Total a cobrar" (business-owner request, same
+  // principle as ReturnDialog's "Total a entregar") — Renta + Depósito +
+  // every "Otro concepto" price, live. No fixed/autofilled prices (rejected
+  // — prices genuinely vary) — this only sums whatever the user already
+  // typed.
+  const totalACobrar =
+    Number(initialRentAmount || 0) +
+    Number(depositAmount || 0) +
+    extras.reduce((sum, extra) => sum + (extra.price || 0), 0);
+
   return (
-    <>
+    <div className="mx-auto flex h-dvh w-full max-w-xl flex-col bg-background text-foreground overflow-hidden">
       <AppHeader title="Nueva renta" showBack />
 
-      <div className="flex flex-col gap-6 px-4 pt-2 pb-8">
-        <section className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold text-muted-foreground">
-            Cliente
-          </h2>
-          <CustomerPicker
-            selectedCustomer={selectedCustomer}
-            onSelect={setSelectedCustomer}
-            onViewCustomer={() => setCustomerDetailOpen(true)}
-          />
-        </section>
+      <main className="flex flex-1 flex-col overflow-y-auto">
+        <div className="flex flex-1 flex-col gap-6 px-4 pt-2">
+          <section className="flex flex-col gap-2">
+            <h2 className="text-sm font-semibold text-muted-foreground">
+              Cliente
+            </h2>
+            <CustomerPicker
+              selectedCustomer={selectedCustomer}
+              onSelect={(customer) => {
+                setPendingNewCustomer(null);
+                setSelectedCustomer(customer);
+              }}
+              pendingNewCustomer={pendingNewCustomer}
+              onSelectDraft={(draft) => {
+                setSelectedCustomer(null);
+                setPendingNewCustomer(draft);
+              }}
+              onViewCustomer={() => setCustomerDetailOpen(true)}
+            />
+          </section>
 
-        <section className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold text-muted-foreground">
-            Qué se renta
-          </h2>
-          <ItemQuantityPicker
-            value={itemQuantities}
-            onChange={setItemQuantities}
-          />
-        </section>
+          <section className="flex flex-col gap-2">
+            <h2 className="text-sm font-semibold text-muted-foreground">
+              Qué se renta
+            </h2>
+            <ItemQuantityPicker
+              value={itemQuantities}
+              onChange={setItemQuantities}
+            />
+          </section>
 
-        <section className="flex flex-col gap-2">
-          <Label htmlFor="rental-initial-amount">Renta</Label>
-          <Input
-            id="rental-initial-amount"
-            type="number"
-            min={0}
-            inputMode="decimal"
-            value={initialRentAmount}
-            onChange={(event) => setInitialRentAmount(event.target.value)}
-          />
-        </section>
+          <section className="flex flex-col gap-2">
+            <Label htmlFor="rental-initial-amount">Renta</Label>
+            <Input
+              id="rental-initial-amount"
+              type="number"
+              min={0}
+              inputMode="decimal"
+              value={initialRentAmount}
+              onChange={(event) => setInitialRentAmount(event.target.value)}
+            />
+          </section>
 
-        <section className="flex flex-col gap-2">
-          <Label htmlFor="rental-deposit-amount">Depósito</Label>
-          <Input
-            id="rental-deposit-amount"
-            type="number"
-            min={0}
-            inputMode="decimal"
-            value={depositAmount}
-            onChange={(event) => setDepositAmount(event.target.value)}
-          />
-        </section>
+          <section className="flex flex-col gap-2">
+            <Label htmlFor="rental-deposit-amount">Depósito</Label>
+            <Input
+              id="rental-deposit-amount"
+              type="number"
+              min={0}
+              inputMode="decimal"
+              value={depositAmount}
+              onChange={(event) => setDepositAmount(event.target.value)}
+            />
+          </section>
 
-        <section className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold text-muted-foreground">Otros</h2>
-          <ExtrasList value={extras} onChange={setExtras} />
-        </section>
+          <section className="flex flex-col gap-2">
+            <h2 className="text-sm font-semibold text-muted-foreground">Otros</h2>
+            <ExtrasList value={extras} onChange={setExtras} />
+          </section>
 
-        {formError && <p className="text-destructive text-sm">{formError}</p>}
+          {formError && <p className="text-destructive text-sm">{formError}</p>}
+        </div>
 
-        <Button
-          type="button"
-          size="lg"
-          disabled={isSubmitting}
-          onClick={() => void handleConfirm()}
-        >
-          {isSubmitting ? "Guardando…" : "Confirmar renta"}
-        </Button>
+        {/* Business-owner request: the total belongs in the same fixed
+            container as the confirm button (always visible together while
+            scrolling the form), not as the last item of the scrollable
+            content — matches ReturnDialog's "Total a entregar" placement
+            right above its confirm button. This bar now shows real content
+            (not just a floating button), so it gets an opaque background
+            and a top border instead of the transparent/pointer-events-none
+            treatment used where the bar has nothing behind it worth
+            clicking through to. */}
+        <div className="bg-background sticky bottom-0 z-10 mt-auto flex shrink-0 flex-col gap-3 border-t p-4">
+          <div className="flex items-center justify-between text-sm font-semibold">
+            <span>Total a cobrar</span>
+            <span>{formatCurrencyMXN(totalACobrar)}</span>
+          </div>
+          <Button
+            type="button"
+            size="lg"
+            disabled={isSubmitting}
+            onClick={() => void handleConfirm()}
+            className="w-full"
+          >
+            {isSubmitting ? "Guardando…" : "Confirmar renta"}
+          </Button>
+        </div>
+      </main>
 
-        <ReceiptDialog
-          open={receiptOpen}
-          onOpenChange={(open) => {
-            setReceiptOpen(open);
-            if (!open) {
-              navigate("/dashboard");
-            }
-          }}
-          receipt={receipt}
-        />
+      <RentalCreatedSummary
+        open={summaryOpen}
+        onOpenChange={setSummaryOpen}
+        receipt={receipt}
+        onViewReceipt={() => {
+          setSummaryOpen(false);
+          setReceiptOpen(true);
+        }}
+        onContinue={() => {
+          setSummaryOpen(false);
+          navigate("/dashboard");
+        }}
+      />
 
-        <CustomerDetailSheet
-          open={customerDetailOpen}
-          onOpenChange={setCustomerDetailOpen}
-          customerId={selectedCustomer?.id ?? null}
-        />
-      </div>
-    </>
+      <ReceiptDialog
+        open={receiptOpen}
+        onOpenChange={setReceiptOpen}
+        receipt={receipt}
+        autoPrint={false}
+      />
+
+      <CustomerDetailSheet
+        open={customerDetailOpen}
+        onOpenChange={setCustomerDetailOpen}
+        customerId={selectedCustomer?.id ?? null}
+      />
+    </div>
   );
 }

@@ -88,7 +88,7 @@ describe.skipIf(!reachable)(
         deposit_amount: 1000,
       });
 
-      expect(rental.folio).toMatch(/^R-\d{6}$/);
+      expect(rental.folio).toMatch(/^R-\d{3,}$/);
       expect(rental.status).toBe("ACTIVE");
       expect(rental.created_by).toBe(authUserId);
       expect(rental.updated_by).toBe(authUserId);

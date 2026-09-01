@@ -47,7 +47,11 @@ export function PaymentDialog({
   onRegistered,
 }: PaymentDialogProps) {
   const [mode, setMode] = useState<PaymentDialogType>("rent");
-  const [amount, setAmount] = useState(String(suggestedAmount));
+  // Redesign — UX/UI pass: starts empty (placeholder shows the suggestion
+  // instead, see PaymentSuggestionField) so a rushed confirm can never
+  // silently accept a stale/wrong prefilled number — the visitor must type
+  // an actual amount.
+  const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -61,7 +65,7 @@ export function PaymentDialog({
   if (open && !wasOpen) {
     setWasOpen(true);
     setMode("rent");
-    setAmount(String(suggestedAmount));
+    setAmount("");
     setNote("");
     setFormError(null);
   } else if (!open && wasOpen) {
@@ -176,11 +180,13 @@ export function PaymentDialog({
 
         {formError && <p className="text-destructive text-sm">{formError}</p>}
 
-        <DialogFooter>
+        <DialogFooter className="flex-col items-stretch">
           <Button
             type="button"
+            size="lg"
             disabled={isSubmitting}
             onClick={() => void handleConfirm()}
+            className="w-full"
           >
             {isSubmitting ? "Guardando…" : "Confirmar"}
           </Button>

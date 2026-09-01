@@ -23,9 +23,11 @@ export interface CropRect {
  * Pure center-crop math: given a source frame's native dimensions and a
  * target aspect ratio, what rectangle (in source-pixel coordinates) should
  * be drawn onto the output canvas? A live camera stream's native aspect
- * ratio essentially never matches the ID-card guide overlay's aspect ratio,
- * so this is what makes the captured photo actually match what the guide
- * visually promised the user, instead of just stretching/distorting it.
+ * ratio essentially never matches the ID card's aspect ratio, so this is
+ * what makes the captured photo match the same center-crop the live
+ * preview already shows via CSS `object-fit: cover` on a fixed-aspect-ratio
+ * container (`CredentialCameraCapture.tsx`) — both crop to the same target
+ * ratio, so what the user sees is exactly what gets saved.
  */
 export function computeCenterCropRect(
   sourceWidth: number,

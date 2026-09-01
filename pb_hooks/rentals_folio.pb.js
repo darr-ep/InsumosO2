@@ -9,9 +9,10 @@
  * request body that even tries to include these fields):
  *
  *   1. Computes the next sequential folio as MAX(existing folio) + 1,
- *      formatted "R-000001" (6-digit, zero-padded, §A.2 — global, never
- *      resets). SQLite serializes writes (confirmed in §11.1), so this
- *      read-then-insert within the same request is safe without a
+ *      formatted "R-001" (3-digit minimum, zero-padded, §A.2 — global,
+ *      never resets, grows past the minimum width once the count exceeds
+ *      it, e.g. "R-1000"). SQLite serializes writes (confirmed in §11.1),
+ *      so this read-then-insert within the same request is safe without a
  *      Postgres-style sequence; the unique index on `folio` added in the
  *      task 1.1 migration is the safety net regardless of that assumption.
  *   2. Forces status = "ACTIVE" — a brand new rental is always active.
@@ -38,7 +39,7 @@ onRecordCreateRequest((e) => {
     return lastNumber + 1;
   })();
 
-  e.record.set("folio", "R-" + String(nextFolioNumber).padStart(6, "0"));
+  e.record.set("folio", "R-" + String(nextFolioNumber).padStart(3, "0"));
   e.record.set("status", "ACTIVE");
   e.record.set("created_by", e.auth ? e.auth.id : "");
   e.record.set("updated_by", e.auth ? e.auth.id : "");

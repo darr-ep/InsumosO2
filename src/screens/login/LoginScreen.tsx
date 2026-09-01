@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { ClientResponseError } from "pocketbase";
+import { ChevronLeft, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { UserAvatar } from "@/components/UserAvatar";
 import {
   getLoginDirectory,
+  loginDirectoryAvatarUrl,
   loginWithPassword,
   type LoginDirectoryEntry,
 } from "@/data/auth.repo";
@@ -35,6 +38,7 @@ export function LoginScreen() {
     null,
   );
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // §14 gap-fill: a stale/rotated session redirects here via
@@ -75,12 +79,14 @@ export function LoginScreen() {
   function handleSelectUser(entry: LoginDirectoryEntry) {
     setSelectedUser(entry);
     setPassword("");
+    setShowPassword(false);
     setLoginError(null);
   }
 
   function handleBackToPicker() {
     setSelectedUser(null);
     setPassword("");
+    setShowPassword(false);
     setLoginError(null);
   }
 
@@ -131,15 +137,20 @@ export function LoginScreen() {
       {!directoryError && directory !== null && !selectedUser && (
         <div className="grid w-full max-w-sm grid-cols-2 gap-3">
           {directory.map((entry) => (
-            <Button
+            <button
               key={entry.id}
               type="button"
-              variant="outline"
-              size="lg"
               onClick={() => handleSelectUser(entry)}
+              className="border-input hover:bg-accent flex flex-col items-center gap-2 rounded-xl border p-3"
             >
-              {entry.name}
-            </Button>
+              <UserAvatar
+                name={entry.name}
+                avatarUrl={loginDirectoryAvatarUrl(entry)}
+                shape="square"
+                size={96}
+              />
+              <span className="text-sm font-medium">{entry.name}</span>
+            </button>
           ))}
         </div>
       )}
@@ -152,19 +163,48 @@ export function LoginScreen() {
             void handleSubmit();
           }}
         >
-          <p className="text-center text-sm text-muted-foreground">
-            Hola, <span className="font-semibold">{selectedUser.name}</span>
-          </p>
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Elegir otro usuario"
+              onClick={handleBackToPicker}
+              disabled={isSubmitting}
+            >
+              <ChevronLeft aria-hidden="true" />
+            </Button>
+            <p className="text-sm text-muted-foreground">
+              Hola, <span className="font-semibold">{selectedUser.name}</span>
+            </p>
+          </div>
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="login-password">Contraseña</Label>
-            <Input
-              id="login-password"
-              type="password"
-              autoFocus
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-            />
+            <div className="relative">
+              <Input
+                id="login-password"
+                type={showPassword ? "text" : "password"}
+                autoFocus
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="pr-10"
+              />
+              <button
+                type="button"
+                aria-label={
+                  showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
+                }
+                onClick={() => setShowPassword((value) => !value)}
+                className="text-muted-foreground absolute inset-y-0 right-0 flex w-10 items-center justify-center"
+              >
+                {showPassword ? (
+                  <EyeOff aria-hidden="true" className="size-5" />
+                ) : (
+                  <Eye aria-hidden="true" className="size-5" />
+                )}
+              </button>
+            </div>
           </div>
 
           {loginError && (
@@ -173,14 +213,6 @@ export function LoginScreen() {
 
           <Button type="submit" size="lg" disabled={isSubmitting}>
             Entrar
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={handleBackToPicker}
-            disabled={isSubmitting}
-          >
-            Elegir otro usuario
           </Button>
         </form>
       )}

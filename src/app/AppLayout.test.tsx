@@ -20,7 +20,7 @@ function renderLayout(initialPath = "/dashboard") {
 /**
  * Redesign Round 2, Batch 1 (Header Pattern, business-owner brief):
  * `AppLayout` is now pure chrome — no header, no account menu of its own.
- * That behavior (the account menu trigger, Historial/Cerrar sesión items,
+ * That behavior (the account menu trigger, Cerrar sesión item,
  * `logout()`+navigate) was extracted verbatim into `AccountMenu`, composed
  * by `AppHeader` per-screen instead — its own ported test coverage now
  * lives in `AccountMenu.test.tsx`. This file only proves `AppLayout` still

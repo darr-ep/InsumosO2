@@ -106,6 +106,53 @@ describe("RentalCard (§17)", () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
+  it("shows the customer's phone when given (Redesign — UX/UI pass, optional/free from already-expanded data)", () => {
+    render(
+      <RentalCard
+        customerName="Juan Pérez"
+        status="ACTIVE"
+        folio="R-000001"
+        onClick={vi.fn()}
+        phone="5512345678"
+      >
+        <p>Desde: 20/08/2026</p>
+      </RentalCard>,
+    );
+
+    expect(screen.getByText("5512345678")).toBeInTheDocument();
+  });
+
+  it("renders no phone line at all when phone isn't given (e.g. search-result cards without expanded customer data)", () => {
+    render(
+      <RentalCard
+        customerName="Juan Pérez"
+        status="ACTIVE"
+        folio="R-000001"
+        onClick={vi.fn()}
+      >
+        <p>Desde: 20/08/2026</p>
+      </RentalCard>,
+    );
+
+    expect(screen.queryByText("5512345678")).not.toBeInTheDocument();
+  });
+
+  it("renders the given itemTypeIcon next to the folio", () => {
+    render(
+      <RentalCard
+        customerName="Juan Pérez"
+        status="ACTIVE"
+        folio="R-000001"
+        onClick={vi.fn()}
+        itemTypeIcon={<span data-testid="item-icon">icon</span>}
+      >
+        <p>Desde: 20/08/2026</p>
+      </RentalCard>,
+    );
+
+    expect(screen.getByTestId("item-icon")).toBeInTheDocument();
+  });
+
   it("applies an optional cardClassName override (e.g. the stale-rental --warning border token)", () => {
     render(
       <RentalCard

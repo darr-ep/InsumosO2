@@ -85,6 +85,26 @@ export async function createCustomer(
   return pb.collection(CUSTOMERS_COLLECTION).create<CustomerRecord>(formData);
 }
 
+// Redesign — UX/UI pass (business-owner request): fixing a typo in a
+// customer's name/phone shouldn't require recreating them. Deliberately
+// separate from `updateCustomerCredentialPhoto` (different concern, no
+// `FormData`/file needed) and from `CustomerForm` (that component is
+// tightly coupled to the credential-photo capture flow — see
+// `CustomerEditForm.tsx`'s own docblock for why this doesn't reuse it).
+export interface UpdateCustomerContactInfoInput {
+  name: string;
+  phone: string;
+}
+
+export async function updateCustomerContactInfo(
+  customerId: string,
+  input: UpdateCustomerContactInfoInput,
+): Promise<CustomerRecord> {
+  return pb
+    .collection(CUSTOMERS_COLLECTION)
+    .update<CustomerRecord>(customerId, input);
+}
+
 // §16.13/CU7's "credencial pendiente" state needs a way out: task 3.4
 // (`CustomerDetailSheet`) lets staff retry/complete the upload later,
 // without recreating the customer.

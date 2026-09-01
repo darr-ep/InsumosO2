@@ -18,11 +18,22 @@
  * reasoning as `rentals_folio.pb.js`/`rentals_return.pb.js` using a custom
  * route instead of loosening a collection's generic API Rules).
  *
- * Returns ONLY `[{id, name, phone}]` for every `users` record — nothing
- * else (no `email`, `avatar`, `verified`, `created`, etc.). No
+ * Returns `[{id, name, phone, avatar}]` for every `users` record — still
+ * nothing else (no `email`, `verified`, `created`, etc.). No
  * `$apis.requireAuth()` middleware: this route must work with zero users
  * authenticated, since its entire purpose is powering the picker a visitor
  * sees BEFORE logging in.
+ *
+ * **Correction (Redesign — UX/UI pass, login picker avatars):** `avatar`
+ * used to be deliberately excluded from this response, lumped in with
+ * `email`/`verified` as "more than the narrow surface needs". That
+ * reasoning doesn't hold for `avatar` specifically once the login picker
+ * actually needs to show one per user (business-owner request) — a profile
+ * photo is no more sensitive than the `name`/`phone` this route already
+ * exposes publicly, and PocketBase's `avatar` field is a plain (non
+ * `protected`) file, servable by a bare URL with no token — same class of
+ * exposure, not a wider one. `email`/`verified` stay excluded; only
+ * `avatar` is added.
  */
 routerAdd("GET", "/api/login-directory", (e) => {
   const users = e.app.findAllRecords("users");
@@ -31,6 +42,7 @@ routerAdd("GET", "/api/login-directory", (e) => {
     id: user.id,
     name: user.get("name"),
     phone: user.get("phone"),
+    avatar: user.get("avatar"),
   }));
 
   // Real bug found live: without this, the browser's HTTP cache can

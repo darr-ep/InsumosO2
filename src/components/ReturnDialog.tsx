@@ -29,6 +29,16 @@ import { formatCurrencyMXN } from "@/lib/currency";
  * `rentals.status` never changes client-side directly — this always calls
  * `data/rentals.repo.ts#returnRental`, the thin wrapper over the custom
  * `POST /api/rentals/{id}/return` endpoint (§19.1, task 3.1).
+ *
+ * Redesign Round 3, Batch B (visual consistency): the per-item `dl` rows
+ * collapsed into one "Producto(s)" line (same `.join(", ")` convention
+ * `RentalCreatedSummary` already uses) and the editable fields moved into
+ * their own `border-t pt-4` block, separating "contexto de solo lectura"
+ * from "lo que vas a registrar" — same section-break pattern
+ * `RentalDetailSheet` already established. No field was removed, only
+ * regrouped. Footer uses the same `flex-col items-stretch` fix as
+ * `RentalCreatedSummary`/`ReturnCreatedSummary` (keeps the confirm button
+ * full-width on tablet instead of shrinking to `sm:justify-end`).
  */
 
 export interface ReturnDialogProps {
@@ -64,29 +74,39 @@ export function ReturnDialog({
   hasPreviousRentPayment,
   onReturned,
 }: ReturnDialogProps) {
-  const [amountCollected, setAmountCollected] = useState(
-    String(suggestedAmount),
-  );
-  const [depositReturned, setDepositReturned] = useState(
-    String(suggestedDepositReturn(depositAmount)),
-  );
+  // Redesign — UX/UI pass: both start empty (placeholders show the
+  // suggestion instead) so a rushed confirm can never silently accept a
+  // stale/wrong prefilled number — same reasoning as PaymentDialog/
+  // PaymentSuggestionField.
+  const [amountCollected, setAmountCollected] = useState("");
+  const [depositReturned, setDepositReturned] = useState("");
   const [note, setNote] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [wasOpen, setWasOpen] = useState(open);
 
+  const hasDeposit = depositAmount > 0;
+
   // Same "adjust state during render" pattern PaymentDialog uses (task
-  // 2.4) instead of a useEffect, to re-seed the suggested amounts every
-  // time the dialog opens fresh, possibly for a different rental.
+  // 2.4) instead of a useEffect, to re-seed the form every time the dialog
+  // opens fresh, possibly for a different rental.
   if (open && !wasOpen) {
     setWasOpen(true);
-    setAmountCollected(String(suggestedAmount));
-    setDepositReturned(String(suggestedDepositReturn(depositAmount)));
+    setAmountCollected("");
+    setDepositReturned("");
     setNote("");
     setFormError(null);
   } else if (!open && wasOpen) {
     setWasOpen(false);
   }
+
+  const suggestedDeposit = suggestedDepositReturn(depositAmount);
+  // §7.3's "total a entregar" (business-owner request, post-launch audit):
+  // the actual deposit-return input only exists when there's a deposit to
+  // give back (see the conditional render below) — when there isn't,
+  // nothing is returned on that front regardless of `depositReturned`'s
+  // stale/empty state.
+  const totalToHandBack = hasDeposit ? Number(depositReturned || 0) : 0;
 
   const elapsedDays = daysSince(startedAt);
 
@@ -95,7 +115,7 @@ export function ReturnDialog({
 
     const parsed = returnFormSchema.safeParse({
       amount_collected: Number(amountCollected || 0),
-      deposit_returned: Number(depositReturned || 0),
+      deposit_returned: hasDeposit ? Number(depositReturned || 0) : 0,
       note,
     });
 
@@ -165,14 +185,16 @@ export function ReturnDialog({
             <dt className="text-muted-foreground">Cliente</dt>
             <dd>{customerName}</dd>
           </div>
-          {items.map((item) => (
-            <div className="flex justify-between" key={item.itemType}>
-              <dt className="text-muted-foreground">
-                {rentalItemTypeLabel(item.itemType)}
-              </dt>
-              <dd>x{item.quantity}</dd>
-            </div>
-          ))}
+          <div className="flex justify-between gap-2">
+            <dt className="text-muted-foreground">Producto(s)</dt>
+            <dd className="text-right">
+              {items
+                .map(
+                  (item) => `${item.quantity} x ${rentalItemTypeLabel(item.itemType)}`,
+                )
+                .join(", ")}
+            </dd>
+          </div>
           <div className="flex justify-between">
             <dt className="text-muted-foreground">Fecha de inicio</dt>
             <dd>{startedAt.toLocaleDateString("es-MX")}</dd>
@@ -187,49 +209,75 @@ export function ReturnDialog({
           </div>
         </dl>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="return-amount-collected">
-            {hasPreviousRentPayment ? "Monto sugerido" : "Renta"} — monto
-            cobrado
-          </Label>
-          <Input
-            id="return-amount-collected"
-            type="number"
-            inputMode="decimal"
-            value={amountCollected}
-            onChange={(event) => setAmountCollected(event.target.value)}
-          />
+        <div className="flex flex-col gap-4 border-t pt-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="return-amount-collected">Monto cobrado</Label>
+            <p className="text-muted-foreground text-sm">
+              {hasPreviousRentPayment ? "Sugerido" : "Renta"}:{" "}
+              {formatCurrencyMXN(suggestedAmount)}
+            </p>
+            <Input
+              id="return-amount-collected"
+              type="number"
+              inputMode="decimal"
+              placeholder={String(suggestedAmount)}
+              value={amountCollected}
+              onChange={(event) => setAmountCollected(event.target.value)}
+            />
+          </div>
+
+          {/* §7.3 (business-owner finding, post-launch audit): a rental with
+              no deposit has nothing to give back — showing this field anyway
+              invites confusion (and a stray non-zero "devolución" for money
+              that was never collected). Renta/monto cobrado above always
+              stays, deposit is the only conditional part. */}
+          {hasDeposit && (
+            <div className="flex flex-col gap-1.5">
+              {/* Business-owner finding: `suggestedDepositReturn` always
+                  equals `depositAmount` (see its own docblock) — a
+                  "Sugerido: $X" line here would just repeat the read-only
+                  "Depósito" row shown a few lines above, verbatim, every
+                  single time. Removed; the placeholder still carries the
+                  number into the input itself. */}
+              <Label htmlFor="return-deposit-returned">
+                Depósito a devolver
+              </Label>
+              <Input
+                id="return-deposit-returned"
+                type="number"
+                inputMode="decimal"
+                placeholder={String(suggestedDeposit)}
+                value={depositReturned}
+                onChange={(event) => setDepositReturned(event.target.value)}
+              />
+            </div>
+          )}
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="return-note">Nota (opcional)</Label>
+            <Input
+              id="return-note"
+              placeholder="Observaciones sobre la devolución"
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+            />
+          </div>
+
+          {formError && <p className="text-destructive text-sm">{formError}</p>}
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="return-deposit-returned">Depósito a devolver</Label>
-          <Input
-            id="return-deposit-returned"
-            type="number"
-            inputMode="decimal"
-            value={depositReturned}
-            onChange={(event) => setDepositReturned(event.target.value)}
-          />
+        <div className="flex items-center justify-between border-t pt-4 text-sm font-semibold">
+          <span>Total a entregar</span>
+          <span>{formatCurrencyMXN(totalToHandBack)}</span>
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="return-note">Nota (opcional)</Label>
-          <Input
-            id="return-note"
-            placeholder="Observaciones sobre la devolución"
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-          />
-        </div>
-
-        {formError && <p className="text-destructive text-sm">{formError}</p>}
-
-        <DialogFooter>
+        <DialogFooter className="flex-col items-stretch">
           <Button
             type="button"
             size="lg"
             disabled={isSubmitting}
             onClick={() => void handleConfirm()}
+            className="w-full"
           >
             {isSubmitting ? "Guardando…" : "Confirmar devolución"}
           </Button>

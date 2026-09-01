@@ -89,6 +89,44 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
     expect(screen.getByText("Activa")).toBeInTheDocument();
   });
 
+  it("shows the customer's phone on each active-rental card (Redesign — UX/UI pass, free from already-expanded data)", async () => {
+    listActiveRentals.mockResolvedValue([
+      {
+        id: "r1",
+        folio: "R-000001",
+        status: "ACTIVE",
+        created: "2026-08-20 10:00:00.000Z",
+        initial_rent_amount: 2800,
+        expand: { customer_id: juan },
+      },
+    ]);
+
+    renderScreen();
+
+    expect(await screen.findByText("5512345678")).toBeInTheDocument();
+  });
+
+  it("shows a product-type icon on a card whose items are all the same type, derived from the already-fetched active items (no new fetch)", async () => {
+    listActiveRentals.mockResolvedValue([
+      {
+        id: "r1",
+        folio: "R-000001",
+        status: "ACTIVE",
+        created: "2026-08-20 10:00:00.000Z",
+        initial_rent_amount: 2800,
+        expand: { customer_id: juan },
+      },
+    ]);
+    listActiveRentalItems.mockResolvedValue([
+      { id: "i1", rental_id: "r1", item_type: "concentrator", quantity: 2 },
+    ]);
+
+    renderScreen();
+
+    const folio = await screen.findByText("Folio: R-000001");
+    expect(folio.parentElement?.querySelector("svg")).toBeInTheDocument();
+  });
+
   it("shows an empty state when there are no active rentals (CU2)", async () => {
     listActiveRentals.mockResolvedValue([]);
 
@@ -206,9 +244,11 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
     });
     await user.click(within(tile).getByRole("button"));
 
-    const input = screen.getByLabelText("Total de concentradores");
-    await user.clear(input);
-    await user.type(input, "10");
+    // Stepper: 5 -> 10 (five taps), replacing the old free-text input.
+    const increase = screen.getByLabelText("Sumar uno al total");
+    for (let i = 0; i < 5; i++) {
+      await user.click(increase);
+    }
     await user.click(screen.getByRole("button", { name: "Guardar" }));
 
     expect(updateBusinessSettings).toHaveBeenCalledWith({
@@ -422,7 +462,7 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
     ).toBeInTheDocument();
   });
 
-  it("gives the scrollable content enough bottom padding to clear the pinned CTA bar over the last RentalCard", async () => {
+  it("does not add compensating bottom padding for the pinned CTA bar (it's a flex sibling, not an overlay — see DashboardScreen.tsx's docblock correction)", async () => {
     listActiveRentals.mockResolvedValue([
       {
         id: "r1",
@@ -436,18 +476,16 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
 
     const { container } = renderScreen();
 
-    const searchInput = await screen.findByLabelText(
-      "Buscar por folio, nombre o teléfono",
-    );
+    await screen.findByLabelText("Buscar por folio, nombre o teléfono");
 
-    // pb-20 (80px) exactly clears the CTA bar's own rendered height: a
-    // size="lg" Button (h-12 = 48px) inside a p-4 (16px×2 = 32px) wrapper =
-    // 80px total. Not guessed — computed from the real Button/wrapper
-    // classes below.
-    const scrollableContent = container.querySelector(".pb-20");
+    // The CTA bar (`sticky bottom-0 shrink-0`) is a flex sibling of the
+    // scrollable content, not an overlay — it always reserves its own
+    // 80px of layout space regardless of padding on the content block
+    // (same pattern AppLayout.tsx's bottom nav already documents). Extra
+    // `pb-20` here was pure double-spacing, not overlap protection.
+    const scrollableContent = container.querySelector(".flex-1.flex-col.gap-6");
     expect(scrollableContent).not.toBeNull();
-    expect(scrollableContent?.contains(searchInput)).toBe(true);
-    expect(scrollableContent?.className).not.toContain("sticky");
+    expect(scrollableContent?.className).not.toContain("pb-20");
   });
 
   /**

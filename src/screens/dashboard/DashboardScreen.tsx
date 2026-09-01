@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
+import { CalendarDays, CircleDollarSign, Droplet, Plus, Wind } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AppHeader } from "@/components/AppHeader";
 import { SearchBar } from "@/components/SearchBar";
@@ -73,11 +74,19 @@ import { formatCurrencyMXN } from "@/lib/currency";
  *    scrolling ancestor — so `sticky bottom-0` here correctly pins within
  *    it (confirmed structurally, not just assumed; see
  *    `DashboardScreen.test.tsx`'s pinned-bar test). `mt-auto` makes the CTA
- *    hug the bottom even when content is shorter than the viewport;
- *    `pb-20` (80px) on the scrollable content block is exactly the CTA
- *    bar's own rendered height (`size="lg"` Button = h-12/48px, inside a
- *    `p-4` wrapper = 16px×2/32px = 80px total), so the CTA can never
- *    visually sit on top of the last `RentalCard`.
+ *    hug the bottom even when content is shorter than the viewport.
+ *    **Correction (business-owner finding, post-launch-audit):** this
+ *    block originally added `pb-20` (80px) on the scrollable content,
+ *    reasoning the CTA bar would otherwise sit on top of the last
+ *    `RentalCard`. That was wrong — the CTA is a normal flex sibling
+ *    (not `position: fixed`/absolute), so it always reserves its own
+ *    80px of layout space regardless of padding, exactly like
+ *    `AppLayout.tsx`'s own bottom nav already documents ("no `pb-20`
+ *    -style compensating padding hack is needed anywhere" — same
+ *    sticky-flex-sibling pattern). The padding was pure double-spacing:
+ *    it never prevented an overlap that couldn't happen, it just left a
+ *    visibly oversized empty gap between the last card and the CTA.
+ *    Removed; the CTA's own box is the only spacing needed.
  * 2. The former full "Requiere revisión" section (duplicated `RentalCard`s)
  *    is now a single compact, tappable banner — explicit go-ahead to
  *    simplify existing tested behavior, not just a color tweak. Tapping it
@@ -209,6 +218,33 @@ export function DashboardScreen() {
     isStaleRental(new Date(rental.created), thresholdDays, now),
   );
 
+  // Redesign — UX/UI pass: a subtle per-card product-type icon
+  // (business-owner request, "leve"). Derived from `activeItems` (already
+  // fetched for the availability stats above) grouped by `rental_id` —
+  // NOT a new fetch. Only rendered when a rental's items are all the same
+  // type; a mixed rental (both concentrador and tanque) shows no icon
+  // rather than guessing which one to prioritize. `searchRentals` results
+  // don't carry item data at all (unchanged, documented limitation) — no
+  // icon there either.
+  const itemTypesByRentalId = new Map<string, Set<string>>();
+  for (const item of activeItems) {
+    const types = itemTypesByRentalId.get(item.rental_id) ?? new Set<string>();
+    types.add(item.item_type);
+    itemTypesByRentalId.set(item.rental_id, types);
+  }
+
+  function rentalItemTypeIcon(rentalId: string) {
+    const types = itemTypesByRentalId.get(rentalId);
+    if (!types || types.size !== 1) {
+      return undefined;
+    }
+    const [onlyType] = types;
+    const Icon = onlyType === "concentrator" ? Wind : Droplet;
+    return (
+      <Icon aria-hidden="true" className="text-muted-foreground size-4" />
+    );
+  }
+
   const activeQuantities = countActiveQuantityByType(activeItems);
   const totalConcentradores = businessSettings?.total_concentradores ?? 0;
   const totalTanques = businessSettings?.total_tanques ?? 0;
@@ -235,10 +271,14 @@ export function DashboardScreen() {
 
   return (
     <div className="flex flex-1 min-h-full flex-col">
-      <AppHeader title={import.meta.env.VITE_BUSINESS_NAME || "Inicio"} />
+      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 pb-2">
+        <AppHeader title={import.meta.env.VITE_BUSINESS_NAME || "Inicio"} />
+        <div className="px-4">
+          <SearchBar value={query} onChange={setQuery} />
+        </div>
+      </div>
 
-      <div className="flex flex-1 flex-col gap-6 px-4 pt-2 pb-20">
-        <SearchBar value={query} onChange={setQuery} />
+      <div className="flex flex-1 flex-col gap-6 px-4 pt-2">
 
         {isSearchActive ? (
           <>
@@ -263,11 +303,8 @@ export function DashboardScreen() {
                       status={rental.status}
                       folio={rental.folio}
                       onClick={() => openRentalDetail(rental.id)}
-                    >
-                      <p>
-                        Teléfono: {rental.expand?.customer_id?.phone ?? "—"}
-                      </p>
-                    </RentalCard>
+                      phone={rental.expand?.customer_id?.phone}
+                    />
                   </li>
                 ))}
               </ul>
@@ -327,6 +364,8 @@ export function DashboardScreen() {
                           status={rental.status}
                           folio={rental.folio}
                           onClick={() => openRentalDetail(rental.id)}
+                          phone={rental.expand?.customer_id?.phone}
+                          itemTypeIcon={rentalItemTypeIcon(rental.id)}
                           cardClassName={
                             isStaleRental(
                               new Date(rental.created),
@@ -337,14 +376,14 @@ export function DashboardScreen() {
                               : undefined
                           }
                         >
-                          <p>
-                            Desde:{" "}
+                          <p className="flex items-center gap-1.5">
+                            <CalendarDays aria-hidden="true" className="size-3.5" />
                             {new Date(rental.created).toLocaleDateString(
                               "es-MX",
                             )}
                           </p>
-                          <p>
-                            Renta:{" "}
+                          <p className="flex items-center gap-1.5">
+                            <CircleDollarSign aria-hidden="true" className="size-3.5" />
                             {formatCurrencyMXN(rental.initial_rent_amount)}
                           </p>
                         </RentalCard>
@@ -375,7 +414,10 @@ export function DashboardScreen() {
 
       <div className="sticky bottom-0 z-10 mt-auto shrink-0 p-4 pointer-events-none">
         <Button asChild size="lg" className="w-full pointer-events-auto">
-          <Link to="/nueva-renta">Nueva renta</Link>
+          <Link to="/nueva-renta">
+            <Plus aria-hidden="true" />
+            Nueva renta
+          </Link>
         </Button>
       </div>
     </div>

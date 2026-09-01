@@ -26,7 +26,7 @@ function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/50",
+        "fixed inset-0 z-50 bg-black/50 backdrop-blur-xs",
         className,
       )}
       {...props}
@@ -48,22 +48,24 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "bg-background fixed top-1/2 left-1/2 z-50 grid w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border p-6",
-          "max-h-[85vh] overflow-y-auto",
+          "bg-background fixed top-1/2 left-1/2 z-50 flex flex-col w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-lg border shadow-xl",
+          "max-h-[85vh] overflow-hidden p-0",
           className,
         )}
         {...props}
       >
-        {children}
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
-            className="ring-offset-background focus:ring-ring absolute top-4 right-4 flex size-11 items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:outline-none disabled:pointer-events-none"
+            className="ring-offset-background focus:ring-ring absolute top-3.5 right-4 z-30 flex size-11 items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:outline-none disabled:pointer-events-none"
           >
             <X aria-hidden="true" />
             <span className="sr-only">Cerrar</span>
           </DialogPrimitive.Close>
         )}
+        <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4">
+          {children}
+        </div>
       </DialogPrimitive.Content>
     </DialogPortal>
   );
@@ -73,7 +75,10 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-header"
-      className={cn("flex flex-col gap-1.5 text-center sm:text-left", className)}
+      className={cn(
+        "sticky -top-6 -mx-6 -mt-6 z-20 flex flex-col gap-1.5 bg-background px-6 pt-6 pb-3 border-b pr-14 text-center sm:text-left",
+        className,
+      )}
       {...props}
     />
   );

@@ -34,6 +34,7 @@ export function PaymentSuggestionField({
         id="payment-amount"
         type="number"
         inputMode="decimal"
+        placeholder={String(suggestedAmount)}
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />

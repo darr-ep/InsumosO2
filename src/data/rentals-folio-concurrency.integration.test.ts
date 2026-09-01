@@ -99,7 +99,7 @@ describe.skipIf(!reachable)(
 
       // Every successful folio matches the expected format.
       for (const folio of folios) {
-        expect(folio).toMatch(/^R-\d{6}$/);
+        expect(folio).toMatch(/^R-\d{3,}$/);
       }
 
       // No silent duplicates: the Set has exactly as many entries as

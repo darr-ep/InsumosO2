@@ -169,21 +169,6 @@ describe("App", () => {
       expect(screen.queryByText(/próximamente/)).not.toBeInTheDocument();
     });
 
-    it("navigates to /historial via the account menu and renders the real Historial screen, not a placeholder (redesign nav batch)", async () => {
-      window.history.pushState({}, "", "/dashboard");
-      const user = userEvent.setup();
-      render(<App />);
-
-      await screen.findByText("No hay rentas activas todavía.");
-      await user.click(screen.getByRole("button", { name: "Cuenta" }));
-      await user.click(screen.getByRole("menuitem", { name: "Historial" }));
-
-      expect(
-        await screen.findByRole("heading", { name: "Historial de rentas" }),
-      ).toBeInTheDocument();
-      expect(screen.queryByText(/próximamente/)).not.toBeInTheDocument();
-    });
-
     it("renders the real Clientes screen at /clientes (Redesign Round 2, Batch 2 — reachable by URL, bottom-nav wiring is a later batch)", async () => {
       window.history.pushState({}, "", "/clientes");
       render(<App />);
@@ -247,16 +232,6 @@ describe("App", () => {
       ).not.toBeInTheDocument();
     });
 
-    it("redirects /historial to /login when there is no valid session (redesign nav batch: new route needs the same RequireAuth coverage)", async () => {
-      window.history.pushState({}, "", "/historial");
-      render(<App />);
-
-      expect(await screen.findByText("Insumos O2")).toBeInTheDocument();
-      expect(
-        screen.queryByRole("heading", { name: "Historial de rentas" }),
-      ).not.toBeInTheDocument();
-    });
-
     it("redirects /clientes to /login when there is no valid session (Redesign Round 2, Batch 2: new route needs the same RequireAuth coverage)", async () => {
       window.history.pushState({}, "", "/clientes");
       render(<App />);
@@ -298,10 +273,20 @@ describe("App", () => {
 
       await screen.findByRole("heading", { name: "Nueva renta" });
 
-      await user.click(screen.getByRole("button", { name: "Cliente nuevo" }));
-      await user.type(screen.getByLabelText("Nombre"), "Darrell");
+      // "Cliente nuevo" is now reached via the unified search-or-create
+      // field: a no-results search offers "Crear cliente nuevo", which opens
+      // the form pre-filled with the typed name. The customer is only
+      // actually created (and this failure surfaces) at "Confirmar renta".
+      searchCustomers.mockResolvedValue([]);
+      await user.type(
+        screen.getByLabelText("Buscar cliente por nombre o teléfono"),
+        "Darrell",
+      );
+      await user.click(
+        await screen.findByRole("button", { name: /Crear cliente nuevo/ }),
+      );
       await user.type(screen.getByLabelText("Teléfono"), "5512345678");
-      await user.click(screen.getByRole("button", { name: "Crear cliente" }));
+      await user.click(screen.getByRole("button", { name: "Confirmar renta" }));
 
       // Redirected to /login, not left on a confusing generic error.
       expect(await screen.findByText("Insumos O2")).toBeInTheDocument();
@@ -322,10 +307,16 @@ describe("App", () => {
 
       await screen.findByRole("heading", { name: "Nueva renta" });
 
-      await user.click(screen.getByRole("button", { name: "Cliente nuevo" }));
-      await user.type(screen.getByLabelText("Nombre"), "Darrell");
+      searchCustomers.mockResolvedValue([]);
+      await user.type(
+        screen.getByLabelText("Buscar cliente por nombre o teléfono"),
+        "Darrell",
+      );
+      await user.click(
+        await screen.findByRole("button", { name: /Crear cliente nuevo/ }),
+      );
       await user.type(screen.getByLabelText("Teléfono"), "5512345678");
-      await user.click(screen.getByRole("button", { name: "Crear cliente" }));
+      await user.click(screen.getByRole("button", { name: "Confirmar renta" }));
 
       expect(
         await screen.findByText("No se pudo guardar el cliente. Intenta de nuevo."),

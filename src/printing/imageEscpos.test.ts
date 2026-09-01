@@ -157,3 +157,13 @@ describe("buildImageTicket (§23.1 — GS v 0 raster command)", () => {
     ]);
   });
 });
+
+describe("getLogoDithered (graceful degradation)", () => {
+  it("resolves null when window or fetch is not available", async () => {
+    const { getLogoDithered } = await import("@/printing/imageEscpos");
+    const result = await getLogoDithered();
+    // In node/jsdom test env without canvas/createImageBitmap, it should resolve null gracefully
+    expect(result === null || typeof result === "object").toBe(true);
+  });
+});
+

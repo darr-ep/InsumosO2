@@ -163,7 +163,7 @@ export function ditheredImageToDataUrl(img: DitheredImage): string {
 // GS v 0 m xL xH yL yH d1...dk — standard ESC/POS raster bit image
 // command (not vendor-specific — in Epson's own datasheet and replicated
 // by practically every clone).
-function packRaster(img: DitheredImage): Uint8Array {
+export function packRaster(img: DitheredImage): Uint8Array {
   const widthBytes = Math.ceil(img.width / 8);
   const raster = new Uint8Array(widthBytes * img.height);
   for (let y = 0; y < img.height; y++) {
@@ -189,3 +189,38 @@ function packRaster(img: DitheredImage): Uint8Array {
 export function buildImageTicket(img: DitheredImage): Uint8Array {
   return concatBytes([INIT, packRaster(img), FEED_LINES(3), CUT]);
 }
+
+let cachedLogoDithered: DitheredImage | null = null;
+
+/**
+ * Loads the ticket business logo (/logo-ticket.png), crops empty margins, and
+ * converts it to 1-bit dithered bitmap ready for thermal printing.
+ * Results are cached in memory so subsequent prints do not re-dither.
+ * Returns null gracefully if loading or canvas is unavailable (e.g. in test envs).
+ */
+export async function getLogoDithered(
+  targetWidth = 280,
+  logoUrl = "/logo-ticket-negro.png",
+): Promise<DitheredImage | null> {
+  if (cachedLogoDithered) {
+    return cachedLogoDithered;
+  }
+
+  if (typeof window === "undefined" || typeof fetch !== "function") {
+    return null;
+  }
+
+  try {
+    const response = await fetch(logoUrl);
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    const file = new File([blob], "logo-ticket.png", { type: blob.type });
+    const dithered = await loadAndDither(file, targetWidth);
+    cachedLogoDithered = dithered;
+    return dithered;
+  } catch {
+    // If canvas / createImageBitmap / fetch isn't supported or fails, fail gracefully
+    return null;
+  }
+}
+

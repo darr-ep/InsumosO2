@@ -1,17 +1,6 @@
-/**
- * SDD.md §23.1 — ESC/POS commands and BLE chunking, validated against the
- * real WW-POS58U thermal printer in the discardable `test-impresora`
- * prototype (see `test-impresora/HANDOFF-IMPRESION-BLUETOOTH.md`). Ported
- * and adapted for production use (task 5.2): the minimal command set that
- * "practically any ESC/POS clone" supports (init, feed, cut), plus the
- * codepage command confirmed live for ñ/tildes.
- *
- * ESC/POS printers use 1-byte codepages, not UTF-8 — a "ñ" encoded as
- * UTF-8 becomes 2 bytes (0xC3 0xB1) and breaks any single-byte codepage.
- * `latin1Bytes` sends the raw Latin-1/CP1252 byte instead (á=0xE1,
- * ñ=0xF1, ¿=0xBF, ...), which is what `selectCodepage`'s confirmed value
- * (16 = WPC1252) expects.
- */
+import type { ReceiptData } from "@/domain/rentals/receipt";
+import { rentalItemTypeLabel } from "@/domain/rentals/rental";
+import { packRaster, type DitheredImage } from "@/printing/imageEscpos";
 
 const ESC = 0x1b;
 const GS = 0x1d;
@@ -20,11 +9,45 @@ export const INIT = new Uint8Array([ESC, 0x40]); // ESC @ : reset printer
 export const FEED_LINES = (n: number) => new Uint8Array([ESC, 0x64, n]); // ESC d n
 export const CUT = new Uint8Array([GS, 0x56, 0x00]); // GS V 0 : full cut (if the printer has a cutter)
 
+// Text alignment
+export const ALIGN_LEFT = new Uint8Array([ESC, 0x61, 0x00]);
+export const ALIGN_CENTER = new Uint8Array([ESC, 0x61, 0x01]);
+export const ALIGN_RIGHT = new Uint8Array([ESC, 0x61, 0x02]);
+
+// Text styles
+export const BOLD_ON = new Uint8Array([ESC, 0x45, 0x01]);
+export const BOLD_OFF = new Uint8Array([ESC, 0x45, 0x00]);
+export const DOUBLE_SIZE = new Uint8Array([GS, 0x21, 0x11]);
+export const DOUBLE_HEIGHT = new Uint8Array([GS, 0x21, 0x01]);
+export const DOUBLE_WIDTH = new Uint8Array([GS, 0x21, 0x10]);
+export const TEXT_NORMAL = new Uint8Array([GS, 0x21, 0x00]);
+
 // n=16 (WPC1252) confirmed against the WW-POS58U: ñ/tildes print correctly.
 // The Epson standard only guarantees n=0 (PC437); the rest of the range is
 // vendor-specific, so this is a fixed, hardware-confirmed default rather
 // than an assumption.
 const CONFIRMED_CODEPAGE = 16;
+
+const currencyFormatter = new Intl.NumberFormat("es-MX", {
+  style: "currency",
+  currency: "MXN",
+});
+
+/**
+ * Formats a 2-column key-value line for 32-character thermal roll widths.
+ * E.g.: "Concentrador 5L        $2,800.00"
+ */
+export function formatRow(left: string, right: string, width = 32): string {
+  const totalLen = left.length + right.length;
+  if (totalLen >= width) {
+    const availableLeft = Math.max(1, width - right.length - 1);
+    const truncatedLeft = left.length > availableLeft ? left.slice(0, availableLeft) : left;
+    const spaces = Math.max(1, width - truncatedLeft.length - right.length);
+    return truncatedLeft + " ".repeat(spaces) + right;
+  }
+  const spaces = width - totalLen;
+  return left + " ".repeat(spaces) + right;
+}
 
 /**
  * The Unicode code point of á/é/í/ó/ú/ñ/¿/¡ coincides byte-for-byte with
@@ -78,10 +101,7 @@ export function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Builds a full text ticket: init, codepage, each line (Latin-1,
- * newline-terminated), feed and cut. The line content itself comes from
- * `formatReceiptLines` (domain layer, §22) — this module only knows about
- * bytes, never about rental/receipt business content.
+ * Builds a basic text ticket for backwards compatibility.
  */
 export function buildTicket(lines: string[]): Uint8Array {
   const parts: Uint8Array[] = [INIT, selectCodepage(CONFIRMED_CODEPAGE)];
@@ -92,3 +112,185 @@ export function buildTicket(lines: string[]): Uint8Array {
   parts.push(CUT);
   return concatBytes(parts);
 }
+
+/**
+ * Builds a structured, high-polish thermal ticket with optional dithered logo,
+ * centered header, clean key-value column alignment, clear section dividers,
+ * emphasized totals, and friendly footer.
+ */
+export function buildStructuredTicket(
+  receipt: ReceiptData,
+  logo?: DitheredImage | null,
+): Uint8Array {
+  const parts: Uint8Array[] = [
+    INIT,
+    selectCodepage(CONFIRMED_CODEPAGE),
+    FEED_LINES(1), // Margen superior inicial para que el cabezal imprima sobre papel plano tras el corte
+  ];
+
+  // 1. Logo (if available) - with clean top padding
+  if (logo) {
+    parts.push(ALIGN_CENTER);
+    parts.push(packRaster(logo));
+    parts.push(FEED_LINES(1));
+  }
+
+  // 2. Business Header (el logo ya incluye el nombre del negocio)
+  parts.push(ALIGN_CENTER);
+  parts.push(TEXT_NORMAL);
+  parts.push(latin1Bytes("Insumos Médicos & Oxígeno\n"));
+  if (receipt.businessPhone) {
+    parts.push(latin1Bytes("Urgencias / Soporte:\n"));
+    parts.push(BOLD_ON);
+    parts.push(latin1Bytes(`Tel: ${receipt.businessPhone}\n`));
+    parts.push(BOLD_OFF);
+  }
+  parts.push(latin1Bytes("================================\n"));
+
+  // 3. Document Title & Folio
+  parts.push(BOLD_ON);
+  const title =
+    receipt.kind === "return"
+      ? "COMPROBANTE DE DEVOLUCIÓN"
+      : "COMPROBANTE DE RENTA";
+  parts.push(latin1Bytes(title + "\n"));
+  parts.push(latin1Bytes(`Folio: ${receipt.folio}\n`));
+  const targetDate =
+    receipt.kind === "return" ? receipt.returnedAt : receipt.date;
+  const dateStr = targetDate.toLocaleDateString("es-MX");
+  const timeStr = targetDate.toLocaleTimeString("es-MX", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+  parts.push(latin1Bytes(`Fecha: ${dateStr}   Hora: ${timeStr}\n`));
+  parts.push(BOLD_OFF);
+  parts.push(latin1Bytes("--------------------------------\n"));
+
+  // 4. Customer Info (Nombre de pila únicamente)
+  const firstName =
+    receipt.customerName.trim().split(/\s+/)[0] || receipt.customerName;
+  parts.push(ALIGN_LEFT);
+  parts.push(latin1Bytes(`Cliente: ${firstName}\n`));
+  parts.push(latin1Bytes("--------------------------------\n"));
+
+  // 5. Items / Breakdown
+  if (receipt.kind === "return") {
+    parts.push(
+      latin1Bytes(
+        formatRow(
+          "Fecha inicio:",
+          receipt.startedAt.toLocaleDateString("es-MX"),
+        ) + "\n",
+      ),
+    );
+    parts.push(
+      latin1Bytes(
+        formatRow(
+          "Fecha devolución:",
+          receipt.returnedAt.toLocaleDateString("es-MX"),
+        ) + "\n",
+      ),
+    );
+    parts.push(
+      latin1Bytes(
+        formatRow("Tiempo rentado:", `${receipt.rentedDays} días`) + "\n",
+      ),
+    );
+    parts.push(latin1Bytes("--------------------------------\n"));
+    parts.push(
+      latin1Bytes(
+        formatRow(
+          "Monto cobrado:",
+          currencyFormatter.format(receipt.amountCollected),
+        ) + "\n",
+      ),
+    );
+    parts.push(BOLD_ON);
+    parts.push(
+      latin1Bytes(
+        formatRow(
+          "DEPÓSITO DEVUELTO:",
+          currencyFormatter.format(receipt.depositReturned),
+        ) + "\n",
+      ),
+    );
+    parts.push(BOLD_OFF);
+  } else {
+    for (const item of receipt.items) {
+      parts.push(
+        latin1Bytes(
+          formatRow(
+            `${item.quantity} x ${rentalItemTypeLabel(item.itemType)}`,
+            "",
+          ) + "\n",
+        ),
+      );
+    }
+    parts.push(
+      latin1Bytes(
+        formatRow(
+          "Renta inicial:",
+          currencyFormatter.format(receipt.initialRentAmount),
+        ) + "\n",
+      ),
+    );
+    parts.push(BOLD_ON);
+    parts.push(
+      latin1Bytes(
+        formatRow(
+          "DEPÓSITO GARANTÍA:",
+          currencyFormatter.format(receipt.depositAmount),
+        ) + "\n",
+      ),
+    );
+    parts.push(BOLD_OFF);
+    for (const extra of receipt.extras) {
+      parts.push(
+        latin1Bytes(
+          formatRow(extra.description, currencyFormatter.format(extra.price)) +
+            "\n",
+        ),
+      );
+    }
+  }
+
+  // 6. Totals
+  parts.push(latin1Bytes("================================\n"));
+  parts.push(BOLD_ON);
+  if (receipt.kind === "return") {
+    parts.push(
+      latin1Bytes(
+        formatRow(
+          "TOTAL COBRADO:",
+          currencyFormatter.format(receipt.amountCollected),
+        ) + "\n",
+      ),
+    );
+  } else {
+    parts.push(
+      latin1Bytes(
+        formatRow("TOTAL PAGADO:", currencyFormatter.format(receipt.total)) +
+          "\n",
+      ),
+    );
+  }
+  parts.push(BOLD_OFF);
+  parts.push(latin1Bytes("================================\n"));
+
+  // 7. Footer
+  parts.push(ALIGN_CENTER);
+  if (receipt.kind === "return") {
+    parts.push(latin1Bytes("¡Gracias por su preferencia!\n"));
+    parts.push(latin1Bytes("Equipo entregado y cerrado.\n"));
+  } else {
+    parts.push(latin1Bytes("* Conserve este comprobante *\n"));
+    parts.push(latin1Bytes("Indispensable para devolución\n"));
+    parts.push(latin1Bytes("de su depósito en garantía.\n"));
+  }
+  parts.push(FEED_LINES(3));
+  parts.push(CUT);
+
+  return concatBytes(parts);
+}
+

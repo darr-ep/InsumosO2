@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
+import { Lock, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+} from "@/components/ui/dialog";
 import {
   Sheet,
   SheetContent,
@@ -7,11 +12,14 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { RentalStatusBadge } from "@/components/RentalStatusBadge";
+import { RentalDetailSheet } from "@/components/RentalDetailSheet";
 import { CredentialCameraCapture } from "@/components/CredentialCameraCapture";
+import { CustomerEditForm } from "@/components/CustomerEditForm";
 import { ID_CARD_ASPECT_RATIO } from "@/lib/credentialCameraCrop";
 import {
   getCredentialPhotoUrl,
   getCustomer,
+  updateCustomerContactInfo,
   updateCustomerCredentialPhoto,
   type CustomerRecord,
 } from "@/data/customers.repo";
@@ -79,6 +87,23 @@ export function CustomerDetailSheet({
 
   const [retryError, setRetryError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [credentialViewerOpen, setCredentialViewerOpen] = useState(false);
+
+  // Redesign — UX/UI pass (business-owner request): edit name/phone
+  // in-place, without recreating the customer.
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  const [selectedRentalId, setSelectedRentalId] = useState<string | null>(
+    null,
+  );
+  const [rentalDetailOpen, setRentalDetailOpen] = useState(false);
+
+  function openRentalDetail(rentalId: string) {
+    setSelectedRentalId(rentalId);
+    setRentalDetailOpen(true);
+  }
 
   // Pure fetch, no setState inside — same reasoning as
   // RentalDetailSheet.tsx#fetchRentalDetail: avoids a
@@ -108,6 +133,8 @@ export function CustomerDetailSheet({
         setCredentialError(null);
         setRevealed(false);
         setRetryError(null);
+        setIsEditing(false);
+        setEditError(null);
 
         // Eager fetch: fires as soon as the sheet opens for a customer who
         // already has a credential photo — no button tap needed. Still
@@ -177,6 +204,25 @@ export function CustomerDetailSheet({
     }
   }
 
+  async function handleSaveEdit(values: { name: string; phone: string }) {
+    if (!customer) {
+      return;
+    }
+
+    setIsSavingEdit(true);
+    setEditError(null);
+
+    try {
+      const updated = await updateCustomerContactInfo(customer.id, values);
+      setCustomer(updated);
+      setIsEditing(false);
+    } catch {
+      setEditError("No se pudo guardar el cambio. Intenta de nuevo.");
+    } finally {
+      setIsSavingEdit(false);
+    }
+  }
+
   const pending = customer
     ? isCredentialPending(customer.credential_photo)
     : false;
@@ -193,6 +239,7 @@ export function CustomerDetailSheet({
   );
 
   return (
+    <>
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent>
         {error && <p className="text-destructive text-sm">{error}</p>}
@@ -203,10 +250,40 @@ export function CustomerDetailSheet({
 
         {customer && (
           <>
-            <SheetHeader>
-              <SheetTitle>{customer.name}</SheetTitle>
-            </SheetHeader>
-            <p className="text-muted-foreground text-sm">{customer.phone}</p>
+            {isEditing ? (
+              <div className="flex flex-col gap-2">
+                <CustomerEditForm
+                  initialValues={{ name: customer.name, phone: customer.phone }}
+                  onSubmit={(values) => void handleSaveEdit(values)}
+                  onCancel={() => {
+                    setIsEditing(false);
+                    setEditError(null);
+                  }}
+                  isSubmitting={isSavingEdit}
+                />
+                {editError && (
+                  <p className="text-destructive text-sm">{editError}</p>
+                )}
+              </div>
+            ) : (
+              <>
+                <SheetHeader className="flex-row items-center gap-1">
+                  <SheetTitle>{customer.name}</SheetTitle>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Editar cliente"
+                    onClick={() => setIsEditing(true)}
+                  >
+                    <Pencil aria-hidden="true" />
+                  </Button>
+                </SheetHeader>
+                <p className="text-muted-foreground text-sm">
+                  {customer.phone}
+                </p>
+              </>
+            )}
 
             <section className="flex flex-col gap-2">
               <h2 className="text-sm font-semibold text-muted-foreground">
@@ -236,14 +313,15 @@ export function CustomerDetailSheet({
                 </div>
               ) : credentialUrl ? (
                 <div
-                  className="relative w-48 overflow-hidden rounded-md border bg-black"
+                  className="relative w-full max-w-xs overflow-hidden rounded-md border bg-black"
                   style={{ aspectRatio: ID_CARD_ASPECT_RATIO }}
                 >
                   <img
                     src={credentialUrl}
                     alt="Credencial del cliente"
+                    onClick={() => revealed && setCredentialViewerOpen(true)}
                     className={`h-full w-full object-cover transition-[filter] duration-200 ${
-                      revealed ? "" : "blur-md"
+                      revealed ? "cursor-zoom-in" : "blur-md"
                     }`}
                   />
                   {!revealed && (
@@ -254,6 +332,7 @@ export function CustomerDetailSheet({
                         className="bg-background/80"
                         onClick={() => setRevealed(true)}
                       >
+                        <Lock aria-hidden="true" />
                         Ver credencial
                       </Button>
                     </div>
@@ -280,7 +359,11 @@ export function CustomerDetailSheet({
               ) : (
                 <ul className="flex flex-col gap-2">
                   {activeRentals.map((rental) => (
-                    <RentalRow key={rental.id} rental={rental} />
+                    <RentalRow
+                      key={rental.id}
+                      rental={rental}
+                      onClick={() => openRentalDetail(rental.id)}
+                    />
                   ))}
                 </ul>
               )}
@@ -298,7 +381,11 @@ export function CustomerDetailSheet({
               ) : (
                 <ul className="flex flex-col gap-2">
                   {historialRentals.map((rental) => (
-                    <RentalRow key={rental.id} rental={rental} />
+                    <RentalRow
+                      key={rental.id}
+                      rental={rental}
+                      onClick={() => openRentalDetail(rental.id)}
+                    />
                   ))}
                 </ul>
               )}
@@ -307,22 +394,56 @@ export function CustomerDetailSheet({
         )}
       </SheetContent>
     </Sheet>
+
+    {credentialUrl && (
+      <Dialog
+        open={credentialViewerOpen}
+        onOpenChange={setCredentialViewerOpen}
+      >
+        <DialogContent className="max-w-md">
+          <img
+            src={credentialUrl}
+            alt="Credencial del cliente (ampliada)"
+            className="w-full rounded-md"
+          />
+        </DialogContent>
+      </Dialog>
+    )}
+
+    <RentalDetailSheet
+      open={rentalDetailOpen}
+      onOpenChange={setRentalDetailOpen}
+      rentalId={selectedRentalId}
+    />
+    </>
   );
 }
 
-// Shared row markup for both the "Rentas activas" and "Historial" lists —
-// identical visual output to what the single mixed list rendered before
-// this split, just reused across the two sections instead of duplicated.
-function RentalRow({ rental }: { rental: RentalRecord }) {
+// Redesign Round 3, punto E: rentas activas e historial ahora son
+// clickeables — `onClick` abre `RentalDetailSheet` para esa renta, en vez de
+// ser solo texto informativo.
+function RentalRow({
+  rental,
+  onClick,
+}: {
+  rental: RentalRecord;
+  onClick: () => void;
+}) {
   return (
-    <li className="flex items-center justify-between rounded-md border p-3">
-      <div>
-        <p className="font-medium">{rental.folio}</p>
-        <p className="text-muted-foreground text-sm">
-          {formatCurrencyMXN(rental.initial_rent_amount)}
-        </p>
-      </div>
-      <RentalStatusBadge status={rental.status} />
+    <li>
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex w-full items-center justify-between rounded-md border p-3 text-left hover:bg-accent"
+      >
+        <div>
+          <p className="font-medium">{rental.folio}</p>
+          <p className="text-muted-foreground text-sm">
+            {formatCurrencyMXN(rental.initial_rent_amount)}
+          </p>
+        </div>
+        <RentalStatusBadge status={rental.status} />
+      </button>
     </li>
   );
 }

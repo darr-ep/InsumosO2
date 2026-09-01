@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
 import { ClientResponseError } from "pocketbase";
@@ -54,14 +54,25 @@ describe("ReturnDialog (§7.3, §16.8, CU6, task 3.2)", () => {
     consumeSessionMessage();
   });
 
-  it("shows cliente, productos, fecha de inicio, tiempo transcurrido and depósito, with editable suggested amounts (CU6 first scenario)", () => {
+  it("shows cliente, productos, fecha de inicio, tiempo transcurrido and depósito, with the suggested amounts as placeholders (CU6 first scenario)", () => {
     render(<ReturnDialog {...baseProps} />);
 
     expect(screen.getByText("Juan Pérez")).toBeInTheDocument();
-    expect(screen.getByText("Concentrador")).toBeInTheDocument();
+    expect(screen.getByText("1 x Concentrador")).toBeInTheDocument();
     expect(screen.getByText("5 días")).toBeInTheDocument();
-    expect(screen.getByLabelText(/monto cobrado/i)).toHaveValue(2800);
-    expect(screen.getByLabelText("Depósito a devolver")).toHaveValue(1000);
+    // Redesign — UX/UI pass: both amounts start empty (placeholder shows
+    // the suggestion) — never a prefilled value a rushed confirm could
+    // silently accept.
+    expect(screen.getByLabelText(/monto cobrado/i)).toHaveValue(null);
+    expect(screen.getByLabelText(/monto cobrado/i)).toHaveAttribute(
+      "placeholder",
+      "2800",
+    );
+    expect(screen.getByLabelText("Depósito a devolver")).toHaveValue(null);
+    expect(screen.getByLabelText("Depósito a devolver")).toHaveAttribute(
+      "placeholder",
+      "1000",
+    );
   });
 
   it("calls returnRental with the (possibly edited) amounts and builds a return receipt on confirm (CU6 second/third scenarios)", async () => {
@@ -73,9 +84,8 @@ describe("ReturnDialog (§7.3, §16.8, CU6, task 3.2)", () => {
     const user = userEvent.setup();
     render(<ReturnDialog {...baseProps} onReturned={onReturned} />);
 
-    const amountInput = screen.getByLabelText(/monto cobrado/i);
-    await user.clear(amountInput);
-    await user.type(amountInput, "5000");
+    await user.type(screen.getByLabelText(/monto cobrado/i), "5000");
+    await user.type(screen.getByLabelText("Depósito a devolver"), "1000");
 
     await user.click(
       screen.getByRole("button", { name: "Confirmar devolución" }),
@@ -209,6 +219,52 @@ describe("ReturnDialog (§7.3, §16.8, CU6, task 3.2)", () => {
       ),
     ).not.toBeInTheDocument();
     expect(consumeSessionMessage()).toBe(STALE_SESSION_MESSAGE);
+  });
+
+  it("shows a live 'Total a entregar' summary that reflects the typed deposit-return amount (business-owner request)", async () => {
+    const user = userEvent.setup();
+    render(<ReturnDialog {...baseProps} />);
+
+    const totalRow = screen.getByText("Total a entregar").closest("div")!;
+    expect(within(totalRow).getByText("$0.00")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Depósito a devolver"), "1000");
+
+    expect(within(totalRow).getByText("$1,000.00")).toBeInTheDocument();
+  });
+
+  it("hides the 'Depósito a devolver' field entirely when the rental never collected a deposit — 'Monto cobrado' still shows (business-owner finding, post-launch audit)", () => {
+    render(<ReturnDialog {...baseProps} depositAmount={0} />);
+
+    expect(screen.getByLabelText(/monto cobrado/i)).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Depósito a devolver"),
+    ).not.toBeInTheDocument();
+
+    const totalRow = screen.getByText("Total a entregar").closest("div")!;
+    expect(within(totalRow).getByText("$0.00")).toBeInTheDocument();
+  });
+
+  it("sends deposit_returned: 0 when there's no deposit, even without a deposit input to type into", async () => {
+    returnRental.mockResolvedValueOnce({
+      id: "rental1",
+      returned_at: "2026-08-26T12:00:00.000Z",
+    });
+    const user = userEvent.setup();
+    render(<ReturnDialog {...baseProps} depositAmount={0} />);
+
+    await user.type(screen.getByLabelText(/monto cobrado/i), "2800");
+    await user.click(
+      screen.getByRole("button", { name: "Confirmar devolución" }),
+    );
+
+    await waitFor(() => expect(returnRental).toHaveBeenCalledTimes(1));
+    expect(returnRental).toHaveBeenCalledWith({
+      rentalId: "rental1",
+      amountCollected: 2800,
+      depositReturned: 0,
+      note: undefined,
+    });
   });
 
   it("shows a Guardando… loading label on the confirm button while submitting, reverting after success (§16.13)", async () => {

@@ -1,5 +1,5 @@
-import { Link, useNavigate } from "react-router";
-import { History, LogOut, UserRound } from "lucide-react";
+import { useNavigate } from "react-router";
+import { LogOut, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -12,10 +12,12 @@ import { logout } from "@/data/auth.repo";
 /**
  * Redesign Round 2, Batch 1 (Header Pattern, business-owner brief) —
  * extracted verbatim out of `AppLayout` so `AppHeader`'s home variant can
- * compose it into the header (title left, account menu right). Same
- * trigger, same two items (Historial, Cerrar sesión), same `logout()` call
- * and navigation as before this extraction — zero behavior change, just
- * relocated so it's independently reusable/testable.
+ * compose it into the header (title left, account menu right).
+ *
+ * Redesign Round 3, punto 6: se quitó el ítem "Historial" — el buscador del
+ * Dashboard (`searchRentals`) ya busca sobre todas las rentas sin filtrar
+ * por status, y la ficha de cliente ya muestra su historial completo, así
+ * que la ruta separada era 100% redundante con eso.
  *
  * §14 "logout manual disponible" — Gap-fill fix (found post-Phase-5): no
  * logout action existed anywhere in the codebase before that. Explicitly
@@ -40,12 +42,6 @@ export function AccountMenu() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem asChild>
-          <Link to="/historial">
-            <History aria-hidden="true" />
-            Historial
-          </Link>
-        </DropdownMenuItem>
         <DropdownMenuItem onSelect={handleLogout}>
           <LogOut aria-hidden="true" />
           Cerrar sesión

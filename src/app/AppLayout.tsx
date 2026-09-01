@@ -43,10 +43,17 @@ const TABS = [
  * regression, not just chrome. `bg-background text-foreground` are
  * redundant with `body`'s own `@layer base` rule (index.css) but kept for
  * clarity/no behavior change.
+ *
+ * Redesign Round 3, Batch B (visual consistency pass): `mx-auto max-w-xl`
+ * on this root — the app had no width cap anywhere, so header/list/nav all
+ * stretched edge-to-edge on tablet. `RentalNewScreen.tsx` mirrors this same
+ * root treatment since it renders outside this layout (own route, no bottom
+ * nav — see `App.tsx`), so both variants of the app shell stay capped the
+ * same way instead of one being full-bleed.
  */
 export function AppLayout() {
   return (
-    <div className="flex min-h-dvh flex-col bg-background text-foreground">
+    <div className="mx-auto flex h-dvh w-full max-w-xl flex-col bg-background text-foreground overflow-hidden">
       <main className="flex flex-1 flex-col overflow-y-auto">
         <Outlet />
       </main>

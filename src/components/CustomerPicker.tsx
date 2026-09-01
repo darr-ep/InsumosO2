@@ -5,12 +5,7 @@ import {
   CustomerForm,
   type CustomerFormSubmitValues,
 } from "@/components/CustomerForm";
-import {
-  createCustomer,
-  searchCustomers,
-  type CustomerRecord,
-} from "@/data/customers.repo";
-import { handleIfStaleSession } from "@/data/staleSession";
+import { searchCustomers, type CustomerRecord } from "@/data/customers.repo";
 
 /**
  * SDD.md §7.1 ("Buscar/crear cliente") + §17. First section of "Nueva
@@ -19,6 +14,24 @@ import { handleIfStaleSession } from "@/data/staleSession";
  * Detalle de renta o desde el buscador de cliente en Nueva renta" — task
  * 3.5 wires that second entry point via the optional `onViewCustomer`
  * callback, exposed once a customer is selected.
+ *
+ * "Cliente nuevo" no longer creates the customer record here — it only
+ * stages a draft (`onSelectDraft`) that the caller (`RentalNewScreen`)
+ * resolves into a real `createCustomer` call at rental-confirm time, so a
+ * new customer isn't persisted until the whole rental is actually
+ * confirmed. See `RentalNewScreen.tsx`'s `handleConfirm`.
+ *
+ * Business owner's fifth follow-up: unified the old "Buscar cliente"/
+ * "Cliente nuevo" two-button toggle into a single search field — there's no
+ * mode switch to tap anymore. Typing searches as before; if nothing matches,
+ * a tappable "Crear cliente nuevo" row (instead of the old plain,
+ * non-actionable hint text) opens `CustomerForm` with "Nombre" pre-filled
+ * from whatever was already typed (`initialValues`), since that's almost
+ * certainly the name the user meant to search OR create. The draft is still
+ * reported continuously (`CustomerForm`'s `liveReport` mode, unchanged) —
+ * this change is only about how the user reaches the create form, not what
+ * happens once they're in it. "‹ Volver a buscar" clears any in-progress
+ * draft so a half-filled, abandoned draft can't linger.
  */
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -26,31 +39,53 @@ const SEARCH_DEBOUNCE_MS = 300;
 export interface CustomerPickerProps {
   selectedCustomer?: CustomerRecord | null;
   onSelect: (customer: CustomerRecord | null) => void;
+  pendingNewCustomer?: CustomerFormSubmitValues | null;
+  onSelectDraft: (draft: CustomerFormSubmitValues | null) => void;
   onViewCustomer?: (customerId: string) => void;
 }
 
 export function CustomerPicker({
   selectedCustomer = null,
   onSelect,
+  pendingNewCustomer = null,
+  onSelectDraft,
   onViewCustomer,
 }: CustomerPickerProps) {
-  const [mode, setMode] = useState<"search" | "create">("search");
+  const [creatingNew, setCreatingNew] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CustomerRecord[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (mode !== "search") {
+    if (creatingNew) {
       return;
     }
 
     const trimmed = query.trim();
 
     if (!trimmed) {
+      // Don't reset `isSearching` here via setState — it's cheaper and
+      // lint-clean to just derive at render time (below) that an empty
+      // query can never be "searching", rather than mutate state for a
+      // branch with no subscription to set up.
       return;
     }
+
+    // Mark as searching (and drop any stale results from a previous query)
+    // the instant a non-empty query changes — not just once the debounce
+    // timer fires. Otherwise there's a ~300ms window where `isSearching` is
+    // still false and leftover/empty `results` can make the "Crear cliente
+    // nuevo" suggestion (or a stale match) flash on screen before a real
+    // search for the current text has actually run. `react-hooks/set-state-in-effect`
+    // disallows a bare synchronous setState here (same reasoning/fix as
+    // `CredentialCameraCapture.tsx`'s `autoStart` effect) — deferred a tick
+    // via `queueMicrotask` to sidestep that; still resolves essentially
+    // immediately, well before the real debounce delay below.
+    queueMicrotask(() => {
+      setIsSearching(true);
+      setResults([]);
+    });
 
     let cancelled = false;
 
@@ -59,7 +94,6 @@ export function CustomerPicker({
         return;
       }
 
-      setIsSearching(true);
       searchCustomers(trimmed)
         .then((items) => {
           if (!cancelled) {
@@ -82,34 +116,33 @@ export function CustomerPicker({
       cancelled = true;
       clearTimeout(timeoutId);
     };
-  }, [query, mode]);
+  }, [query, creatingNew]);
 
   // Derived at render instead of cleared inside the effect above (avoids
   // a setState-in-effect cascading render for the "query was cleared"
   // case) — `results` may briefly hold a stale search's items once the
   // query is emptied, but they're never shown since this is empty then.
   const visibleResults = query.trim() ? results : [];
+  // Same reasoning: `isSearching` can go stale-true if the query is cleared
+  // mid-flight (the effect's empty-query branch intentionally doesn't reset
+  // it via setState) — an empty query can just never be "searching".
+  const showSearching = isSearching && query.trim().length > 0;
 
-  async function handleCreate(values: CustomerFormSubmitValues) {
-    setIsCreating(true);
-    setError(null);
+  function handleCreate(values: CustomerFormSubmitValues) {
+    // No network call here — just report the current draft. `RentalNewScreen`
+    // resolves it into a real `createCustomer` call at rental-confirm time.
+    // Fires continuously (see `CustomerForm`'s `liveReport` mode) — must NOT
+    // reset `creatingNew`/clear the search query, the user is still on this
+    // form.
+    onSelectDraft(values);
+  }
 
-    try {
-      const customer = await createCustomer(values);
-      onSelect(customer);
-      setMode("search");
-      setQuery("");
-    } catch (error) {
-      // §14 gap-fill: a rotated/expired session (still locally "valid" per
-      // `pb.authStore.isValid`) surfaces here as this exact generic
-      // "no se pudo guardar" — redirect to `/login` instead of showing a
-      // confusing domain error the user can never fix by retrying.
-      if (handleIfStaleSession(error)) {
-        return;
-      }
-      setError("No se pudo guardar el cliente. Intenta de nuevo.");
-    } finally {
-      setIsCreating(false);
+  function handleCancelCreate() {
+    setCreatingNew(false);
+    if (pendingNewCustomer) {
+      // Abandoning an in-progress "Cliente nuevo" draft — don't let a
+      // half-filled draft linger and get used later by mistake.
+      onSelectDraft(null);
     }
   }
 
@@ -146,67 +179,69 @@ export function CustomerPicker({
     );
   }
 
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="flex gap-2">
+  if (creatingNew) {
+    return (
+      <div className="flex flex-col gap-3">
         <Button
           type="button"
-          variant={mode === "search" ? "default" : "outline"}
-          onClick={() => setMode("search")}
+          variant="ghost"
+          size="sm"
+          className="self-start"
+          onClick={handleCancelCreate}
         >
-          Buscar cliente
+          ‹ Volver a buscar
         </Button>
-        <Button
-          type="button"
-          variant={mode === "create" ? "default" : "outline"}
-          onClick={() => setMode("create")}
-        >
-          Cliente nuevo
-        </Button>
+        <CustomerForm
+          liveReport
+          onSubmit={handleCreate}
+          initialValues={{ name: query.trim() }}
+        />
       </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <Input
+        placeholder="Nombre o teléfono"
+        aria-label="Buscar cliente por nombre o teléfono"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+      />
 
       {error && <p className="text-destructive text-sm">{error}</p>}
 
-      {mode === "search" ? (
-        <div className="flex flex-col gap-2">
-          <Input
-            placeholder="Nombre o teléfono"
-            aria-label="Buscar cliente por nombre o teléfono"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          {isSearching && (
-            <p className="text-muted-foreground text-sm">Buscando…</p>
-          )}
-          {!isSearching && query.trim() && visibleResults.length === 0 && (
-            <p className="text-muted-foreground text-sm">
-              Sin resultados. Puedes crear un cliente nuevo.
-            </p>
-          )}
-          <ul className="flex flex-col gap-2">
-            {visibleResults.map((customer) => (
-              <li key={customer.id}>
-                <button
-                  type="button"
-                  onClick={() => onSelect(customer)}
-                  className="hover:bg-accent w-full rounded-md border p-3 text-left"
-                >
-                  <p className="font-medium">{customer.name}</p>
-                  <p className="text-muted-foreground text-sm">
-                    {customer.phone}
-                  </p>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : (
-        <CustomerForm
-          submitLabel="Crear cliente"
-          isSubmitting={isCreating}
-          onSubmit={handleCreate}
-        />
+      {showSearching && (
+        <p className="text-muted-foreground text-sm">Buscando…</p>
       )}
+
+      {!showSearching && query.trim() && visibleResults.length === 0 && (
+        <button
+          type="button"
+          onClick={() => setCreatingNew(true)}
+          className="hover:bg-accent w-full rounded-md border border-dashed p-3 text-left"
+        >
+          <p className="font-medium">Crear cliente nuevo</p>
+          <p className="text-muted-foreground text-sm">"{query.trim()}"</p>
+        </button>
+      )}
+
+      <ul className="flex flex-col gap-2">
+        {visibleResults.map((customer) => (
+          <li key={customer.id}>
+            <button
+              type="button"
+              onClick={() => onSelect(customer)}
+              className="hover:bg-accent w-full rounded-md border p-3 text-left"
+            >
+              <p className="font-medium">{customer.name}</p>
+              <p className="text-muted-foreground text-sm">
+                {customer.phone}
+              </p>
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

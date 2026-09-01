@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Phone } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RentalStatusBadge } from "@/components/RentalStatusBadge";
 import type { RentalStatus } from "@/data/rentals.repo";
@@ -31,11 +32,15 @@ import type { RentalStatus } from "@/data/rentals.repo";
  * at `text-xs text-muted-foreground` (tertiary/metadata weight — date,
  * cost, phone, or the stale "días activa" copy, depending on the caller).
  *
- * "Producto" (item type) is intentionally NOT shown here: none of the 3
- * list queries this card is fed from (`listActiveRentals`/`searchRentals`/
- * `listReturnedRentals`) expand `rental_items` — surfacing it would require
- * a new data-fetching change, out of scope for this pure-visual/UX batch
- * (see `sdd/mvp/apply-progress` for the explicit note).
+ * Redesign — UX/UI pass: `itemTypeIcon` is optional and deliberately NOT
+ * always available — it's derived by the caller from data it already has in
+ * memory (e.g. `DashboardScreen`'s own `listActiveRentalItems()` fetch,
+ * grouped by `rental_id`), never a new per-card fetch. `searchRentals`
+ * results still don't carry item-type data (unchanged limitation from the
+ * original note this replaces), so search-result cards render without one
+ * — a real, accepted scope cut, not an oversight. `phone` is optional for
+ * the same reason: only screens that already expand `customer_id` can pass
+ * it for free.
  */
 export interface RentalCardProps {
   customerName: string;
@@ -43,7 +48,9 @@ export interface RentalCardProps {
   folio: string;
   onClick: () => void;
   cardClassName?: string;
-  children: ReactNode;
+  phone?: string;
+  itemTypeIcon?: ReactNode;
+  children?: ReactNode;
 }
 
 export function RentalCard({
@@ -52,6 +59,8 @@ export function RentalCard({
   folio,
   onClick,
   cardClassName,
+  phone,
+  itemTypeIcon,
   children,
 }: RentalCardProps) {
   return (
@@ -63,10 +72,19 @@ export function RentalCard({
             <RentalStatusBadge status={status} />
           </div>
         </CardHeader>
-        <CardContent className="flex flex-col gap-1">
-          <p className="text-sm font-medium text-foreground">
-            Folio: {folio}
-          </p>
+        <CardContent className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-1.5">
+            {itemTypeIcon}
+            <p className="text-sm font-medium text-foreground">
+              Folio: {folio}
+            </p>
+          </div>
+          {phone && (
+            <p className="text-muted-foreground flex items-center gap-1 text-xs">
+              <Phone aria-hidden="true" className="size-3" />
+              {phone}
+            </p>
+          )}
           <div className="flex flex-col gap-0.5 text-xs text-muted-foreground">
             {children}
           </div>

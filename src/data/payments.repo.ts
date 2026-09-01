@@ -1,5 +1,9 @@
 import { pb } from "@/data/pocketbaseClient";
-import type { PaymentRecord, PaymentType } from "@/data/rentals.repo";
+import type {
+  PaymentRecord,
+  PaymentType,
+  PaymentWithUser,
+} from "@/data/rentals.repo";
 
 /**
  * SDD.md §7.2 (flujo Registrar pago) + §11 (payments) + §11.2 (payment_type)
@@ -34,14 +38,18 @@ export async function createPayment(
 // §7.2: "Ver 'Último pago: $X'" — history for a single rental, most recent
 // first. Used by Detalle de renta (Phase 3) and to compute the "Registrar
 // pago" suggestion (§A.7, task 2.3) alongside domain/payments.
+//
+// Redesign Round 3, punto 2: expands `created_by` so the payment history
+// timeline can show who registered each payment ("Registró: Juan").
 export async function listPaymentsForRental(
   rentalId: string,
-): Promise<PaymentRecord[]> {
+): Promise<PaymentWithUser[]> {
   const result = await pb
     .collection(PAYMENTS_COLLECTION)
-    .getList<PaymentRecord>(1, PAYMENTS_HISTORY_PAGE_SIZE, {
+    .getList<PaymentWithUser>(1, PAYMENTS_HISTORY_PAGE_SIZE, {
       filter: pb.filter("rental_id = {:rentalId}", { rentalId }),
       sort: "-created",
+      expand: "created_by",
     });
 
   return result.items;

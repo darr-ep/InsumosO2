@@ -37,7 +37,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
     consumeSessionMessage();
   });
 
-  it("pre-fills the amount with the suggested value and registers a rent payment", async () => {
+  it("shows the suggested value as a placeholder (never prefilled) and registers a rent payment once typed", async () => {
     createPayment.mockResolvedValueOnce({ id: "p1" });
     const onOpenChange = vi.fn();
     const onRegistered = vi.fn();
@@ -54,8 +54,14 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
       />,
     );
 
-    expect(screen.getByLabelText("Monto")).toHaveValue(3000);
+    // Redesign — UX/UI pass: the field starts empty so a rushed confirm can
+    // never silently accept a stale suggested number — only the placeholder
+    // shows it.
+    const amountInput = screen.getByLabelText("Monto");
+    expect(amountInput).toHaveValue(null);
+    expect(amountInput).toHaveAttribute("placeholder", "3000");
 
+    await user.type(amountInput, "3000");
     await user.click(screen.getByRole("button", { name: "Confirmar" }));
 
     expect(createPayment).toHaveBeenCalledWith({
@@ -82,6 +88,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
       />,
     );
 
+    await user.type(screen.getByLabelText("Monto"), "3000");
     await user.click(screen.getByRole("button", { name: "Confirmar" }));
 
     expect(toast.success).toHaveBeenCalledWith("Pago registrado.");
@@ -101,6 +108,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
       />,
     );
 
+    await user.type(screen.getByLabelText("Monto"), "3000");
     await user.click(screen.getByRole("button", { name: "Confirmar" }));
 
     await screen.findByText(
@@ -201,6 +209,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
       />,
     );
 
+    await user.type(screen.getByLabelText("Monto"), "3000");
     await user.click(screen.getByRole("button", { name: "Confirmar" }));
 
     expect(
@@ -233,6 +242,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
       />,
     );
 
+    await user.type(screen.getByLabelText("Monto"), "3000");
     await user.click(screen.getByRole("button", { name: "Confirmar" }));
 
     expect(
@@ -262,6 +272,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
       />,
     );
 
+    await user.type(screen.getByLabelText("Monto"), "3000");
     await user.click(screen.getByRole("button", { name: "Confirmar" }));
 
     await waitFor(() => expect(clear).toHaveBeenCalledTimes(1));
@@ -293,6 +304,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
       />,
     );
 
+    await user.type(screen.getByLabelText("Monto"), "3000");
     await user.click(screen.getByRole("button", { name: "Confirmar" }));
 
     expect(screen.getByRole("button", { name: "Guardando…" })).toBeDisabled();

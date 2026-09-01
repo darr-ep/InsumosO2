@@ -1,12 +1,14 @@
+import { useEffect } from "react";
 import { Navigate, Outlet, Route, BrowserRouter, Routes } from "react-router";
 import { Toaster } from "@/components/ui/sonner";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppLayout } from "@/app/AppLayout";
 import { useIsAuthenticated } from "@/app/useIsAuthenticated";
 import { LoginScreen } from "@/screens/login/LoginScreen";
 import { DashboardScreen } from "@/screens/dashboard/DashboardScreen";
 import { RentalNewScreen } from "@/screens/rental-new/RentalNewScreen";
-import { HistorialScreen } from "@/screens/historial/HistorialScreen";
 import { ClientesScreen } from "@/screens/clientes/ClientesScreen";
+import { webBluetoothPrinter } from "@/printing/WebBluetoothPrinter";
 
 /**
  * SDD.md §14 — Gap-fill fix (found post-Phase-5): `App.tsx` had zero auth
@@ -15,9 +17,24 @@ import { ClientesScreen } from "@/screens/clientes/ClientesScreen";
  * persistente" already backs this with zero extra wiring) — an
  * unauthenticated visitor is redirected to `/login`. Reacts LIVE to
  * `pb.authStore.onChange` (login/logout), no full page reload needed.
+ *
+ * Also the single mount point for `webBluetoothPrinter.startAutoReconnect()`
+ * — it wraps every authenticated route as their common ancestor and stays
+ * mounted across in-app navigation (only its `<Outlet>` content swaps), so
+ * the background retry loop starts once per session instead of resetting on
+ * every screen change. `AppLayout`/`PrinterMenu` remount more often and
+ * would spam/reset the loop if it lived there instead.
+ * `startAutoReconnect()`'s own idempotency guard makes this safe even if
+ * this effect re-fires (e.g. React StrictMode).
  */
 function RequireAuth() {
   const isAuthenticated = useIsAuthenticated();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      webBluetoothPrinter.startAutoReconnect();
+    }
+  }, [isAuthenticated]);
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -43,12 +60,16 @@ function LoginRoute() {
 /**
  * Redesign nav batch (business-owner brief, round 2): the authenticated
  * area is no longer a fixed 3-tab bar — Dashboard is the hub, reached
- * directly after login, with Nueva renta and Historial one tap away (a
- * button on Dashboard, and the header's account menu, respectively).
- * `/buscar` is gone — its behavior is folded into Dashboard's own search
- * bar (DashboardScreen, redesign nav batch). Rental detail, customer file,
- * payment and return remain Sheets/Dialogs on top of these, never routes
- * of their own.
+ * directly after login, with Nueva renta one tap away (a button on
+ * Dashboard). `/buscar` is gone — its behavior is folded into Dashboard's
+ * own search bar (DashboardScreen, redesign nav batch). Rental detail,
+ * customer file, payment and return remain Sheets/Dialogs on top of these,
+ * never routes of their own.
+ *
+ * Redesign Round 3, punto 6: `/historial` route removed — `searchRentals`
+ * already searches over every rental regardless of status and the customer
+ * file already shows its own history, so a separate history screen was
+ * fully redundant.
  *
  * Redesign Round 2, Batch 3 (Bottom Nav Wiring): `AppLayout` reintroduces
  * a minimal, non-fixed 2-item bottom nav (Inicio, Clientes only — see
@@ -67,19 +88,20 @@ export function App() {
   return (
     <BrowserRouter>
       <Toaster />
-      <Routes>
-        <Route path="/login" element={<LoginRoute />} />
-        <Route element={<RequireAuth />}>
-          <Route element={<AppLayout />}>
-            <Route path="/dashboard" element={<DashboardScreen />} />
+      <ErrorBoundary>
+        <Routes>
+          <Route path="/login" element={<LoginRoute />} />
+          <Route element={<RequireAuth />}>
+            <Route element={<AppLayout />}>
+              <Route path="/dashboard" element={<DashboardScreen />} />
+              <Route path="/clientes" element={<ClientesScreen />} />
+            </Route>
             <Route path="/nueva-renta" element={<RentalNewScreen />} />
-            <Route path="/historial" element={<HistorialScreen />} />
-            <Route path="/clientes" element={<ClientesScreen />} />
           </Route>
-        </Route>
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </ErrorBoundary>
     </BrowserRouter>
   );
 }

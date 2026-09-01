@@ -11,6 +11,29 @@ import { z } from "zod";
 export const PAYMENT_DIALOG_TYPES = ["rent", "adjustment"] as const;
 export type PaymentDialogType = (typeof PAYMENT_DIALOG_TYPES)[number];
 
+// Redesign Round 3 (Detalle de renta — historial de pagos): display label
+// for a payment's `payment_type`, independent of `PaymentDialog`'s own
+// "Pago"/"Ajuste" button copy — the history timeline names the actual kind
+// of payment (a `deposit` is never created from `PaymentDialog`, only
+// alongside the rental itself, §7.1).
+// Redesign — UX/UI pass (business-owner finding, post-launch audit):
+// renamed from the bare "Depósito" — in the payment-history timeline it
+// read as ambiguous with *returning* a deposit (ReturnDialog's own
+// "Depósito a devolver"). "Depósito inicial" makes clear this row is the
+// one-time deposit captured at rental creation, never the return.
+const PAYMENT_TYPE_LABELS: Record<"rent" | "deposit" | "adjustment", string> =
+  {
+    rent: "Mensualidad",
+    deposit: "Depósito inicial",
+    adjustment: "Ajuste",
+  };
+
+export function paymentTypeLabel(
+  paymentType: "rent" | "deposit" | "adjustment",
+): string {
+  return PAYMENT_TYPE_LABELS[paymentType];
+}
+
 export const paymentFormSchema = z
   .object({
     payment_type: z.enum(PAYMENT_DIALOG_TYPES),

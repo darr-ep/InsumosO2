@@ -1,14 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildStructuredTicket,
   buildTicket,
   chunk,
   concatBytes,
   CUT,
   FEED_LINES,
+  formatRow,
   INIT,
   latin1Bytes,
   selectCodepage,
 } from "@/printing/escpos";
+import type { RentalReceiptData, ReturnReceiptData } from "@/domain/rentals/receipt";
+
 
 describe("INIT/CUT (§23.1)", () => {
   it("INIT is ESC @ (reset)", () => {
@@ -129,3 +133,85 @@ describe("buildTicket (§22/§23.1)", () => {
     ]);
   });
 });
+
+describe("formatRow (32 columns thermal width)", () => {
+  it("formats key and value with exact spacing to fit 32 chars", () => {
+    const row = formatRow("Renta:", "$2,800.00", 32);
+    expect(row).toBe("Renta:                 $2,800.00");
+    expect(row.length).toBe(32);
+  });
+
+  it("truncates or ensures at least one space when string exceeds width (triangulation)", () => {
+    const row = formatRow("Concentrador de Oxigeno Portatil 5 Litros", "$2,800.00", 32);
+    expect(row.length).toBeLessThanOrEqual(32);
+    expect(row).toContain("$2,800.00");
+  });
+});
+
+describe("buildStructuredTicket (high polish formatted receipt)", () => {
+  const sampleRental: RentalReceiptData = {
+    kind: "create",
+    businessName: "O2 Insumos",
+    businessPhone: "771 131 3535",
+    folio: "R-000001",
+    date: new Date("2026-08-26T10:00:00Z"),
+    customerName: "Juan Pérez",
+    customerPhone: "5512345678",
+    items: [{ itemType: "concentrator", quantity: 1 }],
+    initialRentAmount: 2800,
+    depositAmount: 1000,
+    extras: [{ description: "Cánula", price: 150 }],
+    total: 3950,
+  };
+
+  const sampleReturn: ReturnReceiptData = {
+    kind: "return",
+    businessName: "O2 Insumos",
+    businessPhone: "771 131 3535",
+    folio: "R-000001",
+    customerName: "Juan Pérez",
+    customerPhone: "5512345678",
+    startedAt: new Date("2026-08-01T10:00:00Z"),
+    returnedAt: new Date("2026-08-26T10:00:00Z"),
+    rentedDays: 25,
+    amountCollected: 2800,
+    depositReturned: 1000,
+  };
+
+  it("builds structured ticket containing business info, folio, customer, and totals", () => {
+    const ticket = buildStructuredTicket(sampleRental);
+    const text = new TextDecoder("latin1").decode(ticket);
+
+    expect(text).toContain("Insumos Médicos & Oxígeno");
+    expect(text).toContain("COMPROBANTE DE RENTA");
+    expect(text).toContain("Folio: R-000001");
+    expect(text).toContain("Hora:");
+    expect(text).toContain("Cliente: Juan");
+    expect(text).toContain("DEPÓSITO GARANTÍA:");
+    expect(text).toContain("TOTAL PAGADO:");
+    expect(text).toContain("$3,950.00");
+    expect(text).toContain("Conserve este comprobante");
+  });
+
+  it("builds structured return ticket with return breakdown", () => {
+    const ticket = buildStructuredTicket(sampleReturn);
+    const text = new TextDecoder("latin1").decode(ticket);
+
+    expect(text).toContain("COMPROBANTE DE DEVOLUCIÓN");
+    expect(text).toContain("25 días");
+    expect(text).toContain("TOTAL COBRADO:");
+    expect(text).toContain("$2,800.00");
+  });
+
+  it("includes raster bitmap when logo is provided", () => {
+    const fakeLogo = {
+      width: 8,
+      height: 2,
+      bits: new Uint8Array([1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0]),
+    };
+    const ticket = buildStructuredTicket(sampleRental, fakeLogo);
+    expect(ticket).toBeInstanceOf(Uint8Array);
+    expect(ticket.length).toBeGreaterThan(100);
+  });
+});
+

@@ -22,7 +22,6 @@ function renderMenu() {
     <MemoryRouter initialEntries={["/dashboard"]}>
       <Routes>
         <Route path="/dashboard" element={<AccountMenu />} />
-        <Route path="/historial" element={<p>Historial content</p>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -30,12 +29,11 @@ function renderMenu() {
 
 /**
  * Redesign Round 2, Batch 1 (Header Pattern): `AccountMenu` was extracted
- * verbatim out of `AppLayout` so `AppHeader`'s home variant can compose it
- * — same trigger, same two items (Historial, Cerrar sesión), same
- * `logout()`+`navigate("/login")` call, zero behavior change. These
- * assertions are ported from the "AppLayout — secondary nav menu (redesign
- * nav batch)" describe block in the previous revision of
- * `AppLayout.test.tsx`, proving the extraction is behavior-preserving.
+ * verbatim out of `AppLayout` so `AppHeader`'s home variant can compose it.
+ *
+ * Redesign Round 3, punto 6: el ítem "Historial" se quitó (redundante con
+ * el buscador del Dashboard + historial por cliente) — solo queda
+ * Cerrar sesión.
  */
 describe("AccountMenu (extracted from AppLayout, Redesign Round 2 Batch 1: Header Pattern)", () => {
   beforeEach(() => {
@@ -51,29 +49,16 @@ describe("AccountMenu (extracted from AppLayout, Redesign Round 2 Batch 1: Heade
     ).toBeInTheDocument();
   });
 
-  it("opens the menu to reveal exactly Historial and Cerrar sesión", async () => {
+  it("opens the menu to reveal exactly Cerrar sesión", async () => {
     const user = userEvent.setup();
     renderMenu();
 
     await user.click(screen.getByRole("button", { name: "Cuenta" }));
 
-    expect(
-      screen.getByRole("menuitem", { name: "Historial" }),
-    ).toBeInTheDocument();
     expect(
       screen.getByRole("menuitem", { name: "Cerrar sesión" }),
     ).toBeInTheDocument();
-    expect(screen.getAllByRole("menuitem")).toHaveLength(2);
-  });
-
-  it("navigates to /historial when Historial is tapped", async () => {
-    const user = userEvent.setup();
-    renderMenu();
-
-    await user.click(screen.getByRole("button", { name: "Cuenta" }));
-    await user.click(screen.getByRole("menuitem", { name: "Historial" }));
-
-    expect(await screen.findByText("Historial content")).toBeInTheDocument();
+    expect(screen.getAllByRole("menuitem")).toHaveLength(1);
   });
 
   it("clears the session and redirects to /login when Cerrar sesión is tapped", async () => {

@@ -16,8 +16,10 @@ import { createTestUser, getSuperuserClient } from "@/data/testSupport";
  * This test proves, against a live instance:
  *   1. An anonymous request succeeds (200) with zero users authenticated —
  *      the whole point of the route.
- *   2. The response is exactly `[{id, name, phone}]` per user, no other
- *      field (`email`, `avatar`, `verified`, etc. must NOT leak).
+ *   2. The response is exactly `[{id, name, phone, avatar}]` per user, no
+ *      other field (`email`/`verified`/etc. must NOT leak — see this
+ *      route's own docblock for why `avatar` moved from "excluded" to
+ *      "included", Redesign — UX/UI pass).
  *   3. It reflects real seeded users, not a hardcoded/stubbed list.
  */
 
@@ -43,7 +45,7 @@ describe.skipIf(!reachable)(
       expect(response.status).toBe(200);
     });
 
-    it("returns exactly {id, name, phone} for every seeded user, no other field", async () => {
+    it("returns exactly {id, name, phone, avatar} for every seeded user, no other field", async () => {
       const seeded = await createTestUser(PB_URL, "9");
 
       const response = await fetch(`${PB_URL}/api/login-directory`);
@@ -51,16 +53,25 @@ describe.skipIf(!reachable)(
         id: string;
         name: string;
         phone: string;
+        avatar: string;
       }>;
 
       expect(Array.isArray(body)).toBe(true);
 
       const entry = body.find((user) => user.id === seeded.userId);
       expect(entry).toBeDefined();
-      // Exactly these 3 keys — no email/avatar/verified/created/etc leak.
-      expect(Object.keys(entry!).sort()).toEqual(["id", "name", "phone"]);
+      // Exactly these 4 keys — no email/verified/created/etc leak.
+      expect(Object.keys(entry!).sort()).toEqual([
+        "avatar",
+        "id",
+        "name",
+        "phone",
+      ]);
       expect(typeof entry!.name).toBe("string");
       expect(typeof entry!.phone).toBe("string");
+      // A freshly seeded test user never has an avatar uploaded — the field
+      // is still present (empty string), never omitted.
+      expect(entry!.avatar).toBe("");
       expect(entry!.name.length).toBeGreaterThan(0);
       expect(entry!.phone.length).toBeGreaterThan(0);
     });

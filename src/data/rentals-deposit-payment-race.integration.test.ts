@@ -92,7 +92,7 @@ describe.skipIf(!reachable)(
         extras: [],
       });
 
-      expect(result.rental.folio).toMatch(/^R-\d{6}$/);
+      expect(result.rental.folio).toMatch(/^R-\d{3,}$/);
       expect(result.items).toHaveLength(2);
       expect(result.depositPayment).not.toBeNull();
       expect(result.depositPayment?.amount).toBe(12000);

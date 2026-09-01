@@ -10,6 +10,7 @@ const getCustomer = vi.fn();
 const getCredentialPhotoUrl = vi.fn();
 const updateCustomerCredentialPhoto = vi.fn();
 const listRentalsForCustomer = vi.fn();
+const listActiveRentals = vi.fn();
 
 vi.mock("@/data/customers.repo", () => ({
   listCustomers: (...args: unknown[]) => listCustomers(...args),
@@ -22,6 +23,7 @@ vi.mock("@/data/customers.repo", () => ({
 
 vi.mock("@/data/rentals.repo", () => ({
   listRentalsForCustomer: (...args: unknown[]) => listRentalsForCustomer(...args),
+  listActiveRentals: (...args: unknown[]) => listActiveRentals(...args),
 }));
 
 function renderScreen() {
@@ -54,6 +56,11 @@ describe("ClientesScreen (Redesign Round 2, Batch 2 — Clientes screen)", () =>
     getCredentialPhotoUrl.mockReset();
     updateCustomerCredentialPhoto.mockReset();
     listRentalsForCustomer.mockReset();
+    listActiveRentals.mockReset();
+    // Redesign — UX/UI pass (active-rental-count badge): safe default so
+    // every pre-existing test in this file (which doesn't care about the
+    // badge) doesn't have to know about this new fetch.
+    listActiveRentals.mockResolvedValue([]);
   });
 
   it("shows a header without a back arrow (Clientes is a primary destination, not a drill-down screen)", async () => {
@@ -87,6 +94,21 @@ describe("ClientesScreen (Redesign Round 2, Batch 2 — Clientes screen)", () =>
     expect(screen.getByText("5512345678")).toBeInTheDocument();
     expect(screen.getByText("Ana Ruiz")).toBeInTheDocument();
     expect(screen.getByText("5522223333")).toBeInTheDocument();
+  });
+
+  it("shows an active-rental-count badge per customer, singular/plural, and hides it at zero (Redesign — UX/UI pass, business-owner request)", async () => {
+    listCustomers.mockResolvedValue([juan, ana]);
+    listActiveRentals.mockResolvedValue([
+      { id: "r1", customer_id: "c1" },
+      { id: "r2", customer_id: "c1" },
+      { id: "r3", customer_id: "c2" },
+    ]);
+
+    renderScreen();
+
+    expect(await screen.findByText("Juan Pérez")).toBeInTheDocument();
+    expect(screen.getByText("2 rentas activas")).toBeInTheDocument();
+    expect(screen.getByText("1 renta activa")).toBeInTheDocument();
   });
 
   it("shows an empty state when there are no customers yet", async () => {

@@ -1,27 +1,19 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ClientResponseError } from "pocketbase";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import type { CustomerRecord } from "@/data/customers.repo";
-import { consumeSessionMessage, STALE_SESSION_MESSAGE } from "@/data/staleSession";
 
 const searchCustomers = vi.fn();
+// `createCustomer` is stubbed defensively only — `CustomerPicker` must
+// never call it itself anymore (see file doc comment: "Cliente nuevo" only
+// stages a draft via `onSelectDraft`; `RentalNewScreen` is the one that
+// resolves it into a real `createCustomer` call, at rental-confirm time).
 const createCustomer = vi.fn();
 
 vi.mock("@/data/customers.repo", () => ({
   searchCustomers: (...args: unknown[]) => searchCustomers(...args),
   createCustomer: (...args: unknown[]) => createCustomer(...args),
-}));
-
-const clear = vi.fn();
-
-// §14 gap-fill: `handleCreate`'s catch block calls the real
-// `staleSession.ts` helper, which calls `pb.authStore.clear()` — mocked
-// here the same way App.test.tsx already mocks `pb`, so this stays a fast
-// unit test with no real PocketBase client involved.
-vi.mock("@/data/pocketbaseClient", () => ({
-  pb: { authStore: { clear: (...args: unknown[]) => clear(...args) } },
 }));
 
 const juan = {
@@ -34,15 +26,13 @@ describe("CustomerPicker (§7.1)", () => {
   beforeEach(() => {
     searchCustomers.mockReset();
     createCustomer.mockReset();
-    clear.mockReset();
-    consumeSessionMessage();
   });
 
   it("searches as the user types and lets them pick a result", async () => {
     searchCustomers.mockResolvedValue([juan]);
     const onSelect = vi.fn();
     const user = userEvent.setup();
-    render(<CustomerPicker onSelect={onSelect} />);
+    render(<CustomerPicker onSelect={onSelect} onSelectDraft={vi.fn()} />);
 
     await user.type(
       screen.getByLabelText("Buscar cliente por nombre o teléfono"),
@@ -59,7 +49,13 @@ describe("CustomerPicker (§7.1)", () => {
 
   it("shows the selected customer with an option to change it", () => {
     const onSelect = vi.fn();
-    render(<CustomerPicker selectedCustomer={juan} onSelect={onSelect} />);
+    render(
+      <CustomerPicker
+        selectedCustomer={juan}
+        onSelect={onSelect}
+        onSelectDraft={vi.fn()}
+      />,
+    );
 
     expect(screen.getByText("Juan Pérez")).toBeInTheDocument();
     expect(screen.getByText("5512345678")).toBeInTheDocument();
@@ -77,6 +73,7 @@ describe("CustomerPicker (§7.1)", () => {
       <CustomerPicker
         selectedCustomer={juan}
         onSelect={onSelect}
+        onSelectDraft={vi.fn()}
         onViewCustomer={onViewCustomer}
       />,
     );
@@ -86,64 +83,123 @@ describe("CustomerPicker (§7.1)", () => {
     expect(onViewCustomer).toHaveBeenCalledWith("c1");
   });
 
-  it("switches to 'Cliente nuevo' and creates + selects a customer on submit", async () => {
-    createCustomer.mockResolvedValue(juan);
+  it("shows a tappable 'Crear cliente nuevo' row (not plain text) when a search comes back empty", async () => {
+    searchCustomers.mockResolvedValue([]);
     const onSelect = vi.fn();
+    const onSelectDraft = vi.fn();
     const user = userEvent.setup();
-    render(<CustomerPicker onSelect={onSelect} />);
+    render(<CustomerPicker onSelect={onSelect} onSelectDraft={onSelectDraft} />);
 
-    await user.click(screen.getByRole("button", { name: "Cliente nuevo" }));
-    await user.type(screen.getByLabelText("Nombre"), "Juan Pérez");
-    await user.type(screen.getByLabelText("Teléfono"), "5512345678");
-    await user.upload(
-      screen.getByLabelText("Foto de credencial"),
-      new File(["x"], "credencial.png", { type: "image/png" }),
+    await user.type(
+      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
+      "Juan Pérez",
     );
-    await user.click(screen.getByRole("button", { name: "Crear cliente" }));
 
-    await waitFor(() => expect(createCustomer).toHaveBeenCalledTimes(1));
-    expect(onSelect).toHaveBeenCalledWith(juan);
+    const createButton = await screen.findByRole("button", {
+      name: /Crear cliente nuevo/,
+    });
+    expect(createButton).toHaveTextContent("Juan Pérez");
   });
 
-  it("shows the generic save-error message on a real failure (network/validation), never clearing the session (§14 gap-fill, regression)", async () => {
-    createCustomer.mockRejectedValueOnce(new Error("network down"));
+  it("does not flash 'Crear cliente nuevo' before the debounced search actually resolves", async () => {
+    searchCustomers.mockResolvedValue([]);
     const onSelect = vi.fn();
+    const onSelectDraft = vi.fn();
     const user = userEvent.setup();
-    render(<CustomerPicker onSelect={onSelect} />);
+    render(<CustomerPicker onSelect={onSelect} onSelectDraft={onSelectDraft} />);
 
-    await user.click(screen.getByRole("button", { name: "Cliente nuevo" }));
-    await user.type(screen.getByLabelText("Nombre"), "Juan Pérez");
-    await user.type(screen.getByLabelText("Teléfono"), "5512345678");
-    await user.click(screen.getByRole("button", { name: "Crear cliente" }));
+    // Fires the debounced-search effect via fireEvent instead of
+    // user.type()'s per-keystroke delay, so the assertion right below runs
+    // as close to synchronously-after-change as possible, still well inside
+    // the 300ms debounce window.
+    await user.type(
+      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
+      "J",
+    );
+
+    // Right after typing, the debounce hasn't fired yet — the "no results,
+    // create new" suggestion must not appear before a real search for this
+    // text has actually run and confirmed zero matches.
+    expect(searchCustomers).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole("button", { name: /Crear cliente nuevo/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Buscando…")).toBeInTheDocument();
 
     expect(
-      await screen.findByText("No se pudo guardar el cliente. Intenta de nuevo."),
+      await screen.findByRole("button", { name: /Crear cliente nuevo/ }),
     ).toBeInTheDocument();
-    expect(clear).not.toHaveBeenCalled();
-    expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it("clears the session instead of showing the generic message when the create fails with a stale-session-shaped error (§14 gap-fill — the real live bug: 'Crear cliente' failing with a rotated tokenKey)", async () => {
-    createCustomer.mockRejectedValueOnce(
-      new ClientResponseError({
-        status: 400,
-        response: { message: "Failed to create record.", data: {} },
+  it("tapping 'Crear cliente nuevo' opens the form pre-filled with the typed query, and reports the draft continuously via onSelectDraft — no submit button, and createCustomer is never called here", async () => {
+    searchCustomers.mockResolvedValue([]);
+    const onSelect = vi.fn();
+    const onSelectDraft = vi.fn();
+    const user = userEvent.setup();
+    render(<CustomerPicker onSelect={onSelect} onSelectDraft={onSelectDraft} />);
+
+    await user.type(
+      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
+      "Juan Pérez",
+    );
+    await user.click(
+      await screen.findByRole("button", { name: /Crear cliente nuevo/ }),
+    );
+
+    expect(screen.getByLabelText("Nombre")).toHaveValue("Juan Pérez");
+    // No submit button in this flow anymore — the draft is live-reported.
+    expect(
+      screen.queryByRole("button", { name: "Continuar" }),
+    ).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Teléfono"), "5512345678");
+
+    // No photo uploaded here — `compressImage`'s canvas pipeline isn't
+    // meaningfully runnable in jsdom (same documented limitation as
+    // `CredentialCameraCapture.test.tsx`/`imageCompression.test.ts`).
+    await waitFor(() =>
+      expect(onSelectDraft).toHaveBeenLastCalledWith({
+        name: "Juan Pérez",
+        phone: "5512345678",
+        credentialPhoto: null,
       }),
     );
-    const onSelect = vi.fn();
-    const user = userEvent.setup();
-    render(<CustomerPicker onSelect={onSelect} />);
-
-    await user.click(screen.getByRole("button", { name: "Cliente nuevo" }));
-    await user.type(screen.getByLabelText("Nombre"), "Juan Pérez");
-    await user.type(screen.getByLabelText("Teléfono"), "5512345678");
-    await user.click(screen.getByRole("button", { name: "Crear cliente" }));
-
-    await waitFor(() => expect(clear).toHaveBeenCalledTimes(1));
-    expect(
-      screen.queryByText("No se pudo guardar el cliente. Intenta de nuevo."),
-    ).not.toBeInTheDocument();
+    // The customer must not be persisted here — `RentalNewScreen` resolves
+    // the draft into a real `createCustomer` call at rental-confirm time.
+    expect(createCustomer).not.toHaveBeenCalled();
     expect(onSelect).not.toHaveBeenCalled();
-    expect(consumeSessionMessage()).toBe(STALE_SESSION_MESSAGE);
+  });
+
+  it("clears an in-progress draft via onSelectDraft(null) when tapping '‹ Volver a buscar'", async () => {
+    searchCustomers.mockResolvedValue([]);
+    const draft = { name: "Juan Pérez", phone: "", credentialPhoto: null };
+    const onSelect = vi.fn();
+    const onSelectDraft = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <CustomerPicker
+        pendingNewCustomer={draft}
+        onSelect={onSelect}
+        onSelectDraft={onSelectDraft}
+      />,
+    );
+
+    await user.type(
+      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
+      "Juan Pérez",
+    );
+    await user.click(
+      await screen.findByRole("button", { name: /Crear cliente nuevo/ }),
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "‹ Volver a buscar" }),
+    );
+
+    expect(onSelectDraft).toHaveBeenCalledWith(null);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(
+      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
+    ).toBeInTheDocument();
   });
 });

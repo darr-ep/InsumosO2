@@ -51,7 +51,7 @@ create/view works, delete is rejected (403), and the protected
 ## pb_hooks (Phase 1+)
 
 - `rentals_folio.pb.js` (task 1.2) -- `onRecordCreateRequest` hook on
-  `rentals`. Computes the next sequential folio (`R-000001`, ...), forces
+  `rentals`. Computes the next sequential folio (`R-001`, ...), forces
   `status = "ACTIVE"`, and sets `created_by`/`updated_by` from
   `@request.auth`/`e.auth`. Validated live against PocketBase v0.40.1 --
   see the integration test evidence in `src/data/rentals.integration.test.ts`
@@ -206,6 +206,31 @@ pieces of that gap:
   break the "narrow, explicit surface" pattern task 4.2 established). See
   `src/data/login-directory.integration.test.ts` for live proof: works
   with zero users authenticated, returns exactly those 3 fields per user.
+
+## Redesign — UX/UI pass: login picker avatars (manual step, admin panel only)
+
+`docs/avatars/{nava,astrid,jhetro,bicho,chito,mita}.png` are the 6 real
+business-user portraits the owner provided, one per real account. These are
+NOT app assets (nothing in `src/` imports them) — they exist purely so
+whoever has admin-panel access can upload each one as that user's `avatar`
+field when setting up their real account. `pb_hooks/login_directory.pb.js`
+now also returns `avatar` (see that file's own docblock for why that's safe
+to expose) and `LoginScreen.tsx` renders it as a circular avatar in the user
+picker, falling back to an initial-in-a-circle when absent.
+
+Per this file's own established pattern (§4.2's `createRule = null`, gap-fill
+Login/Auth section above): create these 6 accounts from the PocketBase admin
+panel yourself, one at a time — never scripted, never public self-registration.
+For each: `name`, a real or temporary `phone` (identity field — can be
+corrected later, it's just an `update`), a temporary password (e.g.
+`12345678`, meant to be changed by that person afterward), and upload the
+matching `docs/avatars/*.png` as `avatar`.
+
+**One of these is a rename, not a new account:** "Bicho" (Técnico) is the
+existing "Darrell" dev/test account already logged in throughout this
+redesign round's screenshots — update that same record's `name` and upload
+`bicho.png`, don't create a second one. The other 5 (Nava, Astrid, Jhetro,
+Chito, Mita) are genuinely new accounts.
 
 ## Feature: Runtime-Editable Total Stock (business owner request, post-MVP+redesign, not SDD.md-sourced)
 

@@ -147,7 +147,7 @@ describe("DashboardStats tap-to-edit (Feature: Runtime-Editable Total Stock)", (
     expect(
       screen.getByRole("heading", { name: "Editar total de concentradores" }),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("Total de concentradores")).toHaveValue(8);
+    expect(screen.getByLabelText("Total")).toHaveTextContent("8");
   });
 
   it("opens an edit dialog pre-filled with the current total when the Tanques tile is tapped", async () => {
@@ -162,7 +162,7 @@ describe("DashboardStats tap-to-edit (Feature: Runtime-Editable Total Stock)", (
     expect(
       screen.getByRole("heading", { name: "Editar total de tanques" }),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("Total de tanques")).toHaveValue(2);
+    expect(screen.getByLabelText("Total")).toHaveTextContent("2");
   });
 
   it("INCREASES the total concentradores and calls onSettingsUpdated with the new value", async () => {
@@ -179,9 +179,12 @@ describe("DashboardStats tap-to-edit (Feature: Runtime-Editable Total Stock)", (
     });
     await user.click(within(tile).getByRole("button"));
 
-    const input = screen.getByLabelText("Total de concentradores");
-    await user.clear(input);
-    await user.type(input, "12");
+    // Stepper: 8 -> 12 (four taps), replacing the old free-text input.
+    const increase = screen.getByLabelText("Sumar uno al total");
+    await user.click(increase);
+    await user.click(increase);
+    await user.click(increase);
+    await user.click(increase);
     await user.click(screen.getByRole("button", { name: "Guardar" }));
 
     expect(updateBusinessSettings).toHaveBeenCalledWith({
@@ -212,9 +215,10 @@ describe("DashboardStats tap-to-edit (Feature: Runtime-Editable Total Stock)", (
     });
     await user.click(within(tile).getByRole("button"));
 
-    const input = screen.getByLabelText("Total de tanques");
-    await user.clear(input);
-    await user.type(input, "0");
+    // Stepper: 2 -> 0 (two taps), replacing the old free-text input.
+    const decrease = screen.getByLabelText("Restar uno al total");
+    await user.click(decrease);
+    await user.click(decrease);
     await user.click(screen.getByRole("button", { name: "Guardar" }));
 
     expect(updateBusinessSettings).toHaveBeenCalledWith({ totalTanques: 0 });
@@ -225,23 +229,24 @@ describe("DashboardStats tap-to-edit (Feature: Runtime-Editable Total Stock)", (
     });
   });
 
-  it("rejects a negative total with a clear Spanish error message and does not call updateBusinessSettings", async () => {
+  // Redesign — UX/UI pass: the free-text input (and its negative-value
+  // error path) was replaced by a QuantityStepper whose "−" button is
+  // simply disabled at 0 — a negative total can no longer be typed at all
+  // through this dialog. `totalStockSchema`'s own negative-rejection is
+  // still covered at the domain level (businessSettings.test.ts);
+  // QuantityStepper's own min-disable behavior has its own unit test
+  // (QuantityStepper.test.tsx) — this test only confirms the two are wired
+  // together correctly here.
+  it("disables the stepper's decrease button once the total reaches 0 — a negative total can't be entered", async () => {
     const user = userEvent.setup();
-    renderStats();
+    renderStats({ totalTanques: 0, tanquesDisponibles: 0 });
 
     const tile = screen.getByRole("group", {
-      name: "Concentradores disponibles: 5",
+      name: "Tanques disponibles: 0",
     });
     await user.click(within(tile).getByRole("button"));
 
-    const input = screen.getByLabelText("Total de concentradores");
-    await user.clear(input);
-    await user.type(input, "-3");
-    await user.click(screen.getByRole("button", { name: "Guardar" }));
-
-    expect(
-      await screen.findByText("El total no puede ser negativo."),
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Restar uno al total")).toBeDisabled();
     expect(updateBusinessSettings).not.toHaveBeenCalled();
   });
 

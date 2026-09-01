@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -9,11 +8,7 @@ import {
 import { PrintShareBar } from "@/components/PrintShareBar";
 import { rentalItemTypeLabel } from "@/domain/rentals/rental";
 import type { ReceiptData } from "@/domain/rentals/receipt";
-import {
-  isShareAvailable,
-  shareReceipt,
-} from "@/printing/ShareFallbackPrinter";
-import { webBluetoothPrinter } from "@/printing/WebBluetoothPrinter";
+import { useReceiptActions } from "@/printing/useReceiptActions";
 
 /**
  * SDD.md §22 (generación de comprobantes — modal, no pantalla/ruta aparte,
@@ -32,6 +27,10 @@ import { webBluetoothPrinter } from "@/printing/WebBluetoothPrinter";
  * always stays available alongside it. Printing never touches
  * `onOpenChange` — the rental is already saved by the time this dialog
  * is open, regardless of print outcome (§23's "regla de oro").
+ *
+ * Redesign Round 3: print/share orchestration lives in `useReceiptActions`
+ * now, shared with the short post-creation confirmation
+ * (`RentalCreatedSummary`) so neither duplicates the Bluetooth-first flow.
  */
 
 const currencyFormatter = new Intl.NumberFormat("es-MX", {
@@ -43,74 +42,31 @@ export interface ReceiptDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   receipt: ReceiptData | null;
+  autoPrint?: boolean;
 }
 
 export function ReceiptDialog({
   open,
   onOpenChange,
   receipt,
+  autoPrint = true,
 }: ReceiptDialogProps) {
-  const [shareStatus, setShareStatus] = useState<
-    "idle" | "shared" | "error"
-  >("idle");
-  const [printAvailable, setPrintAvailable] = useState(false);
-  const [printStatus, setPrintStatus] = useState<
-    "idle" | "printing" | "printed" | "failed"
-  >("idle");
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    let cancelled = false;
-    webBluetoothPrinter.isAvailable().then((available) => {
-      if (!cancelled) {
-        setPrintAvailable(available);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [open]);
-
-  async function handleShare() {
-    if (!receipt) {
-      return;
-    }
-
-    const result = await shareReceipt(receipt);
-
-    if (result === "shared") {
-      setShareStatus("shared");
-    } else if (result === "failed") {
-      setShareStatus("error");
-    }
-  }
-
-  async function handlePrint() {
-    if (!receipt) {
-      return;
-    }
-
-    setPrintStatus("printing");
-    try {
-      await webBluetoothPrinter.connect();
-      await webBluetoothPrinter.print(receipt);
-      setPrintStatus("printed");
-    } catch {
-      setPrintStatus("failed");
-    }
-  }
+  const {
+    shareStatus,
+    printAvailable,
+    printStatus,
+    shareAvailable,
+    handleShare,
+    handlePrint,
+    reset,
+  } = useReceiptActions(receipt, open, autoPrint);
 
   return (
     <Dialog
       open={open}
       onOpenChange={(next) => {
         if (!next) {
-          setShareStatus("idle");
-          setPrintStatus("idle");
+          reset();
         }
         onOpenChange(next);
       }}
@@ -119,10 +75,6 @@ export function ReceiptDialog({
         {receipt && (
           <>
             <DialogHeader>
-              {/* SDD.md §22: "Nombre del negocio + logo (si existe) +
-                  teléfono" — on-screen HTML view only (the thermal ESC/POS
-                  ticket stays text-only per imageEscpos.ts's own docblock
-                  decision, never wired into the Bluetooth print path). */}
               <img
                 src="/logo.png"
                 alt={receipt.businessName}
@@ -184,10 +136,7 @@ export function ReceiptDialog({
                   <dd>{receipt.date.toLocaleDateString("es-MX")}</dd>
                 </div>
                 {receipt.items.map((item) => (
-                  <div
-                    className="flex justify-between"
-                    key={item.itemType}
-                  >
+                  <div className="flex justify-between" key={item.itemType}>
                     <dt className="text-muted-foreground">
                       {rentalItemTypeLabel(item.itemType)}
                     </dt>
@@ -223,17 +172,7 @@ export function ReceiptDialog({
               </p>
             )}
             {shareStatus === "shared" && (
-              // Redesign Batch F: this is the confirmation point of the
-              // primary "Nueva renta → Registrar → Comprobante" flow — uses
-              // the `--success` token (registered by Batch E, never
-              // consumed until now) instead of neutral
-              // `text-muted-foreground`, so a successful share/print is
-              // visually distinct from an idle/loading state. Same
-              // "un-consumed token → real first consumer" pattern Batch D
-              // already established for `--warning`.
-              <p className="text-success text-sm">
-                Comprobante compartido.
-              </p>
+              <p className="text-success text-sm">Comprobante compartido.</p>
             )}
             {printStatus === "failed" && (
               <p className="text-destructive text-sm">
@@ -242,17 +181,15 @@ export function ReceiptDialog({
               </p>
             )}
             {printStatus === "printed" && (
-              <p className="text-success text-sm">
-                Comprobante impreso.
-              </p>
+              <p className="text-success text-sm">Comprobante impreso.</p>
             )}
 
             <PrintShareBar
               printAvailable={printAvailable}
               printStatus={printStatus}
-              onPrint={handlePrint}
-              shareAvailable={isShareAvailable()}
-              onShare={handleShare}
+              onPrint={() => void handlePrint()}
+              shareAvailable={shareAvailable}
+              onShare={() => void handleShare()}
               onClose={() => onOpenChange(false)}
             />
           </>

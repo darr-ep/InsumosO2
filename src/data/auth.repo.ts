@@ -11,6 +11,24 @@ export interface LoginDirectoryEntry {
   id: string;
   name: string;
   phone: string;
+  avatar: string;
+}
+
+// Redesign — UX/UI pass: `avatar` is a plain (non `protected`) PocketBase
+// file field, servable by a bare URL with no `pb.files.getToken()` (unlike
+// `credential_photo`, see `customers.repo.ts#getCredentialPhotoUrl`) — the
+// login picker needs this BEFORE the visitor is authenticated, when no
+// token could be requested anyway. `collectionName` is hardcoded since
+// `login-directory.pb.js` only returns the 4 narrow fields, not the full
+// record shape `pb.files.getURL` normally expects.
+export function loginDirectoryAvatarUrl(entry: LoginDirectoryEntry): string | null {
+  if (!entry.avatar) {
+    return null;
+  }
+  return pb.files.getURL(
+    { id: entry.id, collectionName: "users" },
+    entry.avatar,
+  );
 }
 
 /**

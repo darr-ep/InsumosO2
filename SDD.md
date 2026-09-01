@@ -273,7 +273,7 @@ customers (colección)
   # created / updated: automáticos
 
 rentals (colección)
-  folio                 text, único — formato "R-000001", generado server-side (ver 11.1)
+  folio                 text, único — formato "R-001" (mínimo 3 dígitos, crece sin tope), generado server-side (ver 11.1)
   customer_id           relation → customers, requerido
   status                select: ACTIVE | RETURNED, default ACTIVE — solo modificable server-side (ver 19.1)
   returned_at           date, nullable — solo modificable server-side (ver 19.1)
@@ -309,10 +309,10 @@ users (colección de auth nativa de PocketBase)
 
 ### 11.1 Folio consecutivo — generación server-side
 
-El folio (`R-000001`, `R-000002`, ...) se genera en un **hook `onRecordBeforeCreateRequest` de la colección `rentals`** (`pb_hooks/rentals_folio.pb.js`), nunca en el cliente:
+El folio (`R-001`, `R-002`, ...) se genera en un **hook `onRecordBeforeCreateRequest` de la colección `rentals`** (`pb_hooks/rentals_folio.pb.js`), nunca en el cliente:
 
 1. Al llegar una solicitud de creación de renta, el hook ignora cualquier `folio` que el cliente haya mandado (la API Rule de `create` además bloquea explícitamente `@request.data.folio:isset = false`, para que ni siquiera sea posible enviarlo).
-2. Dentro de la misma transacción de escritura, el hook calcula `MAX(folio numérico) + 1` y arma el string con padding a 6 dígitos (`R-000042`).
+2. Dentro de la misma transacción de escritura, el hook calcula `MAX(folio numérico) + 1` y arma el string con padding a un mínimo de 3 dígitos (`R-042`), que crece solo una vez que el número supera el ancho mínimo (`R-1000`, `R-10000`, ...).
 3. La colección tiene un **índice único** sobre `folio` como red de seguridad: si por cualquier motivo dos creaciones llegaran a colisionar, la segunda falla con un error claro en vez de guardar un folio duplicado silenciosamente.
 
 **Por qué este patrón es seguro en PocketBase/SQLite y no hacía falta una secuencia como en Postgres:** SQLite (el motor embebido de PocketBase) serializa las transacciones de escritura — solo una escritura se compromete a la vez, incluso en modo WAL. Un patrón "leer el máximo e insertar" dentro de la misma transacción de escritura, que en Postgres sí necesitaba una secuencia dedicada para evitar condiciones de carrera (dos transacciones concurrentes podían leer el mismo máximo antes de que cualquiera confirmara), en SQLite queda protegido por el propio motor. **Esto debe confirmarse durante la implementación** contra la versión de PocketBase instalada y el resultado real del POC — el índice único sobre `folio` queda como red de seguridad de todos modos, sin importar el resultado de esa verificación.
@@ -1093,7 +1093,7 @@ Integración del adaptador `WebBluetoothPrinter`, reutilizando el código valida
 **Decidido:** selector de los 6 usuarios del negocio + contraseña (sección 14). Con PocketBase, el `phone` se usa directo como `username` de la colección `users` — más simple que el workaround de email sintético que requería Supabase.
 
 **A.2 — Reinicio de folio.**
-**Decidido:** folio global, nunca se reinicia. Formato `R-000001`, generado server-side (sección 11.1).
+**Decidido:** folio global, nunca se reinicia. Formato `R-001` (mínimo 3 dígitos, crece sin tope), generado server-side (sección 11.1).
 
 **A.3 — Umbral de "renta antigua que requiere revisión".**
 **Decidido:** variable de entorno fija (`VITE_STALE_RENTAL_DAYS`), default 30 días.

@@ -7,7 +7,7 @@ import {
 
 /**
  * Feature: Credential Photo Camera + Compression (Batch 2). Pure crop math
- * consumed by `CredentialCameraCapture.tsx`'s `captureVideoFrameAsBlob` —
+ * consumed by `CredentialCameraCapture.tsx`'s `captureAndCompressFrame` —
  * kept fully unit-testable without any canvas/video machinery, same
  * separation pattern as `imageCompression.test.ts`'s
  * `computeCompressedDimensions`.

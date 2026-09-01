@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
@@ -10,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { QuantityStepper } from "@/components/QuantityStepper";
 import {
   updateBusinessSettings,
   type BusinessSettingsRecord,
@@ -84,15 +84,13 @@ export function DashboardStats({
   onSettingsUpdated,
 }: DashboardStatsProps) {
   const [editingField, setEditingField] = useState<EditableField>(null);
-  const [inputValue, setInputValue] = useState("");
+  const [inputValue, setInputValue] = useState(0);
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   function openEditDialog(field: Exclude<EditableField, null>) {
     setEditingField(field);
-    setInputValue(
-      String(field === "concentradores" ? totalConcentradores : totalTanques),
-    );
+    setInputValue(field === "concentradores" ? totalConcentradores : totalTanques);
     setFormError(null);
   }
 
@@ -106,7 +104,7 @@ export function DashboardStats({
       return;
     }
 
-    const parsed = totalStockSchema.safeParse(Number(inputValue));
+    const parsed = totalStockSchema.safeParse(inputValue);
     if (!parsed.success) {
       setFormError(
         parsed.error.issues[0]?.message ?? "Revisa el valor ingresado.",
@@ -142,13 +140,17 @@ export function DashboardStats({
 
   return (
     <>
+      {/* Business-owner request: revert to 3 equal-size tiles, no
+          background tint or size hierarchy between them — the redesign
+          pass's attempt at emphasizing "Rentas activas" read as worse, not
+          better. Plain, same-size, same-chrome tiles side by side. */}
       <div className="grid grid-cols-3 gap-2">
         <div
           role="group"
           aria-label={`Rentas activas: ${activeRentalsCount}`}
-          className="flex flex-col items-center gap-1 rounded-md border p-3"
+          className="flex flex-col items-center justify-center gap-1 rounded-md border p-3"
         >
-          <span className="text-foreground text-2xl font-semibold">
+          <span className="text-foreground text-3xl font-bold">
             {activeRentalsCount}
           </span>
           <span className="text-center text-xs text-muted-foreground">
@@ -159,16 +161,16 @@ export function DashboardStats({
         <div
           role="group"
           aria-label={`Concentradores disponibles: ${concentradoresDisponibles}`}
-          className="rounded-md border p-3"
+          className="rounded-md border"
         >
           <button
             type="button"
             onClick={() => openEditDialog("concentradores")}
-            className="flex w-full flex-col items-center gap-1"
+            className="flex w-full flex-col items-center gap-1 p-3"
           >
             <span
               className={cn(
-                "text-2xl font-semibold",
+                "text-xl font-semibold",
                 availabilityValueClassName(concentradoresDisponibles),
               )}
             >
@@ -183,16 +185,16 @@ export function DashboardStats({
         <div
           role="group"
           aria-label={`Tanques disponibles: ${tanquesDisponibles}`}
-          className="rounded-md border p-3"
+          className="rounded-md border"
         >
           <button
             type="button"
             onClick={() => openEditDialog("tanques")}
-            className="flex w-full flex-col items-center gap-1"
+            className="flex w-full flex-col items-center gap-1 p-3"
           >
             <span
               className={cn(
-                "text-2xl font-semibold",
+                "text-xl font-semibold",
                 availabilityValueClassName(tanquesDisponibles),
               )}
             >
@@ -223,17 +225,17 @@ export function DashboardStats({
           </DialogHeader>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="total-stock-input">
+            <Label id="total-stock-label">
               {editingField === "concentradores"
                 ? "Total de concentradores"
                 : "Total de tanques"}
             </Label>
-            <Input
-              id="total-stock-input"
-              type="number"
-              inputMode="numeric"
+            <QuantityStepper
               value={inputValue}
-              onChange={(event) => setInputValue(event.target.value)}
+              onChange={setInputValue}
+              decreaseLabel="Restar uno al total"
+              increaseLabel="Sumar uno al total"
+              valueLabel="Total"
             />
           </div>
 

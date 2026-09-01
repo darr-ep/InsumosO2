@@ -7,6 +7,7 @@ import {
   searchCustomers,
   type CustomerRecord,
 } from "@/data/customers.repo";
+import { listActiveRentals } from "@/data/rentals.repo";
 
 /**
  * Clientes screen — Redesign Round 2, Batch 2 (business-owner brief,
@@ -43,6 +44,14 @@ const SEARCH_DEBOUNCE_MS = 300;
 export function ClientesScreen() {
   const [customers, setCustomers] = useState<CustomerRecord[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Redesign — UX/UI pass: per-customer "N rentas activas" badge (business-
+  // owner request) — a count map built client-side from the same
+  // `listActiveRentals()` DashboardScreen already uses, fetched once
+  // alongside `listCustomers()`. Not a new business concept, just grouping
+  // already-shaped data by `customer_id`.
+  const [activeRentalCounts, setActiveRentalCounts] = useState<
+    Map<string, number>
+  >(new Map());
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CustomerRecord[]>([]);
@@ -57,11 +66,20 @@ export function ClientesScreen() {
   useEffect(() => {
     let cancelled = false;
 
-    listCustomers()
-      .then((items) => {
-        if (!cancelled) {
-          setCustomers(items);
+    Promise.all([listCustomers(), listActiveRentals()])
+      .then(([items, activeRentals]) => {
+        if (cancelled) {
+          return;
         }
+        setCustomers(items);
+        const counts = new Map<string, number>();
+        for (const rental of activeRentals) {
+          counts.set(
+            rental.customer_id,
+            (counts.get(rental.customer_id) ?? 0) + 1,
+          );
+        }
+        setActiveRentalCounts(counts);
       })
       .catch(() => {
         if (!cancelled) {
@@ -130,14 +148,18 @@ export function ClientesScreen() {
 
   return (
     <>
-      <AppHeader title="Clientes" />
+      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 pb-2">
+        <AppHeader title="Clientes" />
+        <div className="px-4">
+          <SearchBar
+            value={query}
+            onChange={setQuery}
+            placeholder="Nombre del cliente"
+          />
+        </div>
+      </div>
 
       <div className="flex flex-col gap-4 px-4 pt-2 pb-8">
-        <SearchBar
-          value={query}
-          onChange={setQuery}
-          placeholder="Nombre del cliente"
-        />
 
         {isSearchActive ? (
           <>
@@ -173,20 +195,32 @@ export function ClientesScreen() {
 
         {visibleCustomers.length > 0 && (
           <ul className="flex flex-col gap-2">
-            {visibleCustomers.map((customer) => (
-              <li key={customer.id}>
-                <button
-                  type="button"
-                  onClick={() => openCustomerDetail(customer.id)}
-                  className="hover:bg-accent w-full rounded-md border p-3 text-left"
-                >
-                  <p className="font-medium">{customer.name}</p>
-                  <p className="text-muted-foreground text-sm">
-                    {customer.phone}
-                  </p>
-                </button>
-              </li>
-            ))}
+            {visibleCustomers.map((customer) => {
+              const activeCount = activeRentalCounts.get(customer.id) ?? 0;
+              return (
+                <li key={customer.id}>
+                  <button
+                    type="button"
+                    onClick={() => openCustomerDetail(customer.id)}
+                    className="hover:bg-accent flex w-full items-center justify-between gap-2 rounded-md border p-3 text-left"
+                  >
+                    <div>
+                      <p className="font-medium">{customer.name}</p>
+                      <p className="text-muted-foreground text-sm">
+                        {customer.phone}
+                      </p>
+                    </div>
+                    {activeCount > 0 && (
+                      <span className="bg-success/10 text-success inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-xs font-medium">
+                        {activeCount === 1
+                          ? "1 renta activa"
+                          : `${activeCount} rentas activas`}
+                      </span>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
 

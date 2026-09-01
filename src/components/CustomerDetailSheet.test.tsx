@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router";
 import { CustomerDetailSheet } from "@/components/CustomerDetailSheet";
 
 /**
@@ -42,17 +43,33 @@ vi.mock("@/components/CredentialCameraCapture", () => ({
 const getCustomer = vi.fn();
 const getCredentialPhotoUrl = vi.fn();
 const updateCustomerCredentialPhoto = vi.fn();
+const updateCustomerContactInfo = vi.fn();
 const listRentalsForCustomer = vi.fn();
+const getRental = vi.fn();
+const listItemsForRental = vi.fn();
+const listPaymentsForRental = vi.fn();
 
 vi.mock("@/data/customers.repo", () => ({
   getCustomer: (...args: unknown[]) => getCustomer(...args),
   getCredentialPhotoUrl: (...args: unknown[]) => getCredentialPhotoUrl(...args),
   updateCustomerCredentialPhoto: (...args: unknown[]) =>
     updateCustomerCredentialPhoto(...args),
+  updateCustomerContactInfo: (...args: unknown[]) =>
+    updateCustomerContactInfo(...args),
 }));
 
+// `RentalDetailSheet` (Redesign Round 3, punto E: rentas clickeables) is
+// nested inside this component now — its own `@/data/rentals.repo` and
+// `@/data/payments.repo` calls need mocks here too, even though this file's
+// own tests mostly never open it.
 vi.mock("@/data/rentals.repo", () => ({
   listRentalsForCustomer: (...args: unknown[]) => listRentalsForCustomer(...args),
+  getRental: (...args: unknown[]) => getRental(...args),
+  listItemsForRental: (...args: unknown[]) => listItemsForRental(...args),
+}));
+
+vi.mock("@/data/payments.repo", () => ({
+  listPaymentsForRental: (...args: unknown[]) => listPaymentsForRental(...args),
 }));
 
 const customerWithPhoto = {
@@ -69,12 +86,34 @@ const customerPending = {
   credential_photo: "",
 };
 
+// `RentalDetailSheet` (nested here since Redesign Round 3, punto E) calls
+// `useNavigate()` unconditionally — every render needs a Router ancestor,
+// even the tests that never open it.
+function renderSheet(
+  props: Partial<React.ComponentProps<typeof CustomerDetailSheet>> = {},
+) {
+  return render(
+    <MemoryRouter>
+      <CustomerDetailSheet
+        open
+        onOpenChange={vi.fn()}
+        customerId="c1"
+        {...props}
+      />
+    </MemoryRouter>,
+  );
+}
+
 describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
   beforeEach(() => {
     getCustomer.mockReset();
     getCredentialPhotoUrl.mockReset();
     updateCustomerCredentialPhoto.mockReset();
+    updateCustomerContactInfo.mockReset();
     listRentalsForCustomer.mockReset();
+    getRental.mockReset();
+    listItemsForRental.mockReset();
+    listPaymentsForRental.mockReset();
     getCredentialPhotoUrl.mockResolvedValue(
       "http://pb.local/api/files/customers/default/credencial.png?token=default",
     );
@@ -89,9 +128,7 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
       { id: "r4", folio: "R-000001", status: "RETURNED", initial_rent_amount: 2800 },
     ]);
 
-    render(
-      <CustomerDetailSheet open onOpenChange={vi.fn()} customerId="c1" />,
-    );
+    renderSheet();
 
     expect(await screen.findByText("Juan Pérez")).toBeInTheDocument();
 
@@ -126,13 +163,38 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
       { id: "r1", folio: "R-000001", status: "RETURNED", initial_rent_amount: 2800 },
     ]);
 
-    render(
-      <CustomerDetailSheet open onOpenChange={vi.fn()} customerId="c1" />,
-    );
+    renderSheet();
 
     expect(await screen.findByText("Juan Pérez")).toBeInTheDocument();
     expect(screen.getByText("Sin rentas activas.")).toBeInTheDocument();
     expect(screen.queryByText("Sin historial.")).not.toBeInTheDocument();
+  });
+
+  it("opens the rental's detail sheet when an active rental row is tapped (Redesign Round 3, punto E)", async () => {
+    getCustomer.mockResolvedValue(customerWithPhoto);
+    listRentalsForCustomer.mockResolvedValue([
+      { id: "r1", folio: "R-000004", status: "ACTIVE", initial_rent_amount: 2800 },
+    ]);
+    getRental.mockResolvedValue({
+      id: "r1",
+      folio: "R-000004",
+      status: "ACTIVE",
+      initial_rent_amount: 2800,
+      deposit_amount: 1000,
+      created: "2026-08-01T10:00:00.000Z",
+      expand: { customer_id: customerWithPhoto },
+    });
+    listItemsForRental.mockResolvedValue([]);
+    listPaymentsForRental.mockResolvedValue([]);
+    const user = userEvent.setup();
+
+    renderSheet();
+
+    await user.click(await screen.findByText("R-000004"));
+
+    expect(
+      await screen.findByRole("heading", { name: "Renta R-000004" }),
+    ).toBeInTheDocument();
   });
 
   it("fetches the credential eagerly when the sheet opens (no button tap needed) and shows a blurred ID-card preview with a 'Ver credencial' reveal button (CU7)", async () => {
@@ -142,9 +204,7 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
       "http://pb.local/api/files/customers/c1/credencial.png?token=abc",
     );
 
-    render(
-      <CustomerDetailSheet open onOpenChange={vi.fn()} customerId="c1" />,
-    );
+    renderSheet();
 
     await waitFor(() =>
       expect(getCredentialPhotoUrl).toHaveBeenCalledWith(customerWithPhoto),
@@ -161,6 +221,81 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
     ).toBeInTheDocument();
   });
 
+  it("lets editing name/phone in-place and saving via updateCustomerContactInfo (Redesign — UX/UI pass, business-owner request)", async () => {
+    getCustomer.mockResolvedValueOnce(customerWithPhoto);
+    listRentalsForCustomer.mockResolvedValue([]);
+    updateCustomerContactInfo.mockResolvedValueOnce({
+      ...customerWithPhoto,
+      name: "Juan P. Pérez",
+    });
+    const user = userEvent.setup();
+
+    renderSheet();
+
+    await user.click(await screen.findByRole("button", { name: "Editar cliente" }));
+
+    const nameInput = screen.getByLabelText("Nombre");
+    await user.clear(nameInput);
+    await user.type(nameInput, "Juan P. Pérez");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await waitFor(() =>
+      expect(updateCustomerContactInfo).toHaveBeenCalledWith("c1", {
+        name: "Juan P. Pérez",
+        phone: "5512345678",
+      }),
+    );
+    expect(await screen.findByText("Juan P. Pérez")).toBeInTheDocument();
+  });
+
+  it("shows an error and stays in edit mode when saving the edit fails", async () => {
+    getCustomer.mockResolvedValueOnce(customerWithPhoto);
+    listRentalsForCustomer.mockResolvedValue([]);
+    updateCustomerContactInfo.mockRejectedValueOnce(new Error("network"));
+    const user = userEvent.setup();
+
+    renderSheet();
+
+    await user.click(await screen.findByRole("button", { name: "Editar cliente" }));
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    expect(
+      await screen.findByText("No se pudo guardar el cambio. Intenta de nuevo."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Guardar" })).toBeInTheDocument();
+  });
+
+  it("cancels the edit without saving and shows the original name again", async () => {
+    getCustomer.mockResolvedValueOnce(customerWithPhoto);
+    listRentalsForCustomer.mockResolvedValue([]);
+    const user = userEvent.setup();
+
+    renderSheet();
+
+    await user.click(await screen.findByRole("button", { name: "Editar cliente" }));
+    await user.clear(screen.getByLabelText("Nombre"));
+    await user.type(screen.getByLabelText("Nombre"), "algo distinto");
+    await user.click(screen.getByRole("button", { name: "Cancelar" }));
+
+    expect(await screen.findByText("Juan Pérez")).toBeInTheDocument();
+    expect(updateCustomerContactInfo).not.toHaveBeenCalled();
+  });
+
+  it("shows a lock icon on the 'Ver credencial' reveal button (Redesign — UX/UI pass)", async () => {
+    getCustomer.mockResolvedValue(customerWithPhoto);
+    listRentalsForCustomer.mockResolvedValue([]);
+    getCredentialPhotoUrl.mockResolvedValue(
+      "http://pb.local/api/files/customers/c1/credencial.png?token=abc",
+    );
+
+    renderSheet();
+
+    const revealButton = await screen.findByRole("button", {
+      name: "Ver credencial",
+    });
+    expect(revealButton.querySelector("svg")).toBeInTheDocument();
+  });
+
   it("reveals the credential image on tap, client-side only — no additional fetch", async () => {
     getCustomer.mockResolvedValue(customerWithPhoto);
     listRentalsForCustomer.mockResolvedValue([]);
@@ -169,9 +304,7 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
     );
     const user = userEvent.setup();
 
-    render(
-      <CustomerDetailSheet open onOpenChange={vi.fn()} customerId="c1" />,
-    );
+    renderSheet();
 
     const image = await screen.findByAltText("Credencial del cliente");
     expect(image.className).toMatch(/blur-md/);
@@ -191,6 +324,30 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
     expect(getCredentialPhotoUrl).toHaveBeenCalledTimes(1);
   });
 
+  it("opens an enlarged viewer when the revealed credential image is tapped (Redesign Round 3, punto F)", async () => {
+    getCustomer.mockResolvedValue(customerWithPhoto);
+    listRentalsForCustomer.mockResolvedValue([]);
+    getCredentialPhotoUrl.mockResolvedValue(
+      "http://pb.local/api/files/customers/c1/credencial.png?token=abc",
+    );
+    const user = userEvent.setup();
+
+    renderSheet();
+
+    const image = await screen.findByAltText("Credencial del cliente");
+    await user.click(screen.getByRole("button", { name: "Ver credencial" }));
+
+    expect(
+      screen.queryByAltText("Credencial del cliente (ampliada)"),
+    ).not.toBeInTheDocument();
+
+    await user.click(image);
+
+    expect(
+      await screen.findByAltText("Credencial del cliente (ampliada)"),
+    ).toBeInTheDocument();
+  });
+
   it("shows the 'credencial pendiente' state, uploads via the camera in one step (capture IS the upload), and then shows the eager blurred preview (§16.13/Anexo A.5)", async () => {
     getCustomer.mockResolvedValue(customerPending);
     listRentalsForCustomer.mockResolvedValue([]);
@@ -201,9 +358,7 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
     );
     const user = userEvent.setup();
 
-    render(
-      <CustomerDetailSheet open onOpenChange={vi.fn()} customerId="c2" />,
-    );
+    renderSheet({ customerId: "c2" });
 
     expect(
       await screen.findByText("Credencial pendiente. Puedes agregarla ahora."),
@@ -245,9 +400,7 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
     );
     const user = userEvent.setup();
 
-    render(
-      <CustomerDetailSheet open onOpenChange={vi.fn()} customerId="c2" />,
-    );
+    renderSheet({ customerId: "c2" });
     await user.click(
       await screen.findByRole("button", { name: "Simular captura" }),
     );
@@ -266,9 +419,7 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
     updateCustomerCredentialPhoto.mockRejectedValue(new Error("network"));
     const user = userEvent.setup();
 
-    render(
-      <CustomerDetailSheet open onOpenChange={vi.fn()} customerId="c2" />,
-    );
+    renderSheet({ customerId: "c2" });
     await user.click(
       await screen.findByRole("button", { name: "Simular captura" }),
     );
@@ -286,9 +437,7 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
     listRentalsForCustomer.mockResolvedValue([]);
     getCredentialPhotoUrl.mockRejectedValue(new Error("network"));
 
-    render(
-      <CustomerDetailSheet open onOpenChange={vi.fn()} customerId="c1" />,
-    );
+    renderSheet();
 
     expect(
       await screen.findByText("No se pudo cargar la credencial."),
@@ -299,9 +448,7 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
     getCustomer.mockRejectedValue(new Error("network"));
     listRentalsForCustomer.mockResolvedValue([]);
 
-    render(
-      <CustomerDetailSheet open onOpenChange={vi.fn()} customerId="c1" />,
-    );
+    renderSheet();
 
     expect(
       await screen.findByText("No se pudo cargar el cliente."),

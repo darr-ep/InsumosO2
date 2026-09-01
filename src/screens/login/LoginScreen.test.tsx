@@ -17,6 +17,10 @@ const navigate = vi.fn();
 vi.mock("@/data/auth.repo", () => ({
   getLoginDirectory: (...args: unknown[]) => getLoginDirectory(...args),
   loginWithPassword: (...args: unknown[]) => loginWithPassword(...args),
+  // Redesign — UX/UI pass: none of these fixtures seed an `avatar`, so the
+  // real implementation would return null anyway — this mock just avoids
+  // wiring `pb.files.getURL` (real PocketBase client) into this test file.
+  loginDirectoryAvatarUrl: () => null,
 }));
 
 // §14 gap-fill: `handleIfStaleSession` calls `pb.authStore.clear()` —
@@ -177,6 +181,23 @@ describe("LoginScreen — real login (§14, §16.6, CU1, gap-fill)", () => {
     expect(
       await screen.findByRole("button", { name: "María López" }),
     ).toBeInTheDocument();
+  });
+
+  it("toggles the password field between hidden and visible text (Redesign — UX/UI pass)", async () => {
+    getLoginDirectory.mockResolvedValue([juan]);
+    const user = userEvent.setup();
+
+    renderScreen();
+
+    await user.click(await screen.findByRole("button", { name: "Juan Pérez" }));
+    const passwordInput = await screen.findByLabelText("Contraseña");
+    expect(passwordInput).toHaveAttribute("type", "password");
+
+    await user.click(screen.getByRole("button", { name: "Mostrar contraseña" }));
+    expect(passwordInput).toHaveAttribute("type", "text");
+
+    await user.click(screen.getByRole("button", { name: "Ocultar contraseña" }));
+    expect(passwordInput).toHaveAttribute("type", "password");
   });
 
   it("shows 'Tu sesión expiró. Vuelve a entrar.' when a stale-session redirect queued that message (§14 gap-fill)", async () => {

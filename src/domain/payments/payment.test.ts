@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   paymentFormSchema,
+  paymentTypeLabel,
   suggestedPaymentAmount,
   totalPaid,
 } from "@/domain/payments/payment";
@@ -84,5 +85,19 @@ describe("totalPaid (§16.10, task 3.3)", () => {
 
   it("returns 0 for no payments", () => {
     expect(totalPaid([])).toBe(0);
+  });
+});
+
+describe("paymentTypeLabel (Redesign Round 3 — historial de pagos)", () => {
+  it("labels rent as Mensualidad", () => {
+    expect(paymentTypeLabel("rent")).toBe("Mensualidad");
+  });
+
+  it("labels deposit as Depósito inicial (disambiguated from ReturnDialog's 'Depósito a devolver')", () => {
+    expect(paymentTypeLabel("deposit")).toBe("Depósito inicial");
+  });
+
+  it("labels adjustment as Ajuste", () => {
+    expect(paymentTypeLabel("adjustment")).toBe("Ajuste");
   });
 });

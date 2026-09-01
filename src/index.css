@@ -101,4 +101,19 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* Redesign — UX/UI pass: native number-input spinners look inconsistent
+     across Android/iOS and clash with this app's own custom +/- steppers
+     (ItemQuantityPicker, QuantityStepper) — hidden everywhere; the phone's
+     numeric keypad (inputMode="decimal"/"numeric") already covers entry. */
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
 }
+
+

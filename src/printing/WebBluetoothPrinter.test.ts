@@ -52,10 +52,21 @@ function makeService(characteristics: ReturnType<typeof makeCharacteristic>[]) {
   };
 }
 
-function makeDevice(options: {
-  services?: ReturnType<typeof makeService>[];
-  connectImpl?: () => Promise<unknown>;
-}) {
+function makeDevice(
+  options: {
+    services?: ReturnType<typeof makeService>[];
+    connectImpl?: () => Promise<unknown>;
+    /**
+     * Whether `watchAdvertisements()` fires an `"advertisementreceived"`
+     * event (synchronously, matching real hardware: the listener is
+     * always registered before `watchAdvertisements()` is called — see
+     * `waitForAdvertisement`). Default true. Set false to simulate a
+     * device that never advertises, so `waitForAdvertisement`'s timeout
+     * is what rejects.
+     */
+    advertises?: boolean;
+  } = {},
+) {
   const services = options.services ?? [];
   const server = {
     connected: false,
@@ -68,12 +79,38 @@ function makeDevice(options: {
       return server;
     });
 
+  // Minimal EventTarget-like mock — enough for waitForAdvertisement's
+  // addEventListener/removeEventListener("advertisementreceived", ...)
+  // and connectToDevice's addEventListener("gattserverdisconnected", ...).
+  const listeners = new Map<string, Set<() => void>>();
+  const addEventListener = vi.fn((type: string, listener: () => void) => {
+    if (!listeners.has(type)) listeners.set(type, new Set());
+    listeners.get(type)!.add(listener);
+  });
+  const removeEventListener = vi.fn((type: string, listener: () => void) => {
+    listeners.get(type)?.delete(listener);
+  });
+  const dispatch = (type: string) => {
+    listeners.get(type)?.forEach((listener) => listener());
+  };
+
+  const advertises = options.advertises ?? true;
+  const watchAdvertisements = vi.fn().mockImplementation(async () => {
+    if (advertises) {
+      dispatch("advertisementreceived");
+    }
+    // else: never fires — waitForAdvertisement's own timeout rejects.
+  });
+
   const device = {
     name: "WW-POS58U",
     id: "device-1",
     gatt: { connect, get connected() { return server.connected; } },
+    addEventListener,
+    removeEventListener,
+    watchAdvertisements,
   };
-  return { device, server };
+  return { device, server, dispatch };
 }
 
 describe("WebBluetoothPrinter.isAvailable (§23.2 — graceful degradation)", () => {
@@ -288,7 +325,7 @@ describe("WebBluetoothPrinter.print (§22/§23.1)", () => {
     }
     const text = new TextDecoder("latin1").decode(sent);
     expect(text).toContain("Folio: R-000001");
-    expect(text).toContain("Juan Pérez");
+    expect(text).toContain("Juan");
   });
 
   it("falls back to writeValue when writeWithoutResponse isn't supported (triangulation)", async () => {
@@ -337,5 +374,118 @@ describe("WebBluetoothPrinter.disconnect (§23.4)", () => {
 
     expect(disconnect).toHaveBeenCalled();
     await expect(printer.print(receipt)).rejects.toThrow();
+  });
+});
+
+/**
+ * Task: auto-reconnect via getDevices() + waitForAdvertisement (ported from
+ * test-impresora/src/App.tsx, see HANDOFF-IMPRESION-BLUETOOTH.md §4).
+ * navigator.bluetooth.requestDevice() (the native picker) always requires a
+ * real user gesture and can never be triggered automatically — these tests
+ * verify the silent path (getDevices()-only) and that the picker is never
+ * invoked from it.
+ */
+describe("WebBluetoothPrinter.startAutoReconnect (feature detection + single silent attempt, no retry loop)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("is a total no-op when navigator.bluetooth.getDevices doesn't exist", async () => {
+    vi.stubGlobal("navigator", { bluetooth: { requestDevice: vi.fn() } });
+    vi.stubGlobal("window", { isSecureContext: true });
+    const printer = new WebBluetoothPrinter();
+
+    expect(() => printer.startAutoReconnect()).not.toThrow();
+    // Give any (incorrectly scheduled) async work a chance to run.
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(printer.connectionStatus).toBe("disconnected");
+  });
+
+  it("connects silently via getDevices() + waitForAdvertisement, without the native picker", async () => {
+    const writable = makeCharacteristic({ writeWithoutResponse: true });
+    const { device } = makeDevice({ services: [makeService([writable])] });
+    const requestDevice = vi.fn().mockResolvedValue(device);
+    const getDevices = vi.fn().mockResolvedValue([device]);
+    vi.stubGlobal("navigator", { bluetooth: { requestDevice, getDevices } });
+    vi.stubGlobal("window", { isSecureContext: true });
+    const printer = new WebBluetoothPrinter();
+    const statuses: string[] = [];
+    printer.subscribe(() => statuses.push(printer.connectionStatus));
+
+    printer.startAutoReconnect();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(statuses).toContain("connecting");
+    expect(printer.connectionStatus).toBe("connected");
+    expect(requestDevice).not.toHaveBeenCalled();
+  });
+
+  it("does not retry after the single silent attempt fails — no background search loop", async () => {
+    const getDevices = vi.fn().mockResolvedValue([]); // never finds a device
+    vi.stubGlobal("navigator", { bluetooth: { requestDevice: vi.fn(), getDevices } });
+    vi.stubGlobal("window", { isSecureContext: true });
+    const printer = new WebBluetoothPrinter();
+
+    printer.startAutoReconnect();
+    await vi.advanceTimersByTimeAsync(0); // the one silent attempt
+    expect(getDevices).toHaveBeenCalledTimes(1);
+    expect(printer.connectionStatus).toBe("disconnected");
+
+    // Well past every delay the old backoff schedule used (2s/5s/10s/30s) —
+    // must never fire a second attempt on its own.
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(getDevices).toHaveBeenCalledTimes(1);
+    expect(printer.connectionStatus).toBe("disconnected");
+  });
+
+  it("a live gattserverdisconnected just goes to disconnected, without scheduling a retry", async () => {
+    const writable = makeCharacteristic({ write: true });
+    const { device, dispatch } = makeDevice({ services: [makeService([writable])] });
+    const requestDevice = vi.fn().mockResolvedValue(device);
+    const getDevices = vi.fn().mockResolvedValue([]);
+    vi.stubGlobal("navigator", { bluetooth: { requestDevice, getDevices } });
+    vi.stubGlobal("window", { isSecureContext: true });
+    const printer = new WebBluetoothPrinter();
+
+    await printer.connect();
+    expect(printer.connectionStatus).toBe("connected");
+
+    dispatch("gattserverdisconnected");
+    expect(printer.connectionStatus).toBe("disconnected");
+
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(getDevices).not.toHaveBeenCalled(); // reconnecting is manual only now
+  });
+
+  it("a failed manual connect() attempt does not resume any background retry", async () => {
+    const getDevices = vi.fn().mockResolvedValue([]);
+    const requestDevice = vi.fn().mockRejectedValue(new DOMException("cancelled", "NotFoundError"));
+    vi.stubGlobal("navigator", { bluetooth: { requestDevice, getDevices } });
+    vi.stubGlobal("window", { isSecureContext: true });
+    const printer = new WebBluetoothPrinter();
+
+    await expect(printer.connect()).rejects.toThrow();
+
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(getDevices).not.toHaveBeenCalled();
+  });
+
+  it("calling startAutoReconnect() twice only runs the silent attempt once", async () => {
+    const getDevices = vi.fn().mockResolvedValue([]);
+    vi.stubGlobal("navigator", { bluetooth: { requestDevice: vi.fn(), getDevices } });
+    vi.stubGlobal("window", { isSecureContext: true });
+    const printer = new WebBluetoothPrinter();
+
+    printer.startAutoReconnect();
+    printer.startAutoReconnect(); // e.g. React StrictMode's double effect-invoke
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getDevices).toHaveBeenCalledTimes(1);
   });
 });

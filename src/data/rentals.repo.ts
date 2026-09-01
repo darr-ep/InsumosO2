@@ -51,6 +51,14 @@ export interface PaymentRecord extends RecordModel {
   created_by: string;
 }
 
+// Redesign Round 3, punto 2 (historial de pagos): `RentalDetailSheet` needs
+// to show who registered each payment ("Registró: Juan") — expands
+// `created_by` (a `users` relation) the same way `RentalWithCustomer` below
+// expands `customer_id`.
+export interface PaymentWithUser extends PaymentRecord {
+  expand?: { created_by?: { name: string } };
+}
+
 export interface CreateRentalInput {
   customerId: string;
   items: { itemType: RentalItemType; quantity: number }[];
