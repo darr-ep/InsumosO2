@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AppHeader } from "@/components/AppHeader";
+import { useDataCache } from "@/app/DataCacheContext";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import {
   ItemQuantityPicker,
@@ -46,6 +47,7 @@ import { formatCurrencyMXN } from "@/lib/currency";
 
 export function RentalNewScreen() {
   const navigate = useNavigate();
+  const { refreshRentals } = useDataCache();
 
   const [selectedCustomer, setSelectedCustomer] =
     useState<CustomerRecord | null>(null);
@@ -179,6 +181,7 @@ export function RentalNewScreen() {
       );
       setSummaryOpen(true);
       resetForm();
+      void refreshRentals();
     } catch (error) {
       // Gap-fill (Deposit Payment Creation Failure): `createRental` wraps a
       // rental_items/payment step failure in `RentalPartiallyCreatedError`

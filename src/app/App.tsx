@@ -3,11 +3,13 @@ import { Navigate, Outlet, Route, BrowserRouter, Routes } from "react-router";
 import { Toaster } from "@/components/ui/sonner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppLayout } from "@/app/AppLayout";
+import { DataCacheProvider } from "@/app/DataCacheContext";
 import { useIsAuthenticated } from "@/app/useIsAuthenticated";
 import { LoginScreen } from "@/screens/login/LoginScreen";
 import { DashboardScreen } from "@/screens/dashboard/DashboardScreen";
 import { RentalNewScreen } from "@/screens/rental-new/RentalNewScreen";
 import { ClientesScreen } from "@/screens/clientes/ClientesScreen";
+import { ProfileScreen } from "@/screens/profile/ProfileScreen";
 import { webBluetoothPrinter } from "@/printing/WebBluetoothPrinter";
 
 /**
@@ -40,7 +42,11 @@ function RequireAuth() {
     return <Navigate to="/login" replace />;
   }
 
-  return <Outlet />;
+  return (
+    <DataCacheProvider>
+      <Outlet />
+    </DataCacheProvider>
+  );
 }
 
 /**
@@ -97,6 +103,7 @@ export function App() {
               <Route path="/clientes" element={<ClientesScreen />} />
             </Route>
             <Route path="/nueva-renta" element={<RentalNewScreen />} />
+            <Route path="/perfil" element={<ProfileScreen />} />
           </Route>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

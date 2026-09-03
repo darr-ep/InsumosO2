@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { Landmark, PiggyBank, Printer, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CustomerCard } from "@/components/CustomerCard";
 import {
   Sheet,
   SheetContent,
@@ -70,6 +71,7 @@ export interface RentalDetailSheetProps {
   onOpenChange: (open: boolean) => void;
   rentalId: string | null;
   onViewCustomer?: (customerId: string) => void;
+  onRentalChanged?: () => void;
 }
 
 export function RentalDetailSheet({
@@ -77,6 +79,7 @@ export function RentalDetailSheet({
   onOpenChange,
   rentalId,
   onViewCustomer,
+  onRentalChanged,
 }: RentalDetailSheetProps) {
   const navigate = useNavigate();
 
@@ -186,20 +189,24 @@ export function RentalDetailSheet({
           {rental && (
             <>
               {/* A. Encabezado */}
-              <SheetHeader>
+              <SheetHeader className="flex flex-row items-center justify-between gap-2">
                 <SheetTitle>Renta {rental.folio}</SheetTitle>
-              </SheetHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">
-                    {rental.expand?.customer_id?.name ?? "—"}
-                  </p>
-                  <p className="text-muted-foreground text-sm">
-                    {rental.expand?.customer_id?.phone ?? "—"}
-                  </p>
-                </div>
                 <RentalStatusBadge status={rental.status} />
-              </div>
+              </SheetHeader>
+
+              {onViewCustomer && rental.customer_id ? (
+                <CustomerCard
+                  name={rental.expand?.customer_id?.name ?? "—"}
+                  phone={rental.expand?.customer_id?.phone}
+                  ariaLabel="Ver ficha de cliente"
+                  onClick={() => onViewCustomer(rental.customer_id)}
+                />
+              ) : (
+                <CustomerCard
+                  name={rental.expand?.customer_id?.name ?? "—"}
+                  phone={rental.expand?.customer_id?.phone}
+                />
+              )}
 
               {/* B. Resumen */}
               <section className="flex flex-col gap-2 border-t pt-4">
@@ -303,38 +310,23 @@ export function RentalDetailSheet({
             </>
           )}
 
-          {rental && (rental.status === "ACTIVE" || onViewCustomer) && (
+          {rental && rental.status === "ACTIVE" && (
             <SheetFooter>
-              {rental.status === "ACTIVE" && (
-                <>
-                  <Button
-                    type="button"
-                    size="lg"
-                    onClick={() => setPaymentDialogOpen(true)}
-                  >
-                    Registrar pago
-                  </Button>
-                  <Button
-                    type="button"
-                    size="lg"
-                    variant="outline"
-                    onClick={() => setReturnDialogOpen(true)}
-                  >
-                    Devolver
-                  </Button>
-                </>
-              )}
-
-              {onViewCustomer && (
-                <Button
-                  type="button"
-                  size="lg"
-                  variant="ghost"
-                  onClick={() => onViewCustomer(rental.customer_id)}
-                >
-                  Ver ficha de cliente
-                </Button>
-              )}
+              <Button
+                type="button"
+                size="lg"
+                onClick={() => setPaymentDialogOpen(true)}
+              >
+                Registrar pago
+              </Button>
+              <Button
+                type="button"
+                size="lg"
+                variant="outline"
+                onClick={() => setReturnDialogOpen(true)}
+              >
+                Devolver
+              </Button>
             </SheetFooter>
           )}
         </SheetContent>
@@ -350,6 +342,7 @@ export function RentalDetailSheet({
           onRegistered={() => {
             setPaymentDialogOpen(false);
             reload();
+            onRentalChanged?.();
           }}
         />
       )}
@@ -376,6 +369,7 @@ export function RentalDetailSheet({
             setReturnReceipt(receipt);
             setReturnSummaryOpen(true);
             reload();
+            onRentalChanged?.();
           }}
         />
       )}

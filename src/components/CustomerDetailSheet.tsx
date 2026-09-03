@@ -69,12 +69,14 @@ export interface CustomerDetailSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   customerId: string | null;
+  onCustomerChanged?: (customer: CustomerRecord) => void;
 }
 
 export function CustomerDetailSheet({
   open,
   onOpenChange,
   customerId,
+  onCustomerChanged,
 }: CustomerDetailSheetProps) {
   const [customer, setCustomer] = useState<CustomerRecord | null>(null);
   const [rentals, setRentals] = useState<RentalRecord[]>([]);
@@ -215,6 +217,7 @@ export function CustomerDetailSheet({
     try {
       const updated = await updateCustomerContactInfo(customer.id, values);
       setCustomer(updated);
+      onCustomerChanged?.(updated);
       setIsEditing(false);
     } catch {
       setEditError("No se pudo guardar el cambio. Intenta de nuevo.");

@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { ClientResponseError } from "pocketbase";
 import { RentalNewScreen } from "@/screens/rental-new/RentalNewScreen";
+import { DataCacheProvider } from "@/app/DataCacheContext";
 import { consumeSessionMessage, STALE_SESSION_MESSAGE } from "@/data/staleSession";
 import { RentalPartiallyCreatedError } from "@/data/rentals.repo";
 
@@ -12,6 +13,9 @@ const createCustomer = vi.fn();
 const getCustomer = vi.fn();
 const createRental = vi.fn();
 const listRentalsForCustomer = vi.fn();
+const listActiveRentals = vi.fn();
+const listActiveRentalItems = vi.fn();
+const getBusinessSettings = vi.fn();
 const navigate = vi.fn();
 const clear = vi.fn();
 
@@ -39,8 +43,18 @@ vi.mock("@/data/rentals.repo", async () => {
     RentalPartiallyCreatedError: actual.RentalPartiallyCreatedError,
     createRental: (...args: unknown[]) => createRental(...args),
     listRentalsForCustomer: (...args: unknown[]) => listRentalsForCustomer(...args),
+    // DataCacheContext's `refreshRentals` (fired fire-and-forget after a
+    // successful createRental, see RentalNewScreen.tsx) pulls in these two
+    // too — without them mocked here, the background refresh rejects with a
+    // real TypeError (undefined mock) instead of the intended no-op.
+    listActiveRentals: (...args: unknown[]) => listActiveRentals(...args),
+    listActiveRentalItems: (...args: unknown[]) => listActiveRentalItems(...args),
   };
 });
+
+vi.mock("@/data/settings.repo", () => ({
+  getBusinessSettings: (...args: unknown[]) => getBusinessSettings(...args),
+}));
 
 vi.mock("react-router", async () => {
   const actual = await vi.importActual<typeof import("react-router")>(
@@ -54,7 +68,9 @@ const juan = { id: "c1", name: "Juan Pérez", phone: "5512345678" };
 function renderScreen() {
   return render(
     <MemoryRouter>
-      <RentalNewScreen />
+      <DataCacheProvider>
+        <RentalNewScreen />
+      </DataCacheProvider>
     </MemoryRouter>,
   );
 }
@@ -66,6 +82,13 @@ describe("RentalNewScreen (§7.1, §16.7, CU4)", () => {
     getCustomer.mockReset();
     createRental.mockReset();
     listRentalsForCustomer.mockReset();
+    listActiveRentals.mockReset().mockResolvedValue([]);
+    listActiveRentalItems.mockReset().mockResolvedValue([]);
+    getBusinessSettings.mockReset().mockResolvedValue({
+      id: "s1",
+      total_concentradores: 0,
+      total_tanques: 0,
+    });
     navigate.mockReset();
     clear.mockReset();
     consumeSessionMessage();

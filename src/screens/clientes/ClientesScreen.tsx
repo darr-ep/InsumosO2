@@ -1,13 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Users } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { SearchBar } from "@/components/SearchBar";
+import { CustomerCard } from "@/components/CustomerCard";
 import { CustomerDetailSheet } from "@/components/CustomerDetailSheet";
+import { EmptyState } from "@/components/EmptyState";
+import { useDataCache } from "@/app/DataCacheContext";
 import {
-  listCustomers,
   searchCustomers,
   type CustomerRecord,
 } from "@/data/customers.repo";
-import { listActiveRentals } from "@/data/rentals.repo";
 
 /**
  * Clientes screen — Redesign Round 2, Batch 2 (business-owner brief,
@@ -42,16 +44,14 @@ import { listActiveRentals } from "@/data/rentals.repo";
 const SEARCH_DEBOUNCE_MS = 300;
 
 export function ClientesScreen() {
-  const [customers, setCustomers] = useState<CustomerRecord[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  // Redesign — UX/UI pass: per-customer "N rentas activas" badge (business-
-  // owner request) — a count map built client-side from the same
-  // `listActiveRentals()` DashboardScreen already uses, fetched once
-  // alongside `listCustomers()`. Not a new business concept, just grouping
-  // already-shaped data by `customer_id`.
-  const [activeRentalCounts, setActiveRentalCounts] = useState<
-    Map<string, number>
-  >(new Map());
+  const {
+    customers,
+    customersError,
+    loadCustomersIfNeeded,
+    refreshCustomers,
+    rentals,
+    loadRentalsIfNeeded,
+  } = useDataCache();
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CustomerRecord[]>([]);
@@ -64,33 +64,24 @@ export function ClientesScreen() {
   const [customerDetailOpen, setCustomerDetailOpen] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
+    loadCustomersIfNeeded();
+    loadRentalsIfNeeded();
+  }, [loadCustomersIfNeeded, loadRentalsIfNeeded]);
 
-    Promise.all([listCustomers(), listActiveRentals()])
-      .then(([items, activeRentals]) => {
-        if (cancelled) {
-          return;
-        }
-        setCustomers(items);
-        const counts = new Map<string, number>();
-        for (const rental of activeRentals) {
-          counts.set(
-            rental.customer_id,
-            (counts.get(rental.customer_id) ?? 0) + 1,
-          );
-        }
-        setActiveRentalCounts(counts);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setError("No se pudo cargar la lista de clientes.");
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // Redesign — UX/UI pass: per-customer "N rentas activas" badge (business-
+  // owner request) — a count map derived from the `rentals` domain already
+  // shared with DashboardScreen (DataCacheContext), not a new fetch of its
+  // own anymore.
+  const activeRentalCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const rental of rentals ?? []) {
+      counts.set(
+        rental.customer_id,
+        (counts.get(rental.customer_id) ?? 0) + 1,
+      );
+    }
+    return counts;
+  }, [rentals]);
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -179,45 +170,39 @@ export function ClientesScreen() {
           </>
         ) : (
           <>
-            {error && <p className="text-destructive text-sm">{error}</p>}
+            {customersError && (
+              <p className="text-destructive text-sm">{customersError}</p>
+            )}
 
-            {customers === null && !error && (
+            {customers === null && !customersError && (
               <p className="text-muted-foreground text-sm">Cargando…</p>
             )}
 
-            {customers !== null && customers.length === 0 && !error && (
-              <p className="text-muted-foreground text-sm">
-                Aún no hay clientes registrados.
-              </p>
+            {customers !== null && customers.length === 0 && !customersError && (
+              <EmptyState
+                icon={Users}
+                title="Aún no hay clientes registrados."
+              />
             )}
           </>
         )}
 
         {visibleCustomers.length > 0 && (
           <ul className="flex flex-col gap-2">
-            {visibleCustomers.map((customer) => {
+            {visibleCustomers.map((customer, index) => {
               const activeCount = activeRentalCounts.get(customer.id) ?? 0;
               return (
-                <li key={customer.id}>
-                  <button
-                    type="button"
+                <li
+                  key={customer.id}
+                  className="animate-card-enter"
+                  style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
+                >
+                  <CustomerCard
+                    name={customer.name}
+                    phone={customer.phone}
+                    activeCount={activeCount}
                     onClick={() => openCustomerDetail(customer.id)}
-                    className="hover:bg-accent flex w-full items-center justify-between gap-2 rounded-md border p-3 text-left"
-                  >
-                    <div>
-                      <p className="font-medium">{customer.name}</p>
-                      <p className="text-muted-foreground text-sm">
-                        {customer.phone}
-                      </p>
-                    </div>
-                    {activeCount > 0 && (
-                      <span className="bg-success/10 text-success inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-xs font-medium">
-                        {activeCount === 1
-                          ? "1 renta activa"
-                          : `${activeCount} rentas activas`}
-                      </span>
-                    )}
-                  </button>
+                  />
                 </li>
               );
             })}
@@ -228,6 +213,7 @@ export function ClientesScreen() {
           open={customerDetailOpen}
           onOpenChange={setCustomerDetailOpen}
           customerId={selectedCustomerId}
+          onCustomerChanged={refreshCustomers}
         />
       </div>
     </>

@@ -1,24 +1,26 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
-import { CalendarDays, CircleDollarSign, Droplet, Plus, Wind } from "lucide-react";
+import {
+  CalendarDays,
+  CircleDollarSign,
+  Droplet,
+  PackageOpen,
+  Plus,
+  Wind,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AppHeader } from "@/components/AppHeader";
 import { SearchBar } from "@/components/SearchBar";
 import { RentalCard } from "@/components/RentalCard";
 import { DashboardStats } from "@/components/DashboardStats";
+import { EmptyState } from "@/components/EmptyState";
 import { RentalDetailSheet } from "@/components/RentalDetailSheet";
 import { CustomerDetailSheet } from "@/components/CustomerDetailSheet";
+import { useDataCache } from "@/app/DataCacheContext";
 import {
-  listActiveRentals,
-  listActiveRentalItems,
   searchRentals,
-  type RentalItemRecord,
   type RentalWithCustomer,
 } from "@/data/rentals.repo";
-import {
-  getBusinessSettings,
-  type BusinessSettingsRecord,
-} from "@/data/settings.repo";
 import {
   isStaleRental,
   staleRentalDaysThreshold,
@@ -119,11 +121,16 @@ import { formatCurrencyMXN } from "@/lib/currency";
 const SEARCH_DEBOUNCE_MS = 300;
 
 export function DashboardScreen() {
-  const [rentals, setRentals] = useState<RentalWithCustomer[] | null>(null);
-  const [activeItems, setActiveItems] = useState<RentalItemRecord[]>([]);
-  const [businessSettings, setBusinessSettings] =
-    useState<BusinessSettingsRecord | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    rentals,
+    activeItems,
+    businessSettings,
+    rentalsError,
+    isRefreshingRentals,
+    loadRentalsIfNeeded,
+    refreshRentals,
+    setBusinessSettings,
+  } = useDataCache();
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<RentalWithCustomer[]>([]);
@@ -138,31 +145,7 @@ export function DashboardScreen() {
   const [customerDetailOpen, setCustomerDetailOpen] = useState(false);
   const [showStaleOnly, setShowStaleOnly] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    Promise.all([
-      listActiveRentals(),
-      listActiveRentalItems(),
-      getBusinessSettings(),
-    ])
-      .then(([activeRentals, items, settings]) => {
-        if (!cancelled) {
-          setRentals(activeRentals);
-          setActiveItems(items);
-          setBusinessSettings(settings);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setError("No se pudieron cargar las rentas activas.");
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  useEffect(() => loadRentalsIfNeeded(), [loadRentalsIfNeeded]);
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -272,7 +255,10 @@ export function DashboardScreen() {
   return (
     <div className="flex flex-1 min-h-full flex-col">
       <div className="sticky top-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 pb-2">
-        <AppHeader title={import.meta.env.VITE_BUSINESS_NAME || "Inicio"} />
+        <AppHeader
+          title={import.meta.env.VITE_BUSINESS_NAME || "Inicio"}
+          titleClassName="text-primary"
+        />
         <div className="px-4">
           <SearchBar value={query} onChange={setQuery} />
         </div>
@@ -312,9 +298,11 @@ export function DashboardScreen() {
           </>
         ) : (
           <>
-            {error && <p className="text-destructive text-sm">{error}</p>}
+            {rentalsError && (
+              <p className="text-destructive text-sm">{rentalsError}</p>
+            )}
 
-            {rentals === null && !error && (
+            {rentals === null && !rentalsError && (
               <p className="text-muted-foreground text-sm">Cargando…</p>
             )}
 
@@ -327,6 +315,7 @@ export function DashboardScreen() {
                   totalConcentradores={totalConcentradores}
                   totalTanques={totalTanques}
                   onSettingsUpdated={setBusinessSettings}
+                  isRefreshing={isRefreshingRentals}
                 />
 
                 {staleRentals.length > 0 && (
@@ -350,13 +339,20 @@ export function DashboardScreen() {
                 )}
 
                 {rentals.length === 0 ? (
-                  <p className="text-muted-foreground text-sm">
-                    No hay rentas activas todavía.
-                  </p>
+                  <EmptyState
+                    icon={PackageOpen}
+                    title="No hay rentas activas todavía."
+                  />
                 ) : (
                   <ul className="flex flex-col gap-3">
-                    {visibleActiveRentals.map((rental) => (
-                      <li key={rental.id}>
+                    {visibleActiveRentals.map((rental, index) => (
+                      <li
+                        key={rental.id}
+                        className="animate-card-enter"
+                        style={{
+                          animationDelay: `${Math.min(index, 8) * 40}ms`,
+                        }}
+                      >
                         <RentalCard
                           customerName={
                             rental.expand?.customer_id?.name ?? "Cliente"
@@ -404,16 +400,18 @@ export function DashboardScreen() {
             setSelectedCustomerId(customerId);
             setCustomerDetailOpen(true);
           }}
+          onRentalChanged={refreshRentals}
         />
         <CustomerDetailSheet
           open={customerDetailOpen}
           onOpenChange={setCustomerDetailOpen}
           customerId={selectedCustomerId}
+          onCustomerChanged={refreshRentals}
         />
       </div>
 
       <div className="sticky bottom-0 z-10 mt-auto shrink-0 p-4 pointer-events-none">
-        <Button asChild size="lg" className="w-full pointer-events-auto">
+        <Button asChild size="lg" className="w-full pointer-events-auto shadow-lg">
           <Link to="/nueva-renta">
             <Plus aria-hidden="true" />
             Nueva renta

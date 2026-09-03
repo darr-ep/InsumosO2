@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { ClientesScreen } from "@/screens/clientes/ClientesScreen";
+import { DataCacheProvider } from "@/app/DataCacheContext";
 
 const listCustomers = vi.fn();
 const searchCustomers = vi.fn();
@@ -11,6 +12,8 @@ const getCredentialPhotoUrl = vi.fn();
 const updateCustomerCredentialPhoto = vi.fn();
 const listRentalsForCustomer = vi.fn();
 const listActiveRentals = vi.fn();
+const listActiveRentalItems = vi.fn();
+const getBusinessSettings = vi.fn();
 
 vi.mock("@/data/customers.repo", () => ({
   listCustomers: (...args: unknown[]) => listCustomers(...args),
@@ -21,15 +24,26 @@ vi.mock("@/data/customers.repo", () => ({
     updateCustomerCredentialPhoto(...args),
 }));
 
+// DataCacheContext's `refreshRentals` (shared with DashboardScreen) pulls in
+// `listActiveRentalItems`/`getBusinessSettings` too, even though this screen
+// itself only ever reads `rentals` — without these mocked the context's
+// background rentals load rejects with a real TypeError (undefined mock).
 vi.mock("@/data/rentals.repo", () => ({
   listRentalsForCustomer: (...args: unknown[]) => listRentalsForCustomer(...args),
   listActiveRentals: (...args: unknown[]) => listActiveRentals(...args),
+  listActiveRentalItems: (...args: unknown[]) => listActiveRentalItems(...args),
+}));
+
+vi.mock("@/data/settings.repo", () => ({
+  getBusinessSettings: (...args: unknown[]) => getBusinessSettings(...args),
 }));
 
 function renderScreen() {
   return render(
     <MemoryRouter>
-      <ClientesScreen />
+      <DataCacheProvider>
+        <ClientesScreen />
+      </DataCacheProvider>
     </MemoryRouter>,
   );
 }
@@ -57,10 +71,18 @@ describe("ClientesScreen (Redesign Round 2, Batch 2 — Clientes screen)", () =>
     updateCustomerCredentialPhoto.mockReset();
     listRentalsForCustomer.mockReset();
     listActiveRentals.mockReset();
+    listActiveRentalItems.mockReset();
+    getBusinessSettings.mockReset();
     // Redesign — UX/UI pass (active-rental-count badge): safe default so
     // every pre-existing test in this file (which doesn't care about the
     // badge) doesn't have to know about this new fetch.
     listActiveRentals.mockResolvedValue([]);
+    listActiveRentalItems.mockResolvedValue([]);
+    getBusinessSettings.mockResolvedValue({
+      id: "s1",
+      total_concentradores: 0,
+      total_tanques: 0,
+    });
   });
 
   it("shows a header without a back arrow (Clientes is a primary destination, not a drill-down screen)", async () => {
@@ -107,8 +129,8 @@ describe("ClientesScreen (Redesign Round 2, Batch 2 — Clientes screen)", () =>
     renderScreen();
 
     expect(await screen.findByText("Juan Pérez")).toBeInTheDocument();
-    expect(screen.getByText("2 rentas activas")).toBeInTheDocument();
-    expect(screen.getByText("1 renta activa")).toBeInTheDocument();
+    expect(screen.getByText("2 activas")).toBeInTheDocument();
+    expect(screen.getByText("1 activa")).toBeInTheDocument();
   });
 
   it("shows an empty state when there are no customers yet", async () => {

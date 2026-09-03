@@ -3,6 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { DashboardScreen } from "@/screens/dashboard/DashboardScreen";
+import { DataCacheProvider } from "@/app/DataCacheContext";
 
 const listActiveRentals = vi.fn();
 const listActiveRentalItems = vi.fn();
@@ -35,7 +36,9 @@ vi.mock("@/data/settings.repo", () => ({
 function renderScreen() {
   return render(
     <MemoryRouter>
-      <DashboardScreen />
+      <DataCacheProvider>
+        <DashboardScreen />
+      </DataCacheProvider>
     </MemoryRouter>,
   );
 }
@@ -170,12 +173,12 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
     );
 
     // Total tanques = 0 → available is clamped to 0 regardless of active
-    // count, and 0 always renders neutral gray, never as an error.
+    // count, and 0 renders in destructive red (out of stock).
     const tanquesTile = screen.getByRole("group", {
       name: "Tanques disponibles: 0",
     });
     expect(within(tanquesTile).getByText("0")).toHaveClass(
-      "text-muted-foreground",
+      "text-destructive",
     );
   });
 
@@ -184,9 +187,9 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
    * behavior when the business owner hasn't configured stock yet —
    * `business_settings`' seeded default (0/0, matching the migration) is
    * what `beforeEach` above already stubs by default — availability must
-   * show 0, in neutral gray, never as an error state.
+   * show 0, in destructive red (out of stock).
    */
-  it("shows 0 availability (neutral gray, not an error) when business_settings' totals are still at their seeded default (0/0)", async () => {
+  it("shows 0 availability in destructive red when business_settings' totals are still at their seeded default (0/0)", async () => {
     listActiveRentals.mockResolvedValue([]);
     listActiveRentalItems.mockResolvedValue([
       { id: "i1", rental_id: "r1", item_type: "concentrator", quantity: 2 },
@@ -198,17 +201,14 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
       name: "Concentradores disponibles: 0",
     });
     expect(within(concentradoresTile).getByText("0")).toHaveClass(
-      "text-muted-foreground",
+      "text-destructive",
     );
-    expect(
-      within(concentradoresTile).queryByText(/error/i),
-    ).not.toBeInTheDocument();
 
     const tanquesTile = screen.getByRole("group", {
       name: "Tanques disponibles: 0",
     });
     expect(within(tanquesTile).getByText("0")).toHaveClass(
-      "text-muted-foreground",
+      "text-destructive",
     );
   });
 
