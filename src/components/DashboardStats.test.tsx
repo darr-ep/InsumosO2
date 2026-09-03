@@ -4,16 +4,13 @@ import userEvent from "@testing-library/user-event";
 import { DashboardStats } from "@/components/DashboardStats";
 
 /**
- * Redesign Round 2, Batch 4 (Dashboard Restructure). Business owner
- * (verbatim, confirmed): "estadísticas compactas: Rentas activas,
- * Concentradores disponibles y Tanques disponibles. Los valores 0 deben
- * mostrarse en gris neutro, no como error." Explicit styling rule (already
- * decided, not re-asked): zero renders `text-muted-foreground`; a non-zero
- * availability tile can use `--success` (green, "hay stock disponible" is a
- * positive state); "Rentas activas" is a neutral operational count and
- * stays neutral-weighted (`text-foreground`) regardless of its value — it
- * never gets promoted to `text-success`, since it's neither a good nor a
- * bad state.
+ * Redesign Round 2, Batch 4 (Dashboard Restructure), superseded by a later
+ * business-owner request: availability now signals urgency by color —
+ * `0` is `text-destructive` (out of stock), `1` is `text-warning` (running
+ * low), `2+` is `text-success` ("hay stock disponible"). "Rentas activas" is
+ * a neutral operational count and stays neutral-weighted (`text-foreground`)
+ * regardless of its value — it never gets promoted/demoted by this scale,
+ * since it's neither a good nor a bad state.
  *
  * Feature: Runtime-Editable Total Stock (business owner's UX request, post-
  * MVP+redesign, not SDD.md-sourced): the two availability tiles are now
@@ -61,7 +58,7 @@ describe("DashboardStats (compact 3-tile stats row)", () => {
     expect(screen.getByText("Tanques disponibles")).toBeInTheDocument();
   });
 
-  it("shows a zero availability value in neutral gray, not as an error", () => {
+  it("shows a zero availability value in destructive red (out of stock)", () => {
     renderStats({ concentradoresDisponibles: 0, tanquesDisponibles: 4 });
 
     const concentradoresTile = screen.getByRole("group", {
@@ -69,11 +66,25 @@ describe("DashboardStats (compact 3-tile stats row)", () => {
     });
     const value = within(concentradoresTile).getByText("0");
 
-    expect(value).toHaveClass("text-muted-foreground");
+    expect(value).toHaveClass("text-destructive");
     expect(value).not.toHaveClass("text-success");
+    expect(value).not.toHaveClass("text-warning");
   });
 
-  it("shows a non-zero availability value with the --success token", () => {
+  it("shows an availability value of exactly 1 in warning yellow (running low)", () => {
+    renderStats({ concentradoresDisponibles: 1, tanquesDisponibles: 4 });
+
+    const concentradoresTile = screen.getByRole("group", {
+      name: "Concentradores disponibles: 1",
+    });
+    const value = within(concentradoresTile).getByText("1");
+
+    expect(value).toHaveClass("text-warning");
+    expect(value).not.toHaveClass("text-success");
+    expect(value).not.toHaveClass("text-destructive");
+  });
+
+  it("shows an availability value of 2 or more with the --success token", () => {
     renderStats({
       activeRentalsCount: 0,
       concentradoresDisponibles: 0,
@@ -86,7 +97,8 @@ describe("DashboardStats (compact 3-tile stats row)", () => {
     const value = within(tanquesTile).getByText("4");
 
     expect(value).toHaveClass("text-success");
-    expect(value).not.toHaveClass("text-muted-foreground");
+    expect(value).not.toHaveClass("text-destructive");
+    expect(value).not.toHaveClass("text-warning");
   });
 
   it("keeps 'Rentas activas' neutral-weighted regardless of value — never green, even when non-zero", () => {

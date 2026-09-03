@@ -92,6 +92,24 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --animate-card-enter: card-enter 0.35s ease-out both;
+
+  @keyframes card-enter {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-card-enter {
+    animation: none;
+  }
 }
 
 @layer base {
