@@ -164,7 +164,7 @@ export function PrinterMenu() {
           ) : (
             <ZapOff aria-hidden="true" className="mr-2 size-4" />
           )}
-          Auto-imprimir al guardar: {autoPrint ? "Activado" : "Desactivado"}
+          Auto-imprimir: {autoPrint ? "Activado" : "Desactivado"}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
 

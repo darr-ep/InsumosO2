@@ -32,8 +32,10 @@ function renderMenu() {
  * verbatim out of `AppLayout` so `AppHeader`'s home variant can compose it.
  *
  * Redesign Round 3, punto 6: el ítem "Historial" se quitó (redundante con
- * el buscador del Dashboard + historial por cliente) — solo queda
- * Cerrar sesión.
+ * el buscador del Dashboard + historial por cliente).
+ *
+ * New gap-fill feature: Self-Service Profile Screen (business owner
+ * request, post-Phase-5) — "Perfil" added above "Cerrar sesión".
  */
 describe("AccountMenu (extracted from AppLayout, Redesign Round 2 Batch 1: Header Pattern)", () => {
   beforeEach(() => {
@@ -49,16 +51,26 @@ describe("AccountMenu (extracted from AppLayout, Redesign Round 2 Batch 1: Heade
     ).toBeInTheDocument();
   });
 
-  it("opens the menu to reveal exactly Cerrar sesión", async () => {
+  it("opens the menu to reveal exactly Perfil and Cerrar sesión, in that order", async () => {
     const user = userEvent.setup();
     renderMenu();
 
     await user.click(screen.getByRole("button", { name: "Cuenta" }));
 
-    expect(
-      screen.getByRole("menuitem", { name: "Cerrar sesión" }),
-    ).toBeInTheDocument();
-    expect(screen.getAllByRole("menuitem")).toHaveLength(1);
+    const items = screen.getAllByRole("menuitem");
+    expect(items).toHaveLength(2);
+    expect(items[0]).toHaveTextContent("Perfil");
+    expect(items[1]).toHaveTextContent("Cerrar sesión");
+  });
+
+  it("navigates to /perfil when Perfil is tapped", async () => {
+    const user = userEvent.setup();
+    renderMenu();
+
+    await user.click(screen.getByRole("button", { name: "Cuenta" }));
+    await user.click(screen.getByRole("menuitem", { name: "Perfil" }));
+
+    expect(navigate).toHaveBeenCalledWith("/perfil");
   });
 
   it("clears the session and redirects to /login when Cerrar sesión is tapped", async () => {

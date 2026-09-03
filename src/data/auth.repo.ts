@@ -1,3 +1,4 @@
+import type { RecordModel } from "pocketbase";
 import { pb } from "@/data/pocketbaseClient";
 
 /**
@@ -71,4 +72,113 @@ export async function loginWithPassword(
 /** §14: "logout manual disponible" — clears the persisted session. */
 export function logout(): void {
   pb.authStore.clear();
+}
+
+/**
+ * New gap-fill feature: Self-Service Profile Screen (business owner
+ * request, post-Phase-5). The 6 real business accounts are created once by
+ * the superuser (§14: "alta de usuarios: manual, por el administrador
+ * técnico") and, until now, never touched again unless someone noticed a
+ * typo from the admin panel — this closes that gap: any signed-in user can
+ * fix their own display name, phone or password without needing
+ * admin-panel access. The avatar the superuser assigns at account creation
+ * is intentionally permanent — no self-service avatar edit exists by
+ * explicit business owner decision.
+ *
+ * `users.updateRule`/`viewRule` are PocketBase's own UNMODIFIED default
+ * (`id = @request.auth.id`, self-only — confirmed live against the local
+ * instance, not just trusted from `pb_migrations/1787760000_users_phone_
+ * identity.js`'s docblock summary) — a signed-in user can already update
+ * their OWN record through the public API with zero migration change
+ * needed, the mirror image of `users.createRule = null` (task 4.2).
+ */
+export interface AuthUserRecord extends RecordModel {
+  name: string;
+  phone: string;
+  avatar: string;
+}
+
+/**
+ * The signed-in user's own record, straight from the SDK's local
+ * `authStore` — no network round-trip. `null` only when nothing is
+ * authenticated, which `ProfileScreen` never actually renders under (its
+ * route sits behind `RequireAuth`, App.tsx) but is still handled instead of
+ * assumed, same defensive shape `useIsAuthenticated` already uses.
+ */
+export function currentAuthUser(): AuthUserRecord | null {
+  return (pb.authStore.record as AuthUserRecord | null) ?? null;
+}
+
+// `avatar` is a plain (non `protected`) file field on `users` (confirmed
+// live, same as `loginDirectoryAvatarUrl` above already documents for the
+// pre-login picker) — a bare `pb.files.getURL()` resolves it with no
+// `pb.files.getToken()` round-trip needed, unlike `customers.credential_photo`
+// (`customers.repo.ts#getCredentialPhotoUrl`). Takes a real `AuthUserRecord`
+// (not the narrow `{id, collectionName}` shape `loginDirectoryAvatarUrl`
+// needs) since this is only ever called post-login, when the SDK already
+// holds the full record.
+export function ownAvatarUrl(user: AuthUserRecord): string | null {
+  if (!user.avatar) {
+    return null;
+  }
+  return pb.files.getURL(user, user.avatar);
+}
+
+export interface UpdateOwnProfileInput {
+  name: string;
+  phone: string;
+}
+
+/**
+ * `phone` carries a UNIQUE index (`idx_users_phone`) — a duplicate phone is
+ * rejected by PocketBase as a 400 with a field-level `validation_not_unique`
+ * error on `response.data.phone` (confirmed live), which `ProfileScreen`
+ * maps to a friendly inline message instead of the generic save-failure
+ * copy.
+ */
+export async function updateOwnProfile(
+  input: UpdateOwnProfileInput,
+): Promise<AuthUserRecord> {
+  const user = currentAuthUser();
+  if (!user) {
+    throw new Error("No hay una sesión activa.");
+  }
+  return pb.collection("users").update<AuthUserRecord>(user.id, input);
+}
+
+export interface ChangeOwnPasswordInput {
+  oldPassword: string;
+  password: string;
+  passwordConfirm: string;
+}
+
+/**
+ * Live-verified (`src/data/auth-profile.integration.test.ts`): a
+ * non-superuser session changing its OWN password must send the correct
+ * `oldPassword` alongside `password`/`passwordConfirm` — omitted or wrong,
+ * PocketBase rejects with a 400. On success, PocketBase rotates the
+ * record's `tokenKey` server-side, which immediately kills every
+ * previously-issued token for that user, INCLUDING the one this very
+ * request just used — even though `pb.authStore.isValid` keeps reporting
+ * `true` right after (it only checks the JWT's local `exp` claim, never
+ * round-trips to the server; same class of bug `staleSession.ts` already
+ * documents for a different trigger, found live 2026-08-27).
+ *
+ * Re-authenticating transparently via `loginWithPassword` immediately after
+ * a successful change closes that gap here rather than letting it surface
+ * later as a confusing generic "Tu sesión expiró" redirect on some
+ * unrelated next action — chosen as the less jarring option for 6
+ * non-technical business users (see this function's own integration test
+ * file for the full live-verified story).
+ */
+export async function changeOwnPassword(
+  input: ChangeOwnPasswordInput,
+): Promise<void> {
+  const user = currentAuthUser();
+  if (!user) {
+    throw new Error("No hay una sesión activa.");
+  }
+
+  await pb.collection("users").update(user.id, input);
+  await loginWithPassword(user.phone, input.password);
 }

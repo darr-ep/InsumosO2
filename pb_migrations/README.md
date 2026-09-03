@@ -290,6 +290,74 @@ folders, `--dir` pointed at the isolated scratch location) is what actually
 applies the real migration chain while keeping all data writes fully
 isolated from the repo's own `pb_data/`.
 
+## Gap-fill: Self-Service Profile Screen (business owner request, post-Phase-5, not in original SDD §35 phase breakdown)
+
+The 6 real business accounts are created once by the superuser from the
+admin panel (§14) and, until now, had no way for the person actually using
+one to fix their own name, phone, or password without asking for
+admin-panel access. Avatar editing is explicitly OUT of scope: the business
+owner reviewed the screen and confirmed users will never change their own
+profile photo -- the one the owner assigns at account creation is
+permanent ("no cambiarían su imagen, la que les puse será la suya sin
+más"), so `ProfileScreen.tsx` shows the avatar read-only with no upload/
+change capability. No migration file needed for this -- `users.updateRule`/
+`viewRule` are PocketBase's own UNMODIFIED default (`id = @request.auth.id`,
+self-only), confirmed live against the local instance rather than trusted
+from `1787760000_users_phone_identity.js`'s docblock summary alone. New
+code only: `src/data/auth.repo.ts` (`currentAuthUser`, `ownAvatarUrl`,
+`updateOwnProfile`, `changeOwnPassword`),
+`src/domain/auth/profile.ts` (Zod schemas), `src/screens/profile/
+ProfileScreen.tsx` (new route `/perfil`, wired into `App.tsx` the same way
+`/nueva-renta` is -- outside `AppLayout`, no bottom nav, reached via
+`AccountMenu`'s new "Perfil" item).
+
+**Real findings, confirmed live (2026-09-01) via
+`src/data/auth-profile.integration.test.ts` against the local
+port-8090 instance, per this file's own "verify live, never assume" house
+rule:**
+
+- `users.password` has `min: 8` -- PocketBase's own default, not overridden
+  by any migration here. `domain/auth/profile.ts`'s password-change schema
+  mirrors this exact number instead of guessing.
+- A non-superuser session changing its OWN password/passwordConfirm MUST
+  also send the correct `oldPassword` (`pb.collection('users').update(id,
+  {oldPassword, password, passwordConfirm})`) -- omitted or wrong, PocketBase
+  rejects with a 400.
+- **The real gotcha:** on a successful password change, PocketBase rotates
+  the record's `tokenKey` server-side, which immediately kills every
+  previously-issued token for that user -- INCLUDING the token the very
+  request that made the change was using. `pb.authStore.isValid` keeps
+  reporting `true` right after (it only checks the JWT's local `exp` claim,
+  never round-trips to the server) even though the old token is now dead
+  server-side -- the exact same class of bug `src/data/staleSession.ts`
+  already documents for a different trigger (found live 2026-08-27).
+  Left alone, the app would keep rendering as "logged in" until some later
+  unrelated write hit that dead token and got silently bounced to `/login`
+  with the generic "Tu sesión expiró" message -- confusing, since by then
+  the visitor has forgotten they changed their password. Chosen fix:
+  `changeOwnPassword` proactively re-authenticates via `loginWithPassword`
+  (the real phone + the just-set new password) immediately after a
+  successful change, so a fresh valid session is in place before
+  `ProfileScreen` ever tries another request. This was picked over reusing
+  the generic stale-session redirect specifically because that message would
+  be inaccurate and more jarring here -- the visitor didn't do anything
+  wrong, they just changed their own password on purpose.
+- `phone` still carries its UNIQUE index (`idx_users_phone`, same migration
+  as above) -- a duplicate phone on `updateOwnProfile` fails as a 400 with a
+  field-level `{"phone": {"code": "validation_not_unique"}}` in
+  `response.data`, confirmed live and mapped to a friendly inline message
+  ("Ese teléfono ya está en uso por otra cuenta.") instead of the generic
+  save-failure copy.
+
+The avatar shown at the top of `ProfileScreen` is read-only display only
+(`UserAvatar` + `ownAvatarUrl`) -- no upload/change UI, no
+`compressImage`/`updateOwnAvatar` call. `users.avatar` is a plain (non
+`protected`) file field, so `ownAvatarUrl` resolves it with a bare
+`pb.files.getURL()`, no `pb.files.getToken()` round-trip, same as
+`loginDirectoryAvatarUrl` already established for the pre-login picker;
+only the superuser (admin panel, §"Redesign — UX/UI pass: login picker
+avatars" above) ever sets this field.
+
 ## VPS provisioning (task 0.8) -- deliberately not done in this session
 
 Per `HANDOFF-INICIO-DESARROLLO.md`: "Aprovisionar PocketBase (local para
