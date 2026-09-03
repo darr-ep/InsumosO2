@@ -3,17 +3,20 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { AppLayout } from "@/app/AppLayout";
+import { DataCacheProvider } from "@/app/DataCacheContext";
 
 function renderLayout(initialPath = "/dashboard") {
   return render(
-    <MemoryRouter initialEntries={[initialPath]}>
-      <Routes>
-        <Route element={<AppLayout />}>
-          <Route path="/dashboard" element={<p>Dashboard content</p>} />
-          <Route path="/clientes" element={<p>Clientes content</p>} />
-        </Route>
-      </Routes>
-    </MemoryRouter>,
+    <DataCacheProvider>
+      <MemoryRouter initialEntries={[initialPath]}>
+        <Routes>
+          <Route element={<AppLayout />}>
+            <Route path="/dashboard" element={<p>Dashboard content</p>} />
+            <Route path="/clientes" element={<p>Clientes content</p>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    </DataCacheProvider>,
   );
 }
 

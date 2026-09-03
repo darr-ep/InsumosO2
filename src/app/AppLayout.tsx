@@ -1,6 +1,9 @@
-import { NavLink, Outlet } from "react-router";
-import { LayoutDashboard, Users } from "lucide-react";
+import { useRef } from "react";
+import { NavLink, Outlet, useLocation } from "react-router";
+import { LayoutDashboard, RefreshCw, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useDataCache } from "@/app/DataCacheContext";
+import { usePullToRefresh } from "@/lib/usePullToRefresh";
 
 /**
  * Redesign Round 2, Batch 3: Bottom Nav Wiring (business-owner brief,
@@ -50,11 +53,37 @@ const TABS = [
  * root treatment since it renders outside this layout (own route, no bottom
  * nav — see `App.tsx`), so both variants of the app shell stay capped the
  * same way instead of one being full-bleed.
+ *
+ * Commit 3 (pull-to-refresh): `<main>` is the one scroll container both
+ * `DashboardScreen` and `ClientesScreen` render inside via `<Outlet/>`, so
+ * `usePullToRefresh` is wired here once instead of per-screen. Which cache
+ * domain to refresh is picked from the current route — `AppLayout` only
+ * ever renders `/dashboard` and `/clientes` (see `App.tsx`'s route tree),
+ * so that's exhaustive without a fallback branch.
  */
 export function AppLayout() {
+  const location = useLocation();
+  const { refreshRentals, refreshCustomers } = useDataCache();
+  const mainRef = useRef<HTMLElement>(null);
+  const onRefresh =
+    location.pathname === "/clientes" ? refreshCustomers : refreshRentals;
+  const { pullDistance, isRefreshing } = usePullToRefresh(mainRef, onRefresh);
+
   return (
     <div className="mx-auto flex h-dvh w-full max-w-xl flex-col bg-background text-foreground overflow-hidden">
-      <main className="flex flex-1 flex-col overflow-y-auto">
+      <main ref={mainRef} className="flex flex-1 flex-col overflow-y-auto">
+        <div
+          aria-hidden="true"
+          className="flex shrink-0 items-center justify-center overflow-hidden transition-[height] motion-reduce:transition-none"
+          style={{ height: isRefreshing ? 40 : pullDistance }}
+        >
+          <RefreshCw
+            className={cn(
+              "size-5 text-muted-foreground",
+              isRefreshing && "animate-spin motion-reduce:animate-none",
+            )}
+          />
+        </div>
         <Outlet />
       </main>
       <nav
