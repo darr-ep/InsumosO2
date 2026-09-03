@@ -1,8 +1,18 @@
 # nginx-proxy-manager rate limiting (§25) — complementary reverse-proxy layer
 
-**Status: documented, NOT yet applied.** Requires the real VPS/
-`nginx-proxy-manager` instance from deferred task 0.8/4.7 (see
-`pb_migrations/README.md`) — cannot be tested live in this session.
+**Status: APPLIED and live-verified, 2026-09-01.** Real domain is
+`o2insumos.com` (this doc originally said `insumoso2.com` — that domain
+never resolved; corrected here and throughout). Zones live in
+`~/docker/nginx-proxy/data/nginx/custom/http_top.conf` on the VPS (applied
+manually by the business owner over SSH — that directory is root-owned,
+outside what an automated session can write to). The `location` blocks
+below were applied to `api.o2insumos.com`'s proxy host (id 8) via the NPM
+API. Verified live: a burst of bad-credential auth attempts against
+`/api/collections/users/auth-with-password` starts returning `429` after a
+handful of requests, while normal traffic (`/api/login-directory`) keeps
+returning `200` unaffected. `beta.o2insumos.com` (the static frontend, id
+9) was intentionally NOT given the `/api/` block below — it has no `/api/`
+routes of its own, those all live on `api.o2insumos.com`.
 
 ## Why this exists alongside PocketBase's own native rate limiter
 
