@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CustomerCard } from "@/components/CustomerCard";
 import {
   CustomerForm,
   type CustomerFormSubmitValues,
@@ -148,34 +149,32 @@ export function CustomerPicker({
 
   if (selectedCustomer) {
     return (
-      <div className="flex items-center justify-between rounded-md border p-3">
-        <div>
-          <p className="font-medium">{selectedCustomer.name}</p>
-          <p className="text-muted-foreground text-sm">
-            {selectedCustomer.phone}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {onViewCustomer && (
+      <CustomerCard
+        name={selectedCustomer.name}
+        phone={selectedCustomer.phone}
+        trailing={
+          <div className="flex items-center gap-1.5 shrink-0 pl-2">
+            {onViewCustomer && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => onViewCustomer(selectedCustomer.id)}
+              >
+                Ver ficha
+              </Button>
+            )}
             <Button
               type="button"
-              variant="ghost"
+              variant="outline"
               size="sm"
-              onClick={() => onViewCustomer(selectedCustomer.id)}
+              onClick={() => onSelect(null)}
             >
-              Ver ficha
+              Cambiar
             </Button>
-          )}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => onSelect(null)}
-          >
-            Cambiar
-          </Button>
-        </div>
-      </div>
+          </div>
+        }
+      />
     );
   }
 
@@ -229,16 +228,11 @@ export function CustomerPicker({
       <ul className="flex flex-col gap-2">
         {visibleResults.map((customer) => (
           <li key={customer.id}>
-            <button
-              type="button"
+            <CustomerCard
+              name={customer.name}
+              phone={customer.phone}
               onClick={() => onSelect(customer)}
-              className="hover:bg-accent w-full rounded-md border p-3 text-left"
-            >
-              <p className="font-medium">{customer.name}</p>
-              <p className="text-muted-foreground text-sm">
-                {customer.phone}
-              </p>
-            </button>
+            />
           </li>
         ))}
       </ul>

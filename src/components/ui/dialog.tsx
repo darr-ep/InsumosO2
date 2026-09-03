@@ -57,13 +57,13 @@ function DialogContent({
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
-            className="ring-offset-background focus:ring-ring absolute top-3.5 right-4 z-30 flex size-11 items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:outline-none disabled:pointer-events-none"
+            className="ring-offset-background focus:ring-ring absolute top-3 right-3 z-30 flex size-9 items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:outline-none disabled:pointer-events-none"
           >
-            <X aria-hidden="true" />
+            <X aria-hidden="true" className="size-4" />
             <span className="sr-only">Cerrar</span>
           </DialogPrimitive.Close>
         )}
-        <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4">
+        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
           {children}
         </div>
       </DialogPrimitive.Content>
@@ -76,7 +76,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="dialog-header"
       className={cn(
-        "sticky -top-6 -mx-6 -mt-6 z-20 flex flex-col gap-1.5 bg-background px-6 pt-6 pb-3 border-b pr-14 text-center sm:text-left",
+        "sticky -top-4 -mx-4 -mt-4 z-20 flex flex-col gap-1.5 bg-background px-4 pt-4 pb-3 border-b pr-12 text-center sm:text-left",
         className,
       )}
       {...props}

@@ -71,13 +71,13 @@ function SheetContent({
         {showCloseButton && (
           <Drawer.Close
             data-slot="sheet-close"
-            className="ring-offset-background focus:ring-ring absolute top-3.5 right-4 z-30 flex size-11 items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:outline-none disabled:pointer-events-none"
+            className="ring-offset-background focus:ring-ring absolute top-[18px] right-3 z-30 flex size-9 items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:outline-none disabled:pointer-events-none"
           >
-            <X aria-hidden="true" />
+            <X aria-hidden="true" className="size-4" />
             <span className="sr-only">Cerrar</span>
           </Drawer.Close>
         )}
-        <div className="flex-1 overflow-y-auto p-6 pt-4 flex flex-col gap-4">
+        <div className="flex-1 overflow-y-auto p-4 pt-3 flex flex-col gap-4">
           {children}
         </div>
       </Drawer.Content>
@@ -90,7 +90,7 @@ function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="sheet-header"
       className={cn(
-        "sticky -top-4 -mx-6 -mt-4 z-20 flex flex-col gap-1.5 bg-background px-6 pt-4 pb-3 border-b pr-14",
+        "sticky -top-3 -mx-4 -mt-3 z-20 flex flex-col gap-1.5 bg-background px-4 pt-3 pb-3 border-b pr-12",
         className,
       )}
       {...props}
@@ -103,7 +103,7 @@ function SheetFooter({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="sheet-footer"
       className={cn(
-        "sticky -bottom-6 -mx-6 -mb-6 z-20 mt-auto flex flex-col gap-2 bg-background px-6 pt-4 pb-6 border-t",
+        "sticky -bottom-4 -mx-4 -mb-4 z-20 mt-auto flex flex-col gap-2 bg-background px-4 pt-3 pb-4 border-t",
         className,
       )}
       {...props}

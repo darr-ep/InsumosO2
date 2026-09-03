@@ -266,22 +266,24 @@ export function ReturnDialog({
           {formError && <p className="text-destructive text-sm">{formError}</p>}
         </div>
 
-        <div className="flex items-center justify-between border-t pt-4 text-sm font-semibold">
-          <span>Total a entregar</span>
-          <span>{formatCurrencyMXN(totalToHandBack)}</span>
-        </div>
+        <div className="sticky -bottom-4 -mx-4 -mb-4 mt-auto z-20 flex flex-col gap-3 bg-background px-4 pb-4 pt-3 border-t">
+          <div className="flex items-center justify-between text-sm font-semibold">
+            <span>Total a entregar</span>
+            <span>{formatCurrencyMXN(totalToHandBack)}</span>
+          </div>
 
-        <DialogFooter className="flex-col items-stretch">
-          <Button
-            type="button"
-            size="lg"
-            disabled={isSubmitting}
-            onClick={() => void handleConfirm()}
-            className="w-full"
-          >
-            {isSubmitting ? "Guardando…" : "Confirmar devolución"}
-          </Button>
-        </DialogFooter>
+          <DialogFooter className="flex-col items-stretch">
+            <Button
+              type="button"
+              size="lg"
+              disabled={isSubmitting}
+              onClick={() => void handleConfirm()}
+              className="w-full"
+            >
+              {isSubmitting ? "Guardando…" : "Confirmar devolución"}
+            </Button>
+          </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );
