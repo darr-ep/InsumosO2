@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { CustomerCard } from "@/components/CustomerCard";
 import {
   CustomerForm,
@@ -33,6 +34,15 @@ import { searchCustomers, type CustomerRecord } from "@/data/customers.repo";
  * this change is only about how the user reaches the create form, not what
  * happens once they're in it. "‹ Volver a buscar" clears any in-progress
  * draft so a half-filled, abandoned draft can't linger.
+ *
+ * design-fidelity (Slice B2, obs #2221/#2223/#2224, call site #6): "‹ Volver
+ * a buscar" discards the in-progress draft (name, phone, and any captured
+ * photo) — now gated behind the shared `ConfirmDialog`, guarded on the
+ * draft actually having content (name, phone, or photo non-empty). An empty
+ * draft cancels immediately with no popup, since there's nothing to lose.
+ * Dismiss label is "Seguir capturando", not "Cancelar" — a "Cancelar" popup
+ * triggered by a "‹ Volver a buscar" button reads as cancel-the-cancel to a
+ * non-technical user (audit #2221). Synchronous, no `isConfirming` needed.
  */
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -67,6 +77,8 @@ export function CustomerPicker({
   const [results, setResults] = useState<CustomerRecord[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // design-fidelity call site #6 — gates discarding the cliente-nuevo draft.
+  const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false);
 
   useEffect(() => {
     if (creatingNew) {
@@ -148,13 +160,31 @@ export function CustomerPicker({
     onSelectDraft(values);
   }
 
+  // Guard for design-fidelity call site #6: only worth confirming if there's
+  // actually something to lose.
+  const hasDraftContent =
+    pendingNewCustomer !== null &&
+    (pendingNewCustomer.name.trim() !== "" ||
+      pendingNewCustomer.phone.trim() !== "" ||
+      pendingNewCustomer.credentialPhoto !== null);
+
   function handleCancelCreate() {
+    if (hasDraftContent) {
+      setConfirmDiscardOpen(true);
+      return;
+    }
     setCreatingNew(false);
     if (pendingNewCustomer) {
       // Abandoning an in-progress "Cliente nuevo" draft — don't let a
       // half-filled draft linger and get used later by mistake.
       onSelectDraft(null);
     }
+  }
+
+  function handleConfirmDiscardDraft() {
+    setConfirmDiscardOpen(false);
+    setCreatingNew(false);
+    onSelectDraft(null);
   }
 
   if (selectedCustomer) {
@@ -190,22 +220,33 @@ export function CustomerPicker({
 
   if (creatingNew) {
     return (
-      <div className="flex flex-col gap-3">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="self-start"
-          onClick={handleCancelCreate}
-        >
-          ‹ Volver a buscar
-        </Button>
-        <CustomerForm
-          liveReport
-          onSubmit={handleCreate}
-          initialValues={{ name: query.trim() }}
+      <>
+        <div className="flex flex-col gap-3">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="self-start"
+            onClick={handleCancelCreate}
+          >
+            ‹ Volver a buscar
+          </Button>
+          <CustomerForm
+            liveReport
+            onSubmit={handleCreate}
+            initialValues={{ name: query.trim() }}
+          />
+        </div>
+        <ConfirmDialog
+          open={confirmDiscardOpen}
+          onOpenChange={setConfirmDiscardOpen}
+          title="¿Descartar el cliente nuevo?"
+          description="Se perderán el nombre, el teléfono y la foto que ya capturaste."
+          cancelLabel="Seguir capturando"
+          confirmLabel="Sí, descartar"
+          onConfirm={handleConfirmDiscardDraft}
         />
-      </div>
+      </>
     );
   }
 

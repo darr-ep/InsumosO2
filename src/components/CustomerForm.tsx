@@ -4,6 +4,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { CredentialCameraCapture } from "@/components/CredentialCameraCapture";
 import { customerFormSchema, type CustomerFormValues } from "@/domain/customers/customer";
 import { ID_CARD_ASPECT_RATIO } from "@/lib/credentialCameraCrop";
@@ -84,6 +85,13 @@ import { ID_CARD_ASPECT_RATIO } from "@/lib/credentialCameraCrop";
  * "Buscar cliente"/"Cliente nuevo" toggle into one search field — tapping
  * "Crear cliente nuevo" after a no-results search pre-fills "Nombre" with
  * whatever was already typed, via the new `initialValues` prop below.
+ *
+ * design-fidelity (Slice B2, obs #2221/#2223/#2224, call site #5): "Cambiar
+ * foto" used to be a bare `setPhoto(null)` with zero warning, discarding a
+ * photo the customer's ID may already be back in their wallet for. Now gated
+ * unconditionally (there is always a photo to lose when this button renders
+ * at all) behind the shared `ConfirmDialog`, rendered as a JSX sibling of
+ * this form (design B3 nesting pattern) — synchronous, no `isConfirming`.
  */
 
 export interface CustomerFormSubmitValues extends CustomerFormValues {
@@ -124,6 +132,9 @@ export function CustomerForm({
   // (via "Cambiar foto") should jump straight into the live camera instead
   // of back to the idle "Tomar foto" button — see file doc comment.
   const [hasCapturedBefore, setHasCapturedBefore] = useState(false);
+  // design-fidelity call site #5 — gates the retake discard behind a
+  // confirmation popup.
+  const [confirmRetakeOpen, setConfirmRetakeOpen] = useState(false);
 
   // Derived at render time (not via setState-in-effect) so it's always in
   // sync with `photo` — recomputed only when `photo` itself changes.
@@ -184,7 +195,12 @@ export function CustomerForm({
   }
 
   function handleRetakePhoto() {
+    setConfirmRetakeOpen(true);
+  }
+
+  function handleConfirmRetake() {
     setPhoto(null);
+    setConfirmRetakeOpen(false);
   }
 
   // `CredentialCameraCapture` resets itself back to idle on cancel now —
@@ -201,6 +217,7 @@ export function CustomerForm({
   }
 
   return (
+    <>
     <form
       onSubmit={
         liveReport
@@ -290,5 +307,14 @@ export function CustomerForm({
         </Button>
       )}
     </form>
+    <ConfirmDialog
+      open={confirmRetakeOpen}
+      onOpenChange={setConfirmRetakeOpen}
+      title="¿Tomar otra foto?"
+      description="Se borrará la foto que acabas de tomar y tendrás que volver a fotografiar la credencial."
+      confirmLabel="Sí, tomar otra"
+      onConfirm={handleConfirmRetake}
+    />
+    </>
   );
 }

@@ -1,8 +1,33 @@
+import { useState } from "react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { CustomerPicker } from "@/components/CustomerPicker";
+import { CustomerPicker, type CustomerPickerProps } from "@/components/CustomerPicker";
+import type { CustomerFormSubmitValues } from "@/components/CustomerForm";
 import type { CustomerRecord } from "@/data/customers.repo";
+
+// design-fidelity #6's guard reads the live-reported `pendingNewCustomer`
+// prop, exactly like the real caller (`RentalNewScreen`) does — a bare
+// `vi.fn()` for `onSelectDraft` never feeds the draft back in, so it can't
+// exercise the guard. This tiny controlled wrapper mirrors the real
+// prop-drilling loop.
+function ControlledPicker(
+  props: Omit<CustomerPickerProps, "pendingNewCustomer" | "onSelectDraft"> & {
+    onSelectDraft?: (draft: CustomerFormSubmitValues | null) => void;
+  },
+) {
+  const [draft, setDraft] = useState<CustomerFormSubmitValues | null>(null);
+  return (
+    <CustomerPicker
+      {...props}
+      pendingNewCustomer={draft}
+      onSelectDraft={(next) => {
+        setDraft(next);
+        props.onSelectDraft?.(next);
+      }}
+    />
+  );
+}
 
 const searchCustomers = vi.fn();
 // `createCustomer` is stubbed defensively only — `CustomerPicker` must
@@ -170,7 +195,7 @@ describe("CustomerPicker (§7.1)", () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it("clears an in-progress draft via onSelectDraft(null) when tapping '‹ Volver a buscar'", async () => {
+  it("clears an in-progress draft via onSelectDraft(null) after confirming discard when tapping '‹ Volver a buscar' (design-fidelity #6, guarded)", async () => {
     searchCustomers.mockResolvedValue([]);
     const draft = { name: "Juan Pérez", phone: "", credentialPhoto: null };
     const onSelect = vi.fn();
@@ -196,10 +221,96 @@ describe("CustomerPicker (§7.1)", () => {
       screen.getByRole("button", { name: "‹ Volver a buscar" }),
     );
 
+    // Name is non-empty (prefilled from the search query) — the discard
+    // confirmation must appear before the draft is actually cleared.
+    expect(
+      screen.getByRole("heading", { name: "¿Descartar el cliente nuevo?" }),
+    ).toBeInTheDocument();
+    expect(onSelectDraft).not.toHaveBeenCalledWith(null);
+
+    await user.click(screen.getByRole("button", { name: "Sí, descartar" }));
+
     expect(onSelectDraft).toHaveBeenCalledWith(null);
     expect(onSelect).not.toHaveBeenCalled();
     expect(
       screen.getByLabelText("Buscar cliente por nombre o teléfono"),
     ).toBeInTheDocument();
+  });
+
+  it("cancels the cliente-nuevo draft immediately, with no confirmation popup, when nothing has been captured yet (design-fidelity #6 guard)", async () => {
+    searchCustomers.mockResolvedValue([]);
+    const onSelect = vi.fn();
+    const onSelectDraft = vi.fn();
+    const user = userEvent.setup();
+    render(<ControlledPicker onSelect={onSelect} onSelectDraft={onSelectDraft} />);
+
+    await user.type(
+      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
+      "Juan",
+    );
+    await user.click(
+      await screen.findByRole("button", { name: /Crear cliente nuevo/ }),
+    );
+    // Clear the prefilled name so the draft is genuinely empty (no name, no
+    // phone, no photo) — nothing to lose.
+    await user.clear(screen.getByLabelText("Nombre"));
+    await waitFor(() =>
+      expect(onSelectDraft).toHaveBeenLastCalledWith({
+        name: "",
+        phone: "",
+        credentialPhoto: null,
+      }),
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "‹ Volver a buscar" }),
+    );
+
+    expect(
+      screen.queryByRole("heading", { name: "¿Descartar el cliente nuevo?" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
+    ).toBeInTheDocument();
+  });
+
+  it("'Seguir capturando' keeps the cliente-nuevo draft open without discarding it (design-fidelity #6)", async () => {
+    searchCustomers.mockResolvedValue([]);
+    const onSelect = vi.fn();
+    const onSelectDraft = vi.fn();
+    const user = userEvent.setup();
+    render(<ControlledPicker onSelect={onSelect} onSelectDraft={onSelectDraft} />);
+
+    await user.type(
+      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
+      "Juan Pérez",
+    );
+    await user.click(
+      await screen.findByRole("button", { name: /Crear cliente nuevo/ }),
+    );
+    await waitFor(() =>
+      expect(onSelectDraft).toHaveBeenLastCalledWith({
+        name: "Juan Pérez",
+        phone: "",
+        credentialPhoto: null,
+      }),
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "‹ Volver a buscar" }),
+    );
+    expect(
+      screen.getByRole("heading", { name: "¿Descartar el cliente nuevo?" }),
+    ).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: "Seguir capturando" }),
+    );
+
+    expect(
+      screen.queryByRole("heading", { name: "¿Descartar el cliente nuevo?" }),
+    ).not.toBeInTheDocument();
+    expect(onSelectDraft).not.toHaveBeenCalledWith(null);
+    // Still on the create-customer form, not back to search.
+    expect(screen.getByLabelText("Nombre")).toHaveValue("Juan Pérez");
   });
 });

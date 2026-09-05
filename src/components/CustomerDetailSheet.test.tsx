@@ -277,6 +277,50 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
     await user.type(screen.getByLabelText("Nombre"), "algo distinto");
     await user.click(screen.getByRole("button", { name: "Cancelar" }));
 
+    // design-fidelity #8: cancelling with unsaved changes now requires
+    // confirming the discard first (obs #2221/#2222/#2223/#2224).
+    expect(
+      screen.getByRole("heading", { name: "¿Descartar los cambios?" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Sí, descartar" }));
+
+    expect(await screen.findByText("Juan Pérez")).toBeInTheDocument();
+    expect(updateCustomerContactInfo).not.toHaveBeenCalled();
+  });
+
+  it("keeps editing (no discard) when 'Seguir editando' is pressed after cancelling with unsaved changes (design-fidelity #8)", async () => {
+    getCustomer.mockResolvedValueOnce(customerWithPhoto);
+    listRentalsForCustomer.mockResolvedValue([]);
+    const user = userEvent.setup();
+
+    renderSheet();
+
+    await user.click(await screen.findByRole("button", { name: "Editar cliente" }));
+    await user.clear(screen.getByLabelText("Nombre"));
+    await user.type(screen.getByLabelText("Nombre"), "algo distinto");
+    await user.click(screen.getByRole("button", { name: "Cancelar" }));
+    await user.click(screen.getByRole("button", { name: "Seguir editando" }));
+
+    expect(
+      screen.queryByRole("heading", { name: "¿Descartar los cambios?" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Nombre")).toHaveValue("algo distinto");
+    expect(updateCustomerContactInfo).not.toHaveBeenCalled();
+  });
+
+  it("cancels the edit immediately, with no confirmation popup, when nothing was changed (design-fidelity #8 guard)", async () => {
+    getCustomer.mockResolvedValueOnce(customerWithPhoto);
+    listRentalsForCustomer.mockResolvedValue([]);
+    const user = userEvent.setup();
+
+    renderSheet();
+
+    await user.click(await screen.findByRole("button", { name: "Editar cliente" }));
+    await user.click(screen.getByRole("button", { name: "Cancelar" }));
+
+    expect(
+      screen.queryByRole("heading", { name: "¿Descartar los cambios?" }),
+    ).not.toBeInTheDocument();
     expect(await screen.findByText("Juan Pérez")).toBeInTheDocument();
     expect(updateCustomerContactInfo).not.toHaveBeenCalled();
   });
