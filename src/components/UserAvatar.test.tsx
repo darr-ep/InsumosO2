@@ -28,4 +28,13 @@ describe("UserAvatar", () => {
 
     expect(screen.getByText("?")).toBeInTheDocument();
   });
+
+  it("renders the initial fallback with tone='soft' the same as the default tone (design-fidelity §4.2)", () => {
+    // Behavioral floor for the new prop: it must not change WHAT is shown
+    // (still the uppercased initial), only its color treatment — which is a
+    // CSS-only concern this suite doesn't assert on.
+    render(<UserAvatar name="Ana" avatarUrl={null} tone="soft" />);
+
+    expect(screen.getByText("A")).toBeInTheDocument();
+  });
 });

@@ -15,6 +15,13 @@ import { rentalStatusLabel } from "@/domain/rentals/rental";
  * `bg-{token}/10 text-{token}` badge/pill pattern the stale-rentals banner
  * (`DashboardScreen.tsx`) already established for `--warning`. RETURNED
  * stays muted/neutral — a closed-out state correctly carries no color.
+ *
+ * design-fidelity Slice C (§4.1, design obs #2224 §C3): restyled onto the
+ * designer's exact "Activa" pill — `--success-soft` fill (a dedicated
+ * token, not the `/10` opacity trick above) with a small leading dot,
+ * `text-[11px]/500`. This is purely a visual restyle: the "text first,
+ * color as reinforcement" property (the label always renders) is
+ * unchanged, and RETURNED keeps its neutral/no-dot treatment.
  */
 
 export interface RentalStatusBadgeProps {
@@ -22,15 +29,20 @@ export interface RentalStatusBadgeProps {
 }
 
 export function RentalStatusBadge({ status }: RentalStatusBadgeProps) {
+  const isActive = status === "ACTIVE";
+
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
-        status === "ACTIVE"
-          ? "bg-success/10 text-success"
+        "inline-flex items-center gap-1.5 rounded-full px-[9px] py-[6px] text-[11px] font-medium",
+        isActive
+          ? "bg-success-soft text-success"
           : "bg-muted text-muted-foreground",
       )}
     >
+      {isActive && (
+        <span aria-hidden="true" className="size-1.5 rounded-full bg-success" />
+      )}
       {rentalStatusLabel(status)}
     </span>
   );

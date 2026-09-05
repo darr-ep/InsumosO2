@@ -22,7 +22,7 @@ import { RentalCard } from "@/components/RentalCard";
  * the component instead of being left to each call site.
  */
 describe("RentalCard (§17)", () => {
-  it("renders the customer name, folio, and the given metadata content", () => {
+  it("renders the customer name, folio (no 'Folio:' prefix — design-fidelity §4.1), and the given metadata content", () => {
     render(
       <RentalCard
         customerName="Juan Pérez"
@@ -35,11 +35,32 @@ describe("RentalCard (§17)", () => {
     );
 
     expect(screen.getByText("Juan Pérez")).toBeInTheDocument();
-    expect(screen.getByText("Folio: R-000001")).toBeInTheDocument();
+    expect(screen.getByText("R-000001")).toBeInTheDocument();
+    expect(screen.queryByText(/Folio:/)).not.toBeInTheDocument();
     expect(screen.getByText("Desde: 20/08/2026")).toBeInTheDocument();
   });
 
-  it("renders the folio with more visual weight than the metadata content (priorizar por importancia)", () => {
+  // design-fidelity §4.1 (design obs #2224 §C3): the amount is now the
+  // visually prominent element on the card (promoted out of the generic
+  // `children` blob into its own `amount` prop), not the folio.
+  it("renders the amount prop when given, separate from the metadata children", () => {
+    render(
+      <RentalCard
+        customerName="Juan Pérez"
+        status="ACTIVE"
+        folio="R-000001"
+        onClick={vi.fn()}
+        amount="$2,800.00"
+      >
+        <p>Desde: 20/08/2026</p>
+      </RentalCard>,
+    );
+
+    expect(screen.getByText("$2,800.00")).toBeInTheDocument();
+    expect(screen.getByText("Desde: 20/08/2026")).toBeInTheDocument();
+  });
+
+  it("renders no amount at all when the amount prop isn't given", () => {
     render(
       <RentalCard
         customerName="Juan Pérez"
@@ -51,10 +72,7 @@ describe("RentalCard (§17)", () => {
       </RentalCard>,
     );
 
-    expect(screen.getByText("Folio: R-000001")).toHaveClass("font-medium");
-    expect(screen.getByText("Desde: 20/08/2026")).not.toHaveClass(
-      "font-medium",
-    );
+    expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
   });
 
   it("renders the status as visible text, not just color (ACTIVE) — §16.4 via RentalStatusBadge", () => {
@@ -120,6 +138,33 @@ describe("RentalCard (§17)", () => {
     );
 
     expect(screen.getByText("5512345678")).toBeInTheDocument();
+  });
+
+  // design-fidelity §4.1/§6 (design obs #2224 §C2, stretched-link pattern):
+  // the phone is a real `tel:` link and must NOT be a descendant of the
+  // card's own click-through control, so tapping it never also opens the
+  // rental detail.
+  it("renders the phone as a tel: link that does not trigger the card's onClick", async () => {
+    const onClick = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <RentalCard
+        customerName="Juan Pérez"
+        status="ACTIVE"
+        folio="R-000001"
+        onClick={onClick}
+        phone="5512345678"
+      >
+        <p>Desde: 20/08/2026</p>
+      </RentalCard>,
+    );
+
+    const telLink = screen.getByRole("link", { name: /5512345678/ });
+    expect(telLink).toHaveAttribute("href", "tel:5512345678");
+
+    await user.click(telLink);
+
+    expect(onClick).not.toHaveBeenCalled();
   });
 
   it("renders no phone line at all when phone isn't given (e.g. search-result cards without expanded customer data)", () => {

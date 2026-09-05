@@ -210,7 +210,7 @@ describe("ClientesScreen (Redesign Round 2, Batch 2 — Clientes screen)", () =>
     const user = userEvent.setup();
 
     renderScreen();
-    await user.click(await screen.findByText("Juan Pérez"));
+    await user.click(await screen.findByRole("button", { name: "Juan Pérez" }));
 
     expect(getCustomer).toHaveBeenCalledWith("c1");
     expect(

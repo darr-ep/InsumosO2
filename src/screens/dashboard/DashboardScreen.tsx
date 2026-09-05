@@ -2,7 +2,6 @@ import { memo, useEffect, useState } from "react";
 import { Link } from "react-router";
 import {
   CalendarDays,
-  CircleDollarSign,
   Droplet,
   PackageOpen,
   Plus,
@@ -320,6 +319,7 @@ export const DashboardScreen = memo(function DashboardScreen({
                       folio={rental.folio}
                       onClick={() => openRentalDetail(rental.id)}
                       phone={rental.expand?.customer_id?.phone}
+                      amount={formatCurrencyMXN(rental.initial_rent_amount)}
                     />
                   </li>
                 ))}
@@ -368,6 +368,17 @@ export const DashboardScreen = memo(function DashboardScreen({
                   </button>
                 )}
 
+                {rentals.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-semibold text-foreground">
+                      Rentas activas
+                    </h2>
+                    <span className="bg-primary-soft text-primary rounded-full px-2 py-0.5 text-xs font-medium">
+                      {visibleActiveRentals.length}
+                    </span>
+                  </div>
+                )}
+
                 {rentals.length === 0 ? (
                   <EmptyState
                     icon={PackageOpen}
@@ -391,6 +402,7 @@ export const DashboardScreen = memo(function DashboardScreen({
                           folio={rental.folio}
                           onClick={() => openRentalDetail(rental.id)}
                           phone={rental.expand?.customer_id?.phone}
+                          amount={formatCurrencyMXN(rental.initial_rent_amount)}
                           itemTypeIcon={rentalItemTypeIcon(rental.id)}
                           cardClassName={
                             isStaleRental(
@@ -404,13 +416,10 @@ export const DashboardScreen = memo(function DashboardScreen({
                         >
                           <p className="flex items-center gap-1.5">
                             <CalendarDays aria-hidden="true" className="size-3.5" />
+                            Inicio{" "}
                             {new Date(rental.created).toLocaleDateString(
                               "es-MX",
                             )}
-                          </p>
-                          <p className="flex items-center gap-1.5">
-                            <CircleDollarSign aria-hidden="true" className="size-3.5" />
-                            {formatCurrencyMXN(rental.initial_rent_amount)}
                           </p>
                         </RentalCard>
                       </li>

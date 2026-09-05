@@ -105,7 +105,7 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
       name: "Rentas activas: 1",
     });
     expect(within(activeTile).getByText("1")).toBeInTheDocument();
-    expect(screen.getByText("Folio: R-000001")).toBeInTheDocument();
+    expect(screen.getByText("R-000001")).toBeInTheDocument();
     expect(screen.getByText("Activa")).toBeInTheDocument();
   });
 
@@ -143,7 +143,7 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
 
     renderScreen();
 
-    const folio = await screen.findByText("Folio: R-000001");
+    const folio = await screen.findByText("R-000001");
     expect(folio.parentElement?.querySelector("svg")).toBeInTheDocument();
   });
 
@@ -437,7 +437,11 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
 
     renderScreen();
 
-    await user.click(await screen.findByText("Juan Pérez"));
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Ver renta de Juan Pérez, folio R-000001",
+      }),
+    );
 
     expect(
       await screen.findByRole("heading", { name: "Renta R-000001" }),
@@ -544,7 +548,7 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
     const banner = screen.getByRole("button", {
       name: /1 renta requiere revisión/i,
     });
-    const listItem = screen.getByText("Folio: R-000001");
+    const listItem = screen.getByText("R-000001");
 
     function isBefore(a: Node, b: Node) {
       return Boolean(
@@ -578,6 +582,7 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
           id: "r1",
           folio: "R-000184",
           status: "ACTIVE",
+          initial_rent_amount: 2800,
           expand: { customer_id: juan },
         },
       ]);
@@ -588,7 +593,7 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
       setQuery("184");
 
       expect(await screen.findByText("Juan Pérez")).toBeInTheDocument();
-      expect(screen.getByText("Folio: R-000184")).toBeInTheDocument();
+      expect(screen.getByText("R-000184")).toBeInTheDocument();
     });
 
     /**
@@ -604,6 +609,7 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
           id: "r1",
           folio: "R-000184",
           status: "RETURNED",
+          initial_rent_amount: 2800,
           expand: { customer_id: juan },
         },
       ]);
@@ -646,6 +652,7 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
           id: "r1",
           folio: "R-000184",
           status: "ACTIVE",
+          initial_rent_amount: 2800,
           expand: { customer_id: juan },
         },
       ]);
@@ -667,7 +674,11 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
       await screen.findByText("No hay rentas activas todavía.");
 
       setQuery("184");
-      await user.click(await screen.findByText("Juan Pérez"));
+      await user.click(
+        await screen.findByRole("button", {
+          name: "Ver renta de Juan Pérez, folio R-000184",
+        }),
+      );
 
       expect(
         await screen.findByRole("heading", { name: "Renta R-000184" }),
@@ -692,6 +703,7 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
           id: "r2",
           folio: "R-000184",
           status: "ACTIVE",
+          initial_rent_amount: 2800,
           expand: { customer_id: juan },
         },
       ]);
@@ -703,11 +715,11 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
 
       setQuery("184");
 
-      expect(await screen.findByText("Folio: R-000184")).toBeInTheDocument();
+      expect(await screen.findByText("R-000184")).toBeInTheDocument();
       expect(
         screen.queryByRole("group", { name: "Rentas activas: 1" }),
       ).not.toBeInTheDocument();
-      expect(screen.queryByText("Folio: R-000001")).not.toBeInTheDocument();
+      expect(screen.queryByText("R-000001")).not.toBeInTheDocument();
       expect(
         screen.queryByRole("button", { name: /requiere revisión/i }),
       ).not.toBeInTheDocument();

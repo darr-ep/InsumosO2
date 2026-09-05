@@ -20,7 +20,6 @@ describe("RentalStatusBadge (§16.4, task 3.3)", () => {
   it("uses the --success token for ACTIVE (a state, not an action) — never --primary", () => {
     render(<RentalStatusBadge status="ACTIVE" />);
     const badge = screen.getByText("Activa");
-    expect(badge).toHaveClass("bg-success/10");
     expect(badge).toHaveClass("text-success");
     expect(badge).not.toHaveClass("bg-primary/10");
     expect(badge).not.toHaveClass("text-primary");
@@ -31,5 +30,24 @@ describe("RentalStatusBadge (§16.4, task 3.3)", () => {
     const badge = screen.getByText("Devuelta");
     expect(badge).toHaveClass("bg-muted");
     expect(badge).toHaveClass("text-muted-foreground");
+  });
+
+  // design-fidelity Slice C (§4.1, design obs #2224 §C3): the "Activa" pill
+  // now carries a small leading dot as a second, redundant color signal
+  // (soft-fill + dot) — RETURNED intentionally has neither, since it's a
+  // closed-out state that should read as visually quiet.
+  it("renders a leading dot indicator only for ACTIVE, never for RETURNED", () => {
+    const { container: activeContainer } = render(
+      <RentalStatusBadge status="ACTIVE" />,
+    );
+    expect(
+      screen.getByText("Activa").querySelector("span[aria-hidden]"),
+    ).not.toBeNull();
+    activeContainer.remove();
+
+    render(<RentalStatusBadge status="RETURNED" />);
+    expect(
+      screen.getByText("Devuelta").querySelector("span[aria-hidden]"),
+    ).toBeNull();
   });
 });

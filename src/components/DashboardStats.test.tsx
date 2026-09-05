@@ -133,6 +133,54 @@ describe("DashboardStats (compact 3-tile stats row)", () => {
     expect(value).toHaveClass("text-foreground");
     expect(value).not.toHaveClass("text-muted-foreground");
   });
+
+  // design-fidelity Slice C (§4.1, design obs #2224 §C4): each tile's icon
+  // carries a fixed per-card identity hue (blue/amber/teal) — it must NOT
+  // change when availability drops to a low/urgent value, unlike the VALUE
+  // text color above (which IS conditional, by separate established
+  // business rule). This is the one place in this file a class assertion is
+  // load-bearing: "fixed, not conditional" has no other observable signal.
+  it("keeps each tile's icon hue fixed regardless of availability level — never conditional like the value color", () => {
+    const { rerender } = render(
+      <DashboardStats
+        activeRentalsCount={3}
+        concentradoresDisponibles={5}
+        tanquesDisponibles={4}
+        totalConcentradores={8}
+        totalTanques={4}
+        onSettingsUpdated={vi.fn()}
+      />,
+    );
+
+    const concentradoresIconHigh = screen.getByTestId(
+      "stat-icon-concentradores",
+    );
+    const tanquesIconHigh = screen.getByTestId("stat-icon-tanques");
+    const activeIconHigh = screen.getByTestId("stat-icon-rentas-activas");
+
+    rerender(
+      <DashboardStats
+        activeRentalsCount={0}
+        concentradoresDisponibles={0}
+        tanquesDisponibles={0}
+        totalConcentradores={8}
+        totalTanques={4}
+        onSettingsUpdated={vi.fn()}
+      />,
+    );
+
+    const concentradoresIconLow = screen.getByTestId(
+      "stat-icon-concentradores",
+    );
+    const tanquesIconLow = screen.getByTestId("stat-icon-tanques");
+    const activeIconLow = screen.getByTestId("stat-icon-rentas-activas");
+
+    expect(concentradoresIconLow.className).toBe(
+      concentradoresIconHigh.className,
+    );
+    expect(tanquesIconLow.className).toBe(tanquesIconHigh.className);
+    expect(activeIconLow.className).toBe(activeIconHigh.className);
+  });
 });
 
 describe("DashboardStats tap-to-edit (Feature: Runtime-Editable Total Stock)", () => {

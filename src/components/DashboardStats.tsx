@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ClipboardList, Droplet, Wind } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -59,6 +60,16 @@ import { totalStockSchema } from "@/domain/settings/businessSettings";
  * actual tap target — a `role="group"` element cannot also carry the
  * implicit `button` role, so the interactive element has to be a distinct
  * child, not the group container itself.
+ *
+ * design-fidelity Slice C (§4.1, design obs #2224 §C4): each tile also
+ * shows a small icon with a FIXED per-card identity hue (Rentas activas
+ * `text-primary`, Concentradores amber `#D97706`, Tanques teal `#0D9488`)
+ * — deliberately NOT wired to `availabilityValueClassName` above, which
+ * only ever colors the VALUE text, never the icon. The icon answers "what
+ * is this tile about", the value's urgency color answers "how worried
+ * should I be" — conflating them would make a low-stock tile's icon flash
+ * red/amber too, which the design never asks for and would read as a
+ * second, redundant alarm.
  */
 
 export interface DashboardStatsProps {
@@ -159,6 +170,11 @@ export function DashboardStats({
           aria-label={`Rentas activas: ${activeRentalsCount}`}
           className="flex flex-col items-center justify-center gap-1 rounded-md border p-3"
         >
+          <ClipboardList
+            aria-hidden="true"
+            data-testid="stat-icon-rentas-activas"
+            className="text-primary size-5"
+          />
           {isRefreshing ? (
             <Skeleton className="h-9 w-8" />
           ) : (
@@ -181,6 +197,11 @@ export function DashboardStats({
             onClick={() => openEditDialog("concentradores")}
             className="flex w-full flex-col items-center gap-1 p-3"
           >
+            <Wind
+              aria-hidden="true"
+              data-testid="stat-icon-concentradores"
+              className="size-5 text-[#D97706]"
+            />
             {isRefreshing ? (
               <Skeleton className="h-7 w-6" />
             ) : (
@@ -209,6 +230,11 @@ export function DashboardStats({
             onClick={() => openEditDialog("tanques")}
             className="flex w-full flex-col items-center gap-1 p-3"
           >
+            <Droplet
+              aria-hidden="true"
+              data-testid="stat-icon-tanques"
+              className="size-5 text-[#0D9488]"
+            />
             {isRefreshing ? (
               <Skeleton className="h-7 w-6" />
             ) : (
