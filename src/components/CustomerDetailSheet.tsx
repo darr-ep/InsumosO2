@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Lock, Pencil } from "lucide-react";
+import { useNavigate } from "react-router";
+import { Lock, PackageOpen, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -11,6 +12,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { SegmentedToggle } from "@/components/ui/segmented-toggle";
+import { EmptyState } from "@/components/EmptyState";
 import { RentalStatusBadge } from "@/components/RentalStatusBadge";
 import { RentalDetailSheet } from "@/components/RentalDetailSheet";
 import { CredentialCameraCapture } from "@/components/CredentialCameraCapture";
@@ -78,9 +81,16 @@ export function CustomerDetailSheet({
   customerId,
   onCustomerChanged,
 }: CustomerDetailSheetProps) {
+  const navigate = useNavigate();
   const [customer, setCustomer] = useState<CustomerRecord | null>(null);
   const [rentals, setRentals] = useState<RentalRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // design-fidelity Slice C (design obs #2224 §C1): replaces the two
+  // always-visible stacked sections with a single filtered list, toggled by
+  // a `SegmentedToggle` — "Activas" is the default segment.
+  const [rentalSegment, setRentalSegment] = useState<"activas" | "historial">(
+    "activas",
+  );
 
   const [credentialUrl, setCredentialUrl] = useState<string | null>(null);
   const [credentialError, setCredentialError] = useState<string | null>(null);
@@ -137,6 +147,7 @@ export function CustomerDetailSheet({
         setRetryError(null);
         setIsEditing(false);
         setEditError(null);
+        setRentalSegment("activas");
 
         // Eager fetch: fires as soon as the sheet opens for a customer who
         // already has a credential photo — no button tap needed. Still
@@ -282,9 +293,12 @@ export function CustomerDetailSheet({
                     <Pencil aria-hidden="true" />
                   </Button>
                 </SheetHeader>
-                <p className="text-muted-foreground text-sm">
+                <a
+                  href={`tel:${customer.phone}`}
+                  className="text-muted-foreground text-sm"
+                >
                   {customer.phone}
-                </p>
+                </a>
               </>
             )}
 
@@ -350,49 +364,64 @@ export function CustomerDetailSheet({
               )}
             </section>
 
-            <section className="flex flex-col gap-2">
-              <h2 className="text-sm font-semibold text-muted-foreground">
-                Rentas activas
-              </h2>
+            {rentals.length === 0 ? (
+              <EmptyState
+                icon={PackageOpen}
+                title="Sin rentas"
+                description="Este cliente todavía no tiene ninguna renta."
+                action={{
+                  label: "+ Nueva renta",
+                  onClick: () => {
+                    onOpenChange(false);
+                    navigate("/nueva-renta");
+                  },
+                }}
+              />
+            ) : (
+              <section className="flex flex-col gap-2">
+                <SegmentedToggle
+                  value={rentalSegment}
+                  onChange={setRentalSegment}
+                  ariaLabel="Filtrar rentas"
+                  options={[
+                    { value: "activas", label: "Activas" },
+                    { value: "historial", label: "Historial" },
+                  ]}
+                />
 
-              {activeRentals.length === 0 ? (
-                <p className="text-muted-foreground text-sm">
-                  Sin rentas activas.
-                </p>
-              ) : (
-                <ul className="flex flex-col gap-2">
-                  {activeRentals.map((rental) => (
-                    <RentalRow
-                      key={rental.id}
-                      rental={rental}
-                      onClick={() => openRentalDetail(rental.id)}
-                    />
-                  ))}
-                </ul>
-              )}
-            </section>
-
-            <section className="flex flex-col gap-2">
-              <h2 className="text-sm font-semibold text-muted-foreground">
-                Historial
-              </h2>
-
-              {historialRentals.length === 0 ? (
-                <p className="text-muted-foreground text-sm">
-                  Sin historial.
-                </p>
-              ) : (
-                <ul className="flex flex-col gap-2">
-                  {historialRentals.map((rental) => (
-                    <RentalRow
-                      key={rental.id}
-                      rental={rental}
-                      onClick={() => openRentalDetail(rental.id)}
-                    />
-                  ))}
-                </ul>
-              )}
-            </section>
+                {rentalSegment === "activas" ? (
+                  activeRentals.length === 0 ? (
+                    <p className="text-muted-foreground text-sm">
+                      Sin rentas activas.
+                    </p>
+                  ) : (
+                    <ul className="flex flex-col gap-2">
+                      {activeRentals.map((rental) => (
+                        <RentalRow
+                          key={rental.id}
+                          rental={rental}
+                          onClick={() => openRentalDetail(rental.id)}
+                        />
+                      ))}
+                    </ul>
+                  )
+                ) : historialRentals.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">
+                    Sin historial.
+                  </p>
+                ) : (
+                  <ul className="flex flex-col gap-2">
+                    {historialRentals.map((rental) => (
+                      <RentalRow
+                        key={rental.id}
+                        rental={rental}
+                        onClick={() => openRentalDetail(rental.id)}
+                      />
+                    ))}
+                  </ul>
+                )}
+              </section>
+            )}
           </>
         )}
       </SheetContent>

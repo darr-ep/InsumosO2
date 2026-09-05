@@ -135,7 +135,7 @@ export function LoginScreen() {
       )}
 
       {!directoryError && directory !== null && !selectedUser && (
-        <div className="grid w-full max-w-sm grid-cols-2 gap-3">
+        <div className="grid w-full max-w-sm grid-cols-3 gap-3">
           {directory.map((entry) => (
             <button
               key={entry.id}
@@ -174,9 +174,9 @@ export function LoginScreen() {
             >
               <ChevronLeft aria-hidden="true" />
             </Button>
-            <p className="text-sm text-muted-foreground">
-              Hola, <span className="font-semibold">{selectedUser.name}</span>
-            </p>
+            <h2 className="text-lg font-semibold text-foreground">
+              Hola, {selectedUser.name}
+            </h2>
           </div>
 
           <div className="flex flex-col gap-2">

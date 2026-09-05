@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { SegmentedToggle } from "@/components/ui/segmented-toggle";
 import { PaymentSuggestionField } from "@/components/PaymentSuggestionField";
 import { createPayment } from "@/data/payments.repo";
 import { handleIfStaleSession } from "@/data/staleSession";
@@ -168,26 +169,20 @@ export function PaymentDialog({
           {/* Pill-style mode toggle (post-launch polish): a deliberate, scoped
               exception to this app's h-11/44px minimum touch target — that
               floor is for PRIMARY actions (SDD §16.12/§17), not a compact
-              in-row chip like this one. The only two-button toggle of this
-              kind in the app. */}
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant={mode === "rent" ? "default" : "outline"}
-              onClick={() => setMode("rent")}
-              className="h-9 rounded-full px-4"
-            >
-              Pago
-            </Button>
-            <Button
-              type="button"
-              variant={mode === "adjustment" ? "default" : "outline"}
-              onClick={() => setMode("adjustment")}
-              className="h-9 rounded-full px-4"
-            >
-              Ajuste
-            </Button>
-          </div>
+              in-row chip like this one. Was the only two-button toggle of
+              this kind in the app — now extracted to `ui/segmented-toggle`
+              (design-fidelity Slice C, design obs #2224 §C1) so
+              `CustomerDetailSheet`'s Activas/Historial toggle can reuse the
+              exact same pattern instead of drifting into a second copy. */}
+          <SegmentedToggle
+            value={mode}
+            onChange={setMode}
+            ariaLabel="Tipo de movimiento"
+            options={[
+              { value: "rent", label: "Pago" },
+              { value: "adjustment", label: "Ajuste" },
+            ]}
+          />
 
           {mode === "rent" ? (
             <PaymentSuggestionField

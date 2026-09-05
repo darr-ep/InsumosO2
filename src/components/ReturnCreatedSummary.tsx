@@ -29,6 +29,13 @@ import { useReceiptActions } from "@/printing/useReceiptActions";
  * "Continuar" last: `DialogFooter`'s `flex-col items-stretch` keeps DOM
  * order = visual order, so the primary "I'm done" action doesn't outrank
  * printing/sharing a receipt for the customer standing there.
+ *
+ * design-fidelity Slice C (design obs #2224 §C5, owner decision #2218-4):
+ * Imprimir/Compartir now sit side by side in their own row, DELIBERATELY
+ * SUPERSEDING the full-width-stacked layout described above — the owner
+ * explicitly asked for the horizontal pair to match the design. DOM order
+ * is unchanged (Imprimir → Compartir → Volver al inicio), so the primary
+ * action is still visually/structurally LAST.
  */
 
 const currencyFormatter = new Intl.NumberFormat("es-MX", {
@@ -99,28 +106,34 @@ export function ReturnCreatedSummary({
               <p className="text-success text-sm">Comprobante impreso.</p>
             )}
 
-            <DialogFooter className="flex-col items-stretch">
-              {printAvailable && (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size={printerConnected ? "lg" : "default"}
-                  onClick={() => void handlePrint()}
-                  disabled={printStatus === "printing"}
-                  className="w-full"
-                >
-                  {printStatus === "printed" ? "Imprimir nuevamente" : "Imprimir"}
-                </Button>
-              )}
-              {shareAvailable && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void handleShare()}
-                  className="w-full"
-                >
-                  Compartir comprobante
-                </Button>
+            <DialogFooter className="flex-col items-stretch gap-2">
+              {(printAvailable || shareAvailable) && (
+                <div className="flex flex-row gap-2">
+                  {printAvailable && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size={printerConnected ? "lg" : "default"}
+                      onClick={() => void handlePrint()}
+                      disabled={printStatus === "printing"}
+                      className="flex-1"
+                    >
+                      {printStatus === "printed"
+                        ? "Imprimir nuevamente"
+                        : "Imprimir"}
+                    </Button>
+                  )}
+                  {shareAvailable && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => void handleShare()}
+                      className="flex-1"
+                    >
+                      Compartir comprobante
+                    </Button>
+                  )}
+                </div>
               )}
               <Button type="button" onClick={onGoHome} className="w-full">
                 Volver al inicio

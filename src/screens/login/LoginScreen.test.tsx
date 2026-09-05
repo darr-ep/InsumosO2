@@ -99,6 +99,22 @@ describe("LoginScreen — real login (§14, §16.6, CU1, gap-fill)", () => {
     ).toBeInTheDocument();
   });
 
+  // design-fidelity Slice C (design obs #2224 §4.13, task 8): "Hola,
+  // {nombre}" becomes a real heading (was a plain `<p>`) — visual polish
+  // only, the tap-to-advance flow itself is unchanged.
+  it("shows 'Hola, {nombre}' as a real heading on the password step", async () => {
+    getLoginDirectory.mockResolvedValue([juan]);
+    const user = userEvent.setup();
+
+    renderScreen();
+
+    await user.click(await screen.findByRole("button", { name: "Juan Pérez" }));
+
+    expect(
+      await screen.findByRole("heading", { name: /Hola, Juan Pérez/ }),
+    ).toBeInTheDocument();
+  });
+
   it("reveals a password field after tapping a user, and submits phone+password on confirm", async () => {
     getLoginDirectory.mockResolvedValue([juan]);
     loginWithPassword.mockResolvedValue(undefined);

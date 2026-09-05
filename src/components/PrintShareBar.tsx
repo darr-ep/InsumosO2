@@ -26,6 +26,16 @@ import { DialogFooter } from "@/components/ui/dialog";
  * confirming action for this dialog. Label switches to "Imprimir nuevamente"
  * once `printStatus === "printed"`; failed/not-yet-tried both just read
  * "Imprimir" (no separate "reintentar" wording).
+ *
+ * design-fidelity Slice C (design obs #2224 §C5, owner decision #2218-4):
+ * Imprimir/Compartir now sit side by side in their own row instead of each
+ * stacked full-width — this DELIBERATELY SUPERSEDES the original rationale
+ * above ("Cerrar must never visually outrank Imprimir/Compartir" via
+ * matching full-width stacking): the owner explicitly asked for the
+ * horizontal layout to match the design. DOM order is unchanged (Imprimir →
+ * Compartir → Cerrar), which is what actually preserves tab/AT order and
+ * keeps Cerrar the visually/structurally LAST action — the horizontal pair
+ * is just a nested row ABOVE Cerrar's own full-width row, not a reordering.
  */
 export interface PrintShareBarProps {
   printAvailable: boolean;
@@ -45,27 +55,31 @@ export function PrintShareBar({
   onClose,
 }: PrintShareBarProps) {
   return (
-    <DialogFooter className="flex-col items-stretch">
-      {printAvailable && (
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={onPrint}
-          disabled={printStatus === "printing"}
-          className="w-full"
-        >
-          {printStatus === "printed" ? "Imprimir nuevamente" : "Imprimir"}
-        </Button>
-      )}
-      {shareAvailable && (
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onShare}
-          className="w-full"
-        >
-          Compartir
-        </Button>
+    <DialogFooter className="flex-col items-stretch gap-2">
+      {(printAvailable || shareAvailable) && (
+        <div className="flex flex-row gap-2">
+          {printAvailable && (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={onPrint}
+              disabled={printStatus === "printing"}
+              className="flex-1"
+            >
+              {printStatus === "printed" ? "Imprimir nuevamente" : "Imprimir"}
+            </Button>
+          )}
+          {shareAvailable && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onShare}
+              className="flex-1"
+            >
+              Compartir
+            </Button>
+          )}
+        </div>
       )}
       <Button type="button" onClick={onClose} className="w-full">
         Cerrar

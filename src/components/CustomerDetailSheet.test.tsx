@@ -1,8 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { CustomerDetailSheet } from "@/components/CustomerDetailSheet";
+
+// design-fidelity Slice C, task 5: the "Sin rentas" empty state's
+// "+ Nueva renta" CTA navigates away — mocked the same way
+// `LoginScreen.test.tsx` mocks `useNavigate`, preserving `MemoryRouter`
+// (and every other real react-router export `RentalDetailSheet`/
+// `AppHeader` rely on) via `importActual`.
+const navigate = vi.fn();
+vi.mock("react-router", async () => {
+  const actual = await vi.importActual<typeof import("react-router")>(
+    "react-router",
+  );
+  return { ...actual, useNavigate: () => navigate };
+});
 
 /**
  * Feature: Credential Photo Camera + Compression (Batch 3b) — two real UX
@@ -114,50 +127,61 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
     getRental.mockReset();
     listItemsForRental.mockReset();
     listPaymentsForRental.mockReset();
+    navigate.mockReset();
     getCredentialPhotoUrl.mockResolvedValue(
       "http://pb.local/api/files/customers/default/credencial.png?token=default",
     );
   });
 
-  it("splits rentals into 'Rentas activas' and 'Historial' sections, never mixed together (real bug fix — business owner's own principle: 'Diferenciar claramente rentas activas del historial de rentas')", async () => {
+  // design-fidelity Slice C (design obs #2224 §C1/C2, task 4): the two
+  // always-visible stacked sections are replaced by ONE list, controlled by
+  // an Activas/Historial `SegmentedToggle` — "Activas" is the default
+  // segment. Supersedes the two tests this replaces (the two-stacked-
+  // sections structure and its per-section-empty-state proof), which
+  // asserted the now-removed structure directly.
+  it("shows only the Activas segment by default, with the toggle available to switch to Historial (never mixed together)", async () => {
     getCustomer.mockResolvedValue(customerWithPhoto);
     listRentalsForCustomer.mockResolvedValue([
       { id: "r1", folio: "R-000004", status: "ACTIVE", initial_rent_amount: 2800 },
       { id: "r2", folio: "R-000003", status: "RETURNED", initial_rent_amount: 1500 },
-      { id: "r3", folio: "R-000002", status: "RETURNED", initial_rent_amount: 1500 },
-      { id: "r4", folio: "R-000001", status: "RETURNED", initial_rent_amount: 2800 },
     ]);
 
     renderSheet();
 
     expect(await screen.findByText("Juan Pérez")).toBeInTheDocument();
+    expect(screen.getByText("R-000004")).toBeInTheDocument();
+    expect(screen.getByText("Activa")).toBeInTheDocument();
+    expect(screen.queryByText("R-000003")).not.toBeInTheDocument();
 
-    const activeSection = screen
-      .getByRole("heading", { name: "Rentas activas" })
-      .closest("section")!;
-    const historialSection = screen
-      .getByRole("heading", { name: "Historial" })
-      .closest("section")!;
-
-    // ACTIVE rental only inside "Rentas activas".
-    expect(within(activeSection).getByText("R-000004")).toBeInTheDocument();
-    expect(within(activeSection).getByText("Activa")).toBeInTheDocument();
     expect(
-      within(activeSection).queryByText("R-000003"),
-    ).not.toBeInTheDocument();
-
-    // RETURNED rentals only inside "Historial" — never mixed with the
-    // active one, and never both shown under one ambiguous heading.
-    expect(within(historialSection).getByText("R-000003")).toBeInTheDocument();
-    expect(within(historialSection).getByText("R-000002")).toBeInTheDocument();
-    expect(within(historialSection).getByText("R-000001")).toBeInTheDocument();
-    expect(within(historialSection).getAllByText("Devuelta")).toHaveLength(3);
+      screen.getByRole("button", { name: "Activas" }),
+    ).toHaveAttribute("aria-pressed", "true");
     expect(
-      within(historialSection).queryByText("R-000004"),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Historial" }),
+    ).toHaveAttribute("aria-pressed", "false");
   });
 
-  it("shows a per-section empty state when a customer has no active rentals or no historial", async () => {
+  it("switches to the Historial segment when tapped, hiding Activas entirely", async () => {
+    getCustomer.mockResolvedValue(customerWithPhoto);
+    listRentalsForCustomer.mockResolvedValue([
+      { id: "r1", folio: "R-000004", status: "ACTIVE", initial_rent_amount: 2800 },
+      { id: "r2", folio: "R-000003", status: "RETURNED", initial_rent_amount: 1500 },
+      { id: "r3", folio: "R-000002", status: "RETURNED", initial_rent_amount: 1500 },
+    ]);
+    const user = userEvent.setup();
+
+    renderSheet();
+    await screen.findByText("Juan Pérez");
+
+    await user.click(screen.getByRole("button", { name: "Historial" }));
+
+    expect(screen.getByText("R-000003")).toBeInTheDocument();
+    expect(screen.getByText("R-000002")).toBeInTheDocument();
+    expect(screen.getAllByText("Devuelta")).toHaveLength(2);
+    expect(screen.queryByText("R-000004")).not.toBeInTheDocument();
+  });
+
+  it("shows a per-segment empty message when the selected segment has no rentals, while the customer still has some overall", async () => {
     getCustomer.mockResolvedValue(customerWithPhoto);
     listRentalsForCustomer.mockResolvedValue([
       { id: "r1", folio: "R-000001", status: "RETURNED", initial_rent_amount: 2800 },
@@ -166,8 +190,57 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
     renderSheet();
 
     expect(await screen.findByText("Juan Pérez")).toBeInTheDocument();
+    // Activas is empty (only a RETURNED rental exists), but the toggle
+    // itself still renders — this is NOT the "Sin rentas" zero-total case.
     expect(screen.getByText("Sin rentas activas.")).toBeInTheDocument();
-    expect(screen.queryByText("Sin historial.")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Historial" })).toBeInTheDocument();
+  });
+
+  // design-fidelity Slice C (design obs #2224 §5, task 5): the customer-wide
+  // "Sin rentas" empty state — distinct from the per-segment case above —
+  // only appears when the customer has NO rentals at all, and offers a
+  // "+ Nueva renta" CTA instead of the toggle (nothing to toggle between).
+  it("shows the 'Sin rentas' empty state with a '+ Nueva renta' CTA when the customer has no rentals at all, instead of the toggle", async () => {
+    getCustomer.mockResolvedValue(customerWithPhoto);
+    listRentalsForCustomer.mockResolvedValue([]);
+
+    renderSheet();
+
+    expect(await screen.findByText("Sin rentas")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Activas" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "+ Nueva renta" }),
+    ).toBeInTheDocument();
+  });
+
+  it("navigates to /nueva-renta and closes the sheet when the 'Sin rentas' CTA is tapped", async () => {
+    getCustomer.mockResolvedValue(customerWithPhoto);
+    listRentalsForCustomer.mockResolvedValue([]);
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+
+    renderSheet({ onOpenChange });
+    await user.click(
+      await screen.findByRole("button", { name: "+ Nueva renta" }),
+    );
+
+    expect(navigate).toHaveBeenCalledWith("/nueva-renta");
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  // design-fidelity Slice C (design obs #2224 §C2): plain `<p>` in a Sheet,
+  // no parent button — a bare `tel:` anchor suffices here, no stretched-link
+  // restructure needed (unlike RentalCard/CustomerCard).
+  it("renders the customer's phone as a tel: link", async () => {
+    getCustomer.mockResolvedValue(customerWithPhoto);
+    listRentalsForCustomer.mockResolvedValue([]);
+
+    renderSheet();
+
+    const telLink = await screen.findByRole("link", { name: /5512345678/ });
+    expect(telLink).toHaveAttribute("href", "tel:5512345678");
   });
 
   it("opens the rental's detail sheet when an active rental row is tapped (Redesign Round 3, punto E)", async () => {

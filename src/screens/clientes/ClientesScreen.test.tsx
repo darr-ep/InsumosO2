@@ -200,7 +200,11 @@ describe("ClientesScreen (Redesign Round 2, Batch 2 — Clientes screen)", () =>
     ).toBeInTheDocument();
   });
 
-  it("opens CustomerDetailSheet with clearly separate 'Rentas activas' and 'Historial' sections when a customer row is tapped", async () => {
+  // design-fidelity Slice C (design obs #2224 §C1): the two stacked
+  // "Rentas activas"/"Historial" sections were replaced by a single list
+  // controlled by a segmented Activas/Historial toggle — this test now
+  // proves the toggle (not two headings) is what opens.
+  it("opens CustomerDetailSheet with an Activas/Historial toggle when a customer row is tapped", async () => {
     listCustomers.mockResolvedValue([juan]);
     getCustomer.mockResolvedValue(juan);
     listRentalsForCustomer.mockResolvedValue([
@@ -214,10 +218,10 @@ describe("ClientesScreen (Redesign Round 2, Batch 2 — Clientes screen)", () =>
 
     expect(getCustomer).toHaveBeenCalledWith("c1");
     expect(
-      await screen.findByRole("heading", { name: "Rentas activas" }),
+      await screen.findByRole("button", { name: "Activas" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Historial" }),
+      screen.getByRole("button", { name: "Historial" }),
     ).toBeInTheDocument();
   });
 });

@@ -115,6 +115,26 @@ describe("PrintShareBar (§17)", () => {
     expect(screen.getByRole("button", { name: "Imprimir" })).toBeDisabled();
   });
 
+  // design-fidelity Slice C (design obs #2224 §C5, owner decision #2218-4):
+  // Imprimir/Compartir move side by side, but DOM order stays
+  // Imprimir → Compartir → Cerrar so the primary action (Cerrar) is still
+  // last, per §16.4 tab/AT order — even though the layout is now horizontal.
+  it("keeps Imprimir before Compartir before Cerrar in DOM order, even laid out side by side (design-fidelity §C5)", () => {
+    render(
+      <PrintShareBar
+        printAvailable
+        printStatus="idle"
+        onPrint={vi.fn()}
+        shareAvailable
+        onShare={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const buttons = screen.getAllByRole("button").map((b) => b.textContent);
+    expect(buttons).toEqual(["Imprimir", "Compartir", "Cerrar"]);
+  });
+
   it("shows Compartir and calls onShare when shareAvailable", async () => {
     const onShare = vi.fn();
     const user = userEvent.setup();
