@@ -42,6 +42,11 @@ function renderLayout(initialPath = "/dashboard") {
             <Route path="/dashboard" element={null} />
             <Route path="/clientes" element={null} />
           </Route>
+          {/* Sibling of AppLayout's own routes, not nested under it — the
+              center nav CTA links here directly, and this file has no other
+              coverage of RentalNewScreen, so a bare marker is enough to
+              prove the navigation actually happened. */}
+          <Route path="/nueva-renta" element={<div>Nueva renta screen</div>} />
         </Routes>
       </MemoryRouter>
     </DataCacheProvider>,
@@ -117,7 +122,15 @@ describe("AppLayout", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("renders exactly 2 nav items — Inicio and Clientes — with the correct hrefs", async () => {
+  /**
+   * design-fidelity Slice D2: the bottom nav grew from a 2-slot to a
+   * 3-slot structure — two `flex-1` destination NavLinks plus a
+   * non-flexing center "Nueva renta" CTA. This test is the direct
+   * successor of the pre-D2 "renders exactly 2 nav items" assertion,
+   * updated in place (same pattern as prior slices' superseded-test
+   * rewrites) rather than left alongside a now-false assertion.
+   */
+  it("renders exactly 3 interactive nav elements — Inicio, the Nueva renta CTA, and Clientes — with the correct hrefs", async () => {
     renderLayout();
     await screen.findByRole("group", { name: "Rentas activas: 0" });
 
@@ -126,14 +139,45 @@ describe("AppLayout", () => {
     });
     const links = within(nav).getAllByRole("link");
 
-    expect(links).toHaveLength(2);
+    expect(links).toHaveLength(3);
     expect(within(nav).getByRole("link", { name: "Inicio" })).toHaveAttribute(
       "href",
       "/dashboard",
     );
     expect(
+      within(nav).getByRole("link", { name: "Nueva renta" }),
+    ).toHaveAttribute("href", "/nueva-renta");
+    expect(
       within(nav).getByRole("link", { name: "Clientes" }),
     ).toHaveAttribute("href", "/clientes");
+  });
+
+  it.each(["/dashboard", "/clientes"] as const)(
+    "shows the center Nueva renta CTA in the nav from %s",
+    async (path) => {
+      renderLayout(path);
+      const nav = await screen.findByRole("navigation", {
+        name: "Navegación principal",
+      });
+
+      expect(
+        within(nav).getByRole("link", { name: "Nueva renta" }),
+      ).toHaveAttribute("href", "/nueva-renta");
+    },
+  );
+
+  it("navigates to /nueva-renta when the center CTA is tapped", async () => {
+    const user = userEvent.setup();
+    renderLayout("/dashboard");
+    await screen.findByRole("group", { name: "Rentas activas: 0" });
+
+    const nav = screen.getByRole("navigation", {
+      name: "Navegación principal",
+    });
+
+    await user.click(within(nav).getByRole("link", { name: "Nueva renta" }));
+
+    expect(await screen.findByText("Nueva renta screen")).toBeInTheDocument();
   });
 
   it("marks Inicio as the active tab when the current route is /dashboard", async () => {

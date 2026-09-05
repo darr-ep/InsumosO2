@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
-import { NavLink, useLocation, useNavigate } from "react-router";
-import { LayoutDashboard, Users } from "lucide-react";
+import { Fragment, useEffect, useState } from "react";
+import { Link, NavLink, useLocation, useNavigate } from "react-router";
+import { LayoutDashboard, Plus, Users } from "lucide-react";
 import useEmblaCarousel from "embla-carousel-react";
 import { cn } from "@/lib/utils";
 import { useDataCache } from "@/app/DataCacheContext";
 import { usePanelPullToRefresh } from "@/lib/usePanelPullToRefresh";
 import { AppHeader } from "@/components/AppHeader";
 import { SearchBar } from "@/components/SearchBar";
+import { Button } from "@/components/ui/button";
 import { DashboardScreen } from "@/screens/dashboard/DashboardScreen";
 import { ClientesScreen } from "@/screens/clientes/ClientesScreen";
 
@@ -17,6 +18,17 @@ import { ClientesScreen } from "@/screens/clientes/ClientesScreen";
  * Inicio, Clientes. Nueva renta se accede mediante el CTA principal.
  * Buscar se accede mediante el buscador. No agregar más elementos a la
  * navegación primaria." Exactly 2 primary destinations — do not add more.
+ *
+ * design-fidelity Slice D2 (2026-09-05, design obs #2224 §D2): the brief
+ * above still holds verbatim — `TABS` below still enumerates exactly the
+ * same 2 primary destinations it always did. The bottom nav itself gained
+ * a third, CENTER element — a "Nueva renta" call-to-action linking to
+ * `/nueva-renta` — but it is deliberately NOT a third destination in this
+ * list: it's an action shortcut into the wizard, not a place the user
+ * "is" while using the app. It renders directly in the `<nav>` JSX below,
+ * outside `TABS`, non-flexing, with no active/`aria-current` state, so
+ * the two real destinations keep equal `flex-1` width on either side of
+ * it.
  */
 const TABS = [
   { to: "/dashboard", label: "Inicio", icon: LayoutDashboard },
@@ -267,25 +279,40 @@ export function AppLayout() {
       </div>
       <nav
         aria-label="Navegación principal"
-        className="flex shrink-0 border-t bg-card py-1.5"
+        className="flex shrink-0 items-center border-t bg-card min-h-[70px] px-2"
       >
-        {TABS.map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) =>
-              cn(
-                "flex flex-1 flex-col items-center justify-center gap-1 py-1 text-xs font-medium",
-                "min-h-[44px]",
-                isActive
-                  ? "text-primary font-bold"
-                  : "text-muted-foreground hover:text-foreground",
-              )
-            }
-          >
-            <Icon aria-hidden="true" className="size-5" />
-            <span>{label}</span>
-          </NavLink>
+        {TABS.map(({ to, label, icon: Icon }, index) => (
+          <Fragment key={to}>
+            <NavLink
+              to={to}
+              className={({ isActive }) =>
+                cn(
+                  "flex flex-1 flex-col items-center justify-center gap-1 py-1 text-xs font-medium",
+                  "min-h-[44px]",
+                  isActive
+                    ? "text-primary font-bold"
+                    : "text-muted-foreground hover:text-foreground",
+                )
+              }
+            >
+              <Icon aria-hidden="true" className="size-5" />
+              <span>{label}</span>
+            </NavLink>
+            {/* Center CTA sits between the two TABS entries, not flexing —
+                see the TABS docblock above for why it isn't a 3rd entry
+                in that list. `Fragment` (not a wrapper `div`) so it adds
+                no extra DOM node between the two `flex-1` NavLinks. */}
+            {index === 0 && (
+              <div className="shrink-0 px-2">
+                <Button asChild size="lg" className="rounded-full">
+                  <Link to="/nueva-renta">
+                    <Plus aria-hidden="true" />
+                    Nueva renta
+                  </Link>
+                </Button>
+              </div>
+            )}
+          </Fragment>
         ))}
       </nav>
     </div>

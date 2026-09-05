@@ -105,7 +105,13 @@ describe("App", () => {
   });
 
   describe("authenticated (§14, §16.5)", () => {
-    it("redirects to the Dashboard tab and renders the 2-item bottom nav (Inicio/Clientes only — Redesign Round 2, Batch 3)", async () => {
+    // design-fidelity Slice D2: the bottom nav's link count grew from 2 to
+    // 3 (Inicio, the non-destination "Nueva renta" center CTA, Clientes) —
+    // this downstream assertion is updated in place, same pattern as
+    // Slice C's downstream test rewrites, since the count is a direct,
+    // intentional consequence of AppLayout.tsx's own D2 change, not a
+    // change to this file's own auth/redirect behavior under test.
+    it("redirects to the Dashboard tab and renders the 3-element bottom nav (Inicio/Nueva renta CTA/Clientes — design-fidelity Slice D2)", async () => {
       render(<App />);
 
       expect(
@@ -114,10 +120,13 @@ describe("App", () => {
       const nav = screen.getByRole("navigation", {
         name: "Navegación principal",
       });
-      expect(within(nav).getAllByRole("link")).toHaveLength(2);
+      expect(within(nav).getAllByRole("link")).toHaveLength(3);
       expect(
         within(nav).getByRole("link", { name: "Inicio" }),
       ).toHaveAttribute("aria-current", "page");
+      expect(
+        within(nav).getByRole("link", { name: "Nueva renta" }),
+      ).toBeInTheDocument();
       expect(
         within(nav).getByRole("link", { name: "Clientes" }),
       ).toBeInTheDocument();
