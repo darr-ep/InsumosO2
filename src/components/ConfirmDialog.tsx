@@ -34,6 +34,16 @@ import {
  * their parent `Dialog`/`Sheet`, never inside its `DialogContent` — see
  * `overlayClassName="bg-black/30 backdrop-blur-none"` below, which exists
  * specifically so two stacked Radix overlays don't compound to near-black.
+ *
+ * Scoped correction (RESILIENCE-001, frozen findings ledger obs #2230):
+ * `disabled={isConfirming}` on the two buttons only gates their own
+ * `onClick` — Radix's Escape/outside-click dismiss on `DialogContent` is
+ * independent of that. Without the three handlers below, a user could
+ * dismiss the popup mid-mutation (Escape or clicking outside) while the
+ * underlying, irreversible `createPayment`/`returnRental` call kept running
+ * and completed anyway. `preventDefault()` on all three while
+ * `isConfirming` is true keeps the popup open and the mutation the only way
+ * out until it actually resolves.
  */
 export interface ConfirmDialogProps {
   open: boolean;
@@ -64,6 +74,15 @@ export function ConfirmDialog({
         showCloseButton={false}
         className="max-w-[330px]"
         overlayClassName="bg-black/30 backdrop-blur-none"
+        onEscapeKeyDown={(event) => {
+          if (isConfirming) event.preventDefault();
+        }}
+        onPointerDownOutside={(event) => {
+          if (isConfirming) event.preventDefault();
+        }}
+        onInteractOutside={(event) => {
+          if (isConfirming) event.preventDefault();
+        }}
       >
         <div className="flex flex-col items-center gap-3 text-center">
           <div className="flex size-12 items-center justify-center rounded-full bg-rose-50 dark:bg-rose-950/40">

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
@@ -113,6 +113,94 @@ describe("ConfirmDialog (design-fidelity, shared component)", () => {
     expect(
       screen.getByRole("button", { name: "Sí, registrar" }),
     ).toBeDisabled();
+  });
+
+  it("does not dismiss via Escape while a mutation is in flight (isConfirming)", async () => {
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <ConfirmDialog
+        open
+        onOpenChange={onOpenChange}
+        title="¿Registrar este pago?"
+        description="Se registrará un pago de $3,000.00 en la renta R-000001."
+        confirmLabel="Sí, registrar"
+        onConfirm={() => {}}
+        isConfirming
+      />,
+    );
+
+    await user.keyboard("{Escape}");
+
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it("still dismisses via Escape when not confirming (no regression)", async () => {
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <ConfirmDialog
+        open
+        onOpenChange={onOpenChange}
+        title="¿Registrar este pago?"
+        description="Se registrará un pago de $3,000.00 en la renta R-000001."
+        confirmLabel="Sí, registrar"
+        onConfirm={() => {}}
+      />,
+    );
+
+    await user.keyboard("{Escape}");
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("does not dismiss via an outside pointer-down/click while a mutation is in flight (isConfirming)", async () => {
+    const onOpenChange = vi.fn();
+
+    render(
+      <ConfirmDialog
+        open
+        onOpenChange={onOpenChange}
+        title="¿Devolver esta renta?"
+        description="La renta R-000001 se marcará como devuelta. Esta acción no se puede deshacer."
+        confirmLabel="Sí, devolver"
+        onConfirm={() => {}}
+        isConfirming
+      />,
+    );
+
+    // Radix's Dialog defers a pointer-down-outside dismissal until the
+    // matching "click" fires (it registers its `pointerdown` listener
+    // asynchronously too), so both are simulated here to reproduce a real
+    // outside-click interaction.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fireEvent.pointerDown(document.body, { button: 0 });
+    fireEvent.click(document.body);
+
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it("still dismisses via an outside pointer-down/click when not confirming (no regression)", async () => {
+    const onOpenChange = vi.fn();
+
+    render(
+      <ConfirmDialog
+        open
+        onOpenChange={onOpenChange}
+        title="¿Devolver esta renta?"
+        description="La renta R-000001 se marcará como devuelta. Esta acción no se puede deshacer."
+        confirmLabel="Sí, devolver"
+        onConfirm={() => {}}
+      />,
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fireEvent.pointerDown(document.body, { button: 0 });
+    fireEvent.click(document.body);
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
   it("does not render when open is false", () => {
