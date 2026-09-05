@@ -51,7 +51,7 @@ describe("PrintShareBar (§17)", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("shows Imprimir and calls onPrint when printAvailable, and relabels to Reintentar impresión on failure", async () => {
+  it("shows Imprimir and calls onPrint when printAvailable, and relabels to Imprimir nuevamente once printed", async () => {
     const onPrint = vi.fn();
     const user = userEvent.setup();
     const { rerender } = render(
@@ -79,8 +79,24 @@ describe("PrintShareBar (§17)", () => {
       />,
     );
 
+    // Failed/not-yet-tried both just read "Imprimir" — no separate
+    // "reintentar" wording (post-launch polish, normalized with
+    // RentalCreatedSummary's button hierarchy).
+    expect(screen.getByRole("button", { name: "Imprimir" })).toBeInTheDocument();
+
+    rerender(
+      <PrintShareBar
+        printAvailable
+        printStatus="printed"
+        onPrint={onPrint}
+        shareAvailable={false}
+        onShare={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
     expect(
-      screen.getByRole("button", { name: "Reintentar impresión" }),
+      screen.getByRole("button", { name: "Imprimir nuevamente" }),
     ).toBeInTheDocument();
   });
 

@@ -11,7 +11,11 @@ import {
   latin1Bytes,
   selectCodepage,
 } from "@/printing/escpos";
-import type { RentalReceiptData, ReturnReceiptData } from "@/domain/rentals/receipt";
+import type {
+  PaymentReceiptData,
+  RentalReceiptData,
+  ReturnReceiptData,
+} from "@/domain/rentals/receipt";
 
 
 describe("INIT/CUT (§23.1)", () => {
@@ -160,8 +164,7 @@ describe("buildStructuredTicket (high polish formatted receipt)", () => {
     items: [{ itemType: "concentrator", quantity: 1 }],
     initialRentAmount: 2800,
     depositAmount: 1000,
-    extras: [{ description: "Cánula", price: 150 }],
-    total: 3950,
+    total: 3800,
   };
 
   const sampleReturn: ReturnReceiptData = {
@@ -189,7 +192,7 @@ describe("buildStructuredTicket (high polish formatted receipt)", () => {
     expect(text).toContain("Cliente: Juan");
     expect(text).toContain("DEPÓSITO GARANTÍA:");
     expect(text).toContain("TOTAL PAGADO:");
-    expect(text).toContain("$3,950.00");
+    expect(text).toContain("$3,800.00");
     expect(text).toContain("Conserve este comprobante");
   });
 
@@ -201,6 +204,47 @@ describe("buildStructuredTicket (high polish formatted receipt)", () => {
     expect(text).toContain("25 días");
     expect(text).toContain("TOTAL COBRADO:");
     expect(text).toContain("$2,800.00");
+  });
+
+  const samplePayment: PaymentReceiptData = {
+    kind: "payment",
+    businessName: "O2 Insumos",
+    businessPhone: "771 131 3535",
+    folio: "R-000001",
+    customerName: "Juan Pérez",
+    customerPhone: "5512345678",
+    paymentType: "rent",
+    amount: 2300,
+    date: new Date("2026-09-10T10:00:00Z"),
+    note: undefined,
+  };
+
+  it("builds structured payment ticket with the payment type, amount, and total", () => {
+    const ticket = buildStructuredTicket(samplePayment);
+    const text = new TextDecoder("latin1").decode(ticket);
+
+    expect(text).toContain("COMPROBANTE DE PAGO");
+    expect(text).toContain("Folio: R-000001");
+    expect(text).toContain("Mensualidad:");
+    expect(text).toContain("TOTAL:");
+    expect(text).toContain("$2,300.00");
+    expect(text).toContain("¡Gracias por su pago!");
+  });
+
+  it("includes a Nota line only when the payment has one", () => {
+    const withNote = buildStructuredTicket({
+      ...samplePayment,
+      paymentType: "adjustment",
+      note: "Descuento por cliente frecuente",
+    });
+    const textWithNote = new TextDecoder("latin1").decode(withNote);
+    expect(textWithNote).toContain("Ajuste:");
+    expect(textWithNote).toContain("Nota:");
+    expect(textWithNote).toContain("Descuento por cliente frecuente");
+
+    const withoutNote = buildStructuredTicket(samplePayment);
+    const textWithoutNote = new TextDecoder("latin1").decode(withoutNote);
+    expect(textWithoutNote).not.toContain("Nota:");
   });
 
   it("includes raster bitmap when logo is provided", () => {

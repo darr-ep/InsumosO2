@@ -18,11 +18,6 @@ import {
 export type RentalStatus = "ACTIVE" | "RETURNED";
 export type PaymentType = "rent" | "deposit" | "adjustment";
 
-export interface RentalExtra {
-  description: string;
-  price: number;
-}
-
 export interface RentalRecord extends RecordModel {
   folio: string;
   customer_id: string;
@@ -31,7 +26,6 @@ export interface RentalRecord extends RecordModel {
   initial_rent_amount: number;
   deposit_amount: number;
   deposit_returned_amount: number;
-  extras: RentalExtra[];
   created_by: string;
   updated_by: string;
   returned_by: string;
@@ -64,7 +58,6 @@ export interface CreateRentalInput {
   items: { itemType: RentalItemType; quantity: number }[];
   initialRentAmount: number;
   depositAmount: number;
-  extras: RentalExtra[];
 }
 
 export interface CreateRentalResult {
@@ -162,7 +155,6 @@ export async function createRental(
       customer_id: input.customerId,
       initial_rent_amount: input.initialRentAmount,
       deposit_amount: input.depositAmount,
-      extras: input.extras,
     },
   );
 
@@ -216,6 +208,16 @@ export async function getRental(
 }
 
 // §16.10: "qué tiene rentado" — the rental_items for one rental.
+//
+// `requestKey: null` (same reasoning as `createRental`'s docblock above):
+// PocketBase's default auto-cancellation key is method+basePath only — it
+// ignores query params/filters — so this collides with
+// `listActiveRentalItems` below (same collection, different filter) when
+// `RentalDetailSheet.reload()` and `DataCacheContext.refreshRentals()` fire
+// together, which they do on every return/payment (`onReturned`/
+// `onRegistered` call `reload(); onRentalChanged?.();` back to back). That
+// collision aborted this call and surfaced as a false "No se pudo
+// actualizar la renta. Verifica tu conexión" after a successful devolución.
 export async function listItemsForRental(
   rentalId: string,
 ): Promise<RentalItemRecord[]> {
@@ -223,6 +225,7 @@ export async function listItemsForRental(
     .collection(RENTAL_ITEMS_COLLECTION)
     .getList<RentalItemRecord>(1, ACTIVE_RENTALS_PAGE_SIZE, {
       filter: pb.filter("rental_id = {:rentalId}", { rentalId }),
+      requestKey: null,
     });
 
   return result.items;
@@ -246,6 +249,10 @@ export async function listActiveRentalItems(): Promise<RentalItemRecord[]> {
       filter: pb.filter("rental_id.status = {:status}", {
         status: "ACTIVE" satisfies RentalStatus,
       }),
+      // requestKey: null — see listItemsForRental's docblock: this and that
+      // call share a default auto-cancellation key (PocketBase ignores
+      // filters) and fire together on every return/payment.
+      requestKey: null,
     });
 
   return result.items;

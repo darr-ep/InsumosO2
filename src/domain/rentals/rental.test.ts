@@ -12,7 +12,6 @@ describe("rentalFormSchema (§20, §16.7)", () => {
     items: [{ item_type: "concentrator" as const, quantity: 1 }],
     initial_rent_amount: 2800,
     deposit_amount: 1000,
-    extras: [],
   };
 
   it("accepts a well-formed rental", () => {
@@ -36,14 +35,6 @@ describe("rentalFormSchema (§20, §16.7)", () => {
     const result = rentalFormSchema.safeParse({
       ...base,
       items: [{ item_type: "tank", quantity: 0 }],
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it("rejects an extras entry with an empty description", () => {
-    const result = rentalFormSchema.safeParse({
-      ...base,
-      extras: [{ description: "", price: 50 }],
     });
     expect(result.success).toBe(false);
   });

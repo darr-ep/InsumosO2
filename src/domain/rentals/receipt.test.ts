@@ -7,7 +7,7 @@ import {
 import type { RentalReceiptData, ReturnReceiptData } from "@/domain/rentals/receipt";
 
 describe("buildRentalReceipt (§22)", () => {
-  it("totals initial rent + deposit + extras", () => {
+  it("totals initial rent + deposit", () => {
     const receipt = buildRentalReceipt({
       businessName: "Insumos O2",
       businessPhone: "771 131 3535",
@@ -18,14 +18,13 @@ describe("buildRentalReceipt (§22)", () => {
       items: [{ itemType: "concentrator", quantity: 1 }],
       initialRentAmount: 2800,
       depositAmount: 1000,
-      extras: [{ description: "2 cubrebocas KF94", price: 50 }],
     });
 
-    expect(receipt.total).toBe(3850);
+    expect(receipt.total).toBe(3800);
     expect(receipt.kind).toBe("create");
   });
 
-  it("totals correctly with no extras", () => {
+  it("totals correctly with a zero deposit", () => {
     const receipt = buildRentalReceipt({
       businessName: "Insumos O2",
       businessPhone: "771 131 3535",
@@ -36,7 +35,6 @@ describe("buildRentalReceipt (§22)", () => {
       items: [{ itemType: "tank", quantity: 1 }],
       initialRentAmount: 1500,
       depositAmount: 0,
-      extras: [],
     });
 
     expect(receipt.total).toBe(1500);
@@ -76,8 +74,7 @@ describe("formatReceiptLines (§22 — shared by ShareFallbackPrinter and WebBlu
     items: [{ itemType: "concentrator", quantity: 1 }],
     initialRentAmount: 2800,
     depositAmount: 1000,
-    extras: [{ description: "2 cubrebocas KF94", price: 50 }],
-    total: 3850,
+    total: 3800,
   };
 
   const returnReceipt: ReturnReceiptData = {
@@ -94,7 +91,7 @@ describe("formatReceiptLines (§22 — shared by ShareFallbackPrinter and WebBlu
     depositReturned: 1000,
   };
 
-  it("includes business, folio, customer, items, extras and total for a rental receipt", () => {
+  it("includes business, folio, customer, items and total for a rental receipt", () => {
     const lines = formatReceiptLines(rentalReceipt);
 
     expect(lines).toContain("Insumos O2 · 771 131 3535");
@@ -103,8 +100,7 @@ describe("formatReceiptLines (§22 — shared by ShareFallbackPrinter and WebBlu
     expect(lines).toContain("1 x Concentrador");
     expect(lines).toContain("Renta inicial: $2,800.00");
     expect(lines).toContain("Depósito: $1,000.00");
-    expect(lines).toContain("2 cubrebocas KF94: $50.00");
-    expect(lines).toContain("Total: $3,850.00");
+    expect(lines).toContain("Total: $3,800.00");
   });
 
   it("includes rented days, amount collected and deposit returned for a return receipt (triangulation)", () => {

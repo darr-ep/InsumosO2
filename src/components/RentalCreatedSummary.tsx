@@ -15,9 +15,11 @@ import { useReceiptActions } from "@/printing/useReceiptActions";
 
 /**
  * Redesign Round 3, punto 1 (post-creación de renta): reemplaza la apertura
- * inmediata del comprobante completo por una confirmación corta. El
- * comprobante completo sigue existiendo — se abre desde "Ver comprobante"
- * (`onViewReceipt`), no como vista principal.
+ * inmediata del comprobante completo por una confirmación corta — este
+ * diálogo already shows every field of the receipt inline (see the `dl`
+ * below), so there's no separate "ver comprobante completo" step anymore
+ * (a dedicated button for that was removed as redundant — the user is
+ * already looking at it).
  *
  * Reusa `useReceiptActions` (mismo hook que `ReceiptDialog`) para no
  * duplicar la orquestación de impresión/compartir Bluetooth-first — incluye
@@ -25,13 +27,20 @@ import { useReceiptActions } from "@/printing/useReceiptActions";
  * preferencia "auto-imprimir al guardar" (`printSettings.ts`, toggle en
  * `PrinterMenu`) está activada.
  *
- * Batch B fix: `DialogFooter`'s own default is `flex-col-reverse` at the
- * base breakpoint, which was flipping the visual order on mobile — the
- * LAST button in this JSX ("Continuar") rendered on TOP, and "Imprimir
- * comprobante" (the button that's supposed to be "muy evidente" when a
- * printer is connected) rendered at the bottom. `flex-col items-stretch`
- * (no `sm:` prefix, forced at every breakpoint) keeps DOM order = visual
- * order everywhere, so Imprimir is genuinely first/most prominent.
+ * Button hierarchy (business-owner request, post-launch polish): "Imprimir"
+ * is `variant="secondary"` — a real next step, but not THE final action —
+ * and its label switches to "Imprimir nuevamente" once `printStatus ===
+ * "printed"` (never a distinct "reintentar" wording; failed/not-yet-tried
+ * both just read "Imprimir"). Tapping it while no printer is connected
+ * already surfaces the browser's Bluetooth device picker via
+ * `useReceiptActions`' `handlePrint` → `webBluetoothPrinter.connect()` — no
+ * separate "connect printer" UI needed here. "Continuar" is the one
+ * `variant="default"` (primary) button, and stays LAST in DOM order on
+ * purpose: `DialogFooter`'s `flex-col items-stretch` (forced at every
+ * breakpoint, overriding its own `flex-col-reverse` default) keeps DOM
+ * order = visual order, so the print/share steps stay reachable first and
+ * the primary "I'm done" action doesn't visually outrank them into being
+ * tapped before a physical receipt is even printed for the customer.
  */
 
 const currencyFormatter = new Intl.NumberFormat("es-MX", {
@@ -43,7 +52,6 @@ export interface RentalCreatedSummaryProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   receipt: RentalReceiptData | null;
-  onViewReceipt: () => void;
   onContinue: () => void;
 }
 
@@ -51,7 +59,6 @@ export function RentalCreatedSummary({
   open,
   onOpenChange,
   receipt,
-  onViewReceipt,
   onContinue,
 }: RentalCreatedSummaryProps) {
   const { printAvailable, printStatus, shareAvailable, handlePrint, handleShare, reset } =
@@ -123,14 +130,13 @@ export function RentalCreatedSummary({
               {printAvailable && (
                 <Button
                   type="button"
+                  variant="secondary"
                   size={printerConnected ? "lg" : "default"}
                   onClick={() => void handlePrint()}
                   disabled={printStatus === "printing"}
                   className="w-full"
                 >
-                  {printStatus === "failed"
-                    ? "Reintentar impresión"
-                    : "Imprimir comprobante"}
+                  {printStatus === "printed" ? "Imprimir nuevamente" : "Imprimir"}
                 </Button>
               )}
               {shareAvailable && (
@@ -145,15 +151,6 @@ export function RentalCreatedSummary({
               )}
               <Button
                 type="button"
-                variant="ghost"
-                onClick={onViewReceipt}
-                className="w-full"
-              >
-                Ver comprobante
-              </Button>
-              <Button
-                type="button"
-                variant={printAvailable ? "outline" : "default"}
                 onClick={onContinue}
                 className="w-full"
               >

@@ -85,7 +85,6 @@ describe.skipIf(!reachable)(
         ],
         initialRentAmount: 2800,
         depositAmount: 0,
-        extras: [],
       });
 
       const rentalToReturn = await createRental({
@@ -93,7 +92,6 @@ describe.skipIf(!reachable)(
         items: [{ itemType: "tank", quantity: 5 }],
         initialRentAmount: 1500,
         depositAmount: 0,
-        extras: [],
       });
       await returnRental({
         rentalId: rentalToReturn.rental.id,

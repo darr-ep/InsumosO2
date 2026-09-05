@@ -43,7 +43,6 @@ describe("createRental (CU4 orchestration)", () => {
       items: [{ itemType: "concentrator", quantity: 1 }],
       initialRentAmount: 2800,
       depositAmount: 1000,
-      extras: [],
     });
 
     expect(collection).toHaveBeenNthCalledWith(1, "rentals");
@@ -51,7 +50,6 @@ describe("createRental (CU4 orchestration)", () => {
       customer_id: "cust1",
       initial_rent_amount: 2800,
       deposit_amount: 1000,
-      extras: [],
     });
 
     expect(collection).toHaveBeenNthCalledWith(2, "rental_items");
@@ -90,7 +88,6 @@ describe("createRental (CU4 orchestration)", () => {
       ],
       initialRentAmount: 2800,
       depositAmount: 12000,
-      extras: [],
     });
 
     const itemCreateCalls = create.mock.calls.slice(1, 3);
@@ -113,7 +110,6 @@ describe("createRental (CU4 orchestration)", () => {
       ],
       initialRentAmount: 2800,
       depositAmount: 12000,
-      extras: [],
     }).catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(RentalPartiallyCreatedError);
@@ -135,7 +131,6 @@ describe("createRental (CU4 orchestration)", () => {
       items: [{ itemType: "concentrator", quantity: 1 }],
       initialRentAmount: 2800,
       depositAmount: 12000,
-      extras: [],
     }).catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(RentalPartiallyCreatedError);
@@ -155,8 +150,7 @@ describe("createRental (CU4 orchestration)", () => {
         items: [{ itemType: "concentrator", quantity: 1 }],
         initialRentAmount: 2800,
         depositAmount: 1000,
-        extras: [],
-      }),
+        }),
     ).rejects.toBe(rejection);
   });
 
@@ -168,7 +162,6 @@ describe("createRental (CU4 orchestration)", () => {
       items: [],
       initialRentAmount: 500,
       depositAmount: 0,
-      extras: [],
     });
 
     const rentalPayload = create.mock.calls[0][0];
@@ -184,7 +177,6 @@ describe("createRental (CU4 orchestration)", () => {
       items: [],
       initialRentAmount: 500,
       depositAmount: 0,
-      extras: [],
     });
 
     expect(collection).not.toHaveBeenCalledWith("payments");

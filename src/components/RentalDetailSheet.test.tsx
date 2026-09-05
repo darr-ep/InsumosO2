@@ -210,6 +210,44 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
     ).toBeInTheDocument();
   });
 
+  it("lets reprinting a Mensualidad (rent) payment's own receipt from its history row (post-launch: every row is reprintable, not just Depósito inicial)", async () => {
+    getRental.mockResolvedValue(activeRental);
+    listItemsForRental.mockResolvedValue([
+      { id: "i1", item_type: "concentrator", quantity: 1 },
+    ]);
+    listPaymentsForRental.mockResolvedValue([
+      {
+        id: "p2",
+        amount: 2300,
+        payment_type: "rent",
+        created: "2026-09-10T10:00:00.000Z",
+        note: "",
+        expand: { created_by: { name: "Juan" } },
+      },
+      {
+        id: "p1",
+        amount: 1000,
+        payment_type: "deposit",
+        created: "2026-08-01T10:00:00.000Z",
+        note: "",
+        expand: { created_by: { name: "Juan" } },
+      },
+    ]);
+    const user = userEvent.setup();
+
+    renderSheet();
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Reimprimir comprobante de mensualidad",
+      }),
+    );
+
+    expect(
+      await screen.findByText(`Comprobante de pago ${activeRental.folio}`),
+    ).toBeInTheDocument();
+  });
+
   it("shows 'Registrar pago' and 'Devolver' as always-visible buttons (never a menu) while ACTIVE", async () => {
     getRental.mockResolvedValue(activeRental);
     listItemsForRental.mockResolvedValue([]);
@@ -285,42 +323,6 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
       screen.queryByRole("heading", {
         name: "Comprobante de devolución R-000001",
       }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("opens the full comprobante from the short confirmation's 'Ver comprobante' (Redesign Round 3, punto 5)", async () => {
-    getRental.mockResolvedValue(activeRental);
-    listItemsForRental.mockResolvedValue([]);
-    listPaymentsForRental.mockResolvedValue([]);
-    returnRental.mockResolvedValue({
-      id: "r1",
-      returned_at: "2026-08-26T12:00:00.000Z",
-    });
-    const user = userEvent.setup();
-
-    renderSheet();
-
-    await user.click(
-      await screen.findByRole("button", { name: "Devolver" }),
-    );
-    await user.click(
-      screen.getByRole("button", { name: "Confirmar devolución" }),
-    );
-    await screen.findByRole("heading", { name: "Devolución registrada ✓" });
-
-    await user.click(
-      screen.getByRole("button", { name: "Ver comprobante" }),
-    );
-
-    expect(
-      await screen.findByRole("heading", {
-        name: "Comprobante de devolución R-000001",
-      }),
-    ).toBeInTheDocument();
-    // Redesign Round 3 fix: "Ver comprobante" must close the short
-    // confirmation, not leave it open underneath the full receipt.
-    expect(
-      screen.queryByRole("heading", { name: "Devolución registrada ✓" }),
     ).not.toBeInTheDocument();
   });
 

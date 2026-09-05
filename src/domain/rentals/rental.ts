@@ -2,9 +2,9 @@ import { z } from "zod";
 
 /**
  * SDD.md §20 (validaciones — renta, capa Zod) + §7.1 (flujo Nueva renta) +
- * §16.7 (orden de campos) + §11.2 (extras). Pure rules for the "Nueva
- * renta" form (task 1.8) — folio/status are never part of this schema,
- * they're always server-set (§11.1, §19.1, task 1.2).
+ * §16.7 (orden de campos). Pure rules for the "Nueva renta" form (task
+ * 1.8) — folio/status are never part of this schema, they're always
+ * server-set (§11.1, §19.1, task 1.2).
  */
 
 export const RENTAL_ITEM_TYPES = ["concentrator", "tank"] as const;
@@ -38,23 +38,24 @@ export const rentalItemSchema = z.object({
 
 export type RentalItemFormValues = z.infer<typeof rentalItemSchema>;
 
-export const rentalExtraSchema = z.object({
-  description: z.string().trim().min(1, "Describe el concepto."),
-  price: z.number().min(0, "El precio no puede ser negativo."),
-});
-
-export type RentalExtraFormValues = z.infer<typeof rentalExtraSchema>;
-
 export const rentalFormSchema = z.object({
   customer_id: z.string().min(1, "Selecciona o crea un cliente."),
   items: z
     .array(rentalItemSchema)
     .min(1, "Selecciona al menos un producto."),
+  // PocketBase's `initial_rent_amount` field is `required: true`
+  // (pb_migrations/1787760020_rentals_collection.js) — for a `number` field
+  // that means "must be non-zero", not just "must be present" (PocketBase
+  // can't otherwise tell a numeric zero-value apart from "not sent"; the
+  // server rejects 0 with "Cannot be blank." even though it's a valid,
+  // present number). Confirmed live against a local instance: `min(0)` here
+  // let $0 through client-side, then the server bounced it as a generic
+  // "Failed to create record." with no field surfaced to the UI. `.gt(0)`
+  // matches the real server contract.
   initial_rent_amount: z
     .number()
-    .min(0, "La renta inicial no puede ser negativa."),
+    .gt(0, "La renta inicial debe ser mayor a 0."),
   deposit_amount: z.number().min(0, "El depósito no puede ser negativo."),
-  extras: z.array(rentalExtraSchema),
 });
 
 export type RentalFormValues = z.infer<typeof rentalFormSchema>;
@@ -64,7 +65,6 @@ export const emptyRentalFormValues: RentalFormValues = {
   items: [],
   initial_rent_amount: 0,
   deposit_amount: 0,
-  extras: [],
 };
 
 /**

@@ -1,5 +1,6 @@
 import type { ReceiptData } from "@/domain/rentals/receipt";
 import { rentalItemTypeLabel } from "@/domain/rentals/rental";
+import { paymentTypeLabel } from "@/domain/payments/payment";
 import { packRaster, type DitheredImage } from "@/printing/imageEscpos";
 
 const ESC = 0x1b;
@@ -152,7 +153,9 @@ export function buildStructuredTicket(
   const title =
     receipt.kind === "return"
       ? "COMPROBANTE DE DEVOLUCIÓN"
-      : "COMPROBANTE DE RENTA";
+      : receipt.kind === "payment"
+        ? "COMPROBANTE DE PAGO"
+        : "COMPROBANTE DE RENTA";
   parts.push(latin1Bytes(title + "\n"));
   parts.push(latin1Bytes(`Folio: ${receipt.folio}\n`));
   const targetDate =
@@ -216,6 +219,28 @@ export function buildStructuredTicket(
       ),
     );
     parts.push(BOLD_OFF);
+  } else if (receipt.kind === "payment") {
+    parts.push(BOLD_ON);
+    parts.push(
+      latin1Bytes(
+        formatRow(
+          `${paymentTypeLabel(receipt.paymentType)}:`,
+          currencyFormatter.format(receipt.amount),
+        ) + "\n",
+      ),
+    );
+    parts.push(BOLD_OFF);
+    if (receipt.note) {
+      // Plain text, NOT `formatRow` — that helper is for two-column
+      // label:value rows and truncates the LEFT side once the combined
+      // length passes the line width. A short "Nota:" label paired with
+      // free-text notes (which can easily run the full line width) truncated
+      // the label itself down to a single stray letter instead of shortening
+      // the note — confirmed live via a test with a 32-char note. A note has
+      // no fixed-width "value" side to align against, so it isn't a
+      // `formatRow` row at all.
+      parts.push(latin1Bytes(`Nota: ${receipt.note}\n`));
+    }
   } else {
     for (const item of receipt.items) {
       parts.push(
@@ -245,14 +270,6 @@ export function buildStructuredTicket(
       ),
     );
     parts.push(BOLD_OFF);
-    for (const extra of receipt.extras) {
-      parts.push(
-        latin1Bytes(
-          formatRow(extra.description, currencyFormatter.format(extra.price)) +
-            "\n",
-        ),
-      );
-    }
   }
 
   // 6. Totals
@@ -265,6 +282,12 @@ export function buildStructuredTicket(
           "TOTAL COBRADO:",
           currencyFormatter.format(receipt.amountCollected),
         ) + "\n",
+      ),
+    );
+  } else if (receipt.kind === "payment") {
+    parts.push(
+      latin1Bytes(
+        formatRow("TOTAL:", currencyFormatter.format(receipt.amount)) + "\n",
       ),
     );
   } else {
@@ -283,6 +306,8 @@ export function buildStructuredTicket(
   if (receipt.kind === "return") {
     parts.push(latin1Bytes("¡Gracias por su preferencia!\n"));
     parts.push(latin1Bytes("Equipo entregado y cerrado.\n"));
+  } else if (receipt.kind === "payment") {
+    parts.push(latin1Bytes("¡Gracias por su pago!\n"));
   } else {
     parts.push(latin1Bytes("* Conserve este comprobante *\n"));
     parts.push(latin1Bytes("Indispensable para devolución\n"));

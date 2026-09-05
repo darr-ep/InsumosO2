@@ -31,7 +31,9 @@ import {
   totalPaid,
 } from "@/domain/payments/payment";
 import {
+  buildPaymentReceipt,
   buildRentalReceipt,
+  type PaymentReceiptData,
   type ReturnReceiptData,
 } from "@/domain/rentals/receipt";
 import { formatCurrencyMXN } from "@/lib/currency";
@@ -62,8 +64,9 @@ const PAYMENT_TYPE_ICONS: Record<PaymentType, typeof PiggyBank> = {
  * explícitamente como sugerencia, nunca como un monto obligatorio.
  *
  * Redesign Round 3, punto 5: devolver ya no abre el comprobante completo de
- * inmediato — muestra `ReturnCreatedSummary` (confirmación breve) primero;
- * el comprobante completo sigue disponible vía "Ver comprobante".
+ * inmediato — muestra `ReturnCreatedSummary` (confirmación breve) primero,
+ * con sus propias acciones de imprimir/compartir inline (post-launch
+ * polish — ya no hay un "Ver comprobante" separado, ver ese componente).
  */
 
 export interface RentalDetailSheetProps {
@@ -94,17 +97,21 @@ export function RentalDetailSheet({
   const [returnReceipt, setReturnReceipt] = useState<ReturnReceiptData | null>(
     null,
   );
-  const [receiptOpen, setReceiptOpen] = useState(false);
 
   // Redesign — UX/UI pass: per-row reprint on the "Depósito inicial" history
   // entry — reuses the exact receipt this rental was created with
   // (`buildRentalReceipt`), reconstructed from data already in this sheet's
-  // own state (no new fetch). "Mensualidad"/"Ajuste" rows don't get a
-  // reprint action here: `domain/rentals/receipt.ts` has no receipt
-  // template for a standalone rent/adjustment payment (only "create" and
-  // "return") — building one is a separate, bigger feature (new receipt
-  // kind + ESC/POS layout + tests), out of scope for this pass.
+  // own state (no new fetch).
   const [creationReceiptOpen, setCreationReceiptOpen] = useState(false);
+
+  // Post-launch polish: every OTHER payment-history row ("Mensualidad"/
+  // "Ajuste") is reprintable too now, not just "Depósito inicial" — via the
+  // new `"payment"` receipt kind (`domain/rentals/receipt.ts`). One shared
+  // dialog + one selected-payment slot, since only one row's reprint can be
+  // open at a time.
+  const [paymentReceiptOpen, setPaymentReceiptOpen] = useState(false);
+  const [selectedPaymentReceipt, setSelectedPaymentReceipt] =
+    useState<PaymentReceiptData | null>(null);
 
   // Pure fetch, no setState inside — kept separate from the effect/reload
   // callers below on purpose. `react-hooks/set-state-in-effect` flags any
@@ -291,16 +298,36 @@ export function RentalDetailSheet({
                               </p>
                             )}
                           </div>
-                          {payment.payment_type === "deposit" && (
-                            <button
-                              type="button"
-                              aria-label="Reimprimir comprobante de depósito inicial"
-                              onClick={() => setCreationReceiptOpen(true)}
-                              className="text-muted-foreground hover:text-foreground shrink-0 p-1"
-                            >
-                              <Printer aria-hidden="true" className="size-4" />
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            aria-label={`Reimprimir comprobante de ${paymentTypeLabel(payment.payment_type).toLowerCase()}`}
+                            onClick={() => {
+                              if (payment.payment_type === "deposit") {
+                                setCreationReceiptOpen(true);
+                                return;
+                              }
+
+                              setSelectedPaymentReceipt(
+                                buildPaymentReceipt({
+                                  businessName: import.meta.env.VITE_BUSINESS_NAME,
+                                  businessPhone: import.meta.env.VITE_BUSINESS_PHONE,
+                                  folio: rental?.folio ?? "",
+                                  customerName:
+                                    rental?.expand?.customer_id?.name ?? "",
+                                  customerPhone:
+                                    rental?.expand?.customer_id?.phone ?? "",
+                                  paymentType: payment.payment_type,
+                                  amount: payment.amount,
+                                  date: new Date(payment.created),
+                                  note: payment.note || undefined,
+                                }),
+                              );
+                              setPaymentReceiptOpen(true);
+                            }}
+                            className="text-muted-foreground hover:text-foreground shrink-0 p-1"
+                          >
+                            <Printer aria-hidden="true" className="size-4" />
+                          </button>
                         </li>
                       );
                     })}
@@ -338,6 +365,7 @@ export function RentalDetailSheet({
           onOpenChange={setPaymentDialogOpen}
           rentalId={rental.id}
           suggestedAmount={suggestedAmount}
+          initialRentAmount={rental.initial_rent_amount}
           hasPreviousRentPayment={!!lastRentPayment}
           onRegistered={() => {
             setPaymentDialogOpen(false);
@@ -364,6 +392,10 @@ export function RentalDetailSheet({
           startedAt={new Date(rental.created)}
           depositAmount={rental.deposit_amount}
           suggestedAmount={suggestedAmount}
+          initialRentAmount={rental.initial_rent_amount}
+          totalRentPaid={payments
+            .filter((payment) => payment.payment_type === "rent")
+            .reduce((sum, payment) => sum + payment.amount, 0)}
           hasPreviousRentPayment={!!lastRentPayment}
           onReturned={(receipt) => {
             setReturnReceipt(receipt);
@@ -378,21 +410,11 @@ export function RentalDetailSheet({
         open={returnSummaryOpen}
         onOpenChange={setReturnSummaryOpen}
         receipt={returnReceipt}
-        onViewReceipt={() => {
-          setReturnSummaryOpen(false);
-          setReceiptOpen(true);
-        }}
         onGoHome={() => {
           setReturnSummaryOpen(false);
           onOpenChange(false);
           navigate("/dashboard");
         }}
-      />
-
-      <ReceiptDialog
-        open={receiptOpen}
-        onOpenChange={setReceiptOpen}
-        receipt={returnReceipt}
       />
 
       {rental && (
@@ -412,11 +434,17 @@ export function RentalDetailSheet({
             })),
             initialRentAmount: rental.initial_rent_amount,
             depositAmount: rental.deposit_amount,
-            extras: rental.extras ?? [],
           })}
           autoPrint={false}
         />
       )}
+
+      <ReceiptDialog
+        open={paymentReceiptOpen}
+        onOpenChange={setPaymentReceiptOpen}
+        receipt={selectedPaymentReceipt}
+        autoPrint={false}
+      />
     </>
   );
 }

@@ -8,6 +8,7 @@ import {
 import { PrintShareBar } from "@/components/PrintShareBar";
 import { rentalItemTypeLabel } from "@/domain/rentals/rental";
 import type { ReceiptData } from "@/domain/rentals/receipt";
+import { paymentTypeLabel } from "@/domain/payments/payment";
 import { useReceiptActions } from "@/printing/useReceiptActions";
 
 /**
@@ -83,7 +84,9 @@ export function ReceiptDialog({
               <DialogTitle>
                 {receipt.kind === "return"
                   ? `Comprobante de devolución ${receipt.folio}`
-                  : `Comprobante ${receipt.folio}`}
+                  : receipt.kind === "payment"
+                    ? `Comprobante de pago ${receipt.folio}`
+                    : `Comprobante ${receipt.folio}`}
               </DialogTitle>
               <DialogDescription>
                 {receipt.businessName} · {receipt.businessPhone}
@@ -121,6 +124,31 @@ export function ReceiptDialog({
                   <dd>{currencyFormatter.format(receipt.depositReturned)}</dd>
                 </div>
               </dl>
+            ) : receipt.kind === "payment" ? (
+              <dl className="flex flex-col gap-2 text-sm">
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Cliente</dt>
+                  <dd>{receipt.customerName}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Teléfono</dt>
+                  <dd>{receipt.customerPhone}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Fecha</dt>
+                  <dd>{receipt.date.toLocaleDateString("es-MX")}</dd>
+                </div>
+                <div className="flex justify-between font-semibold">
+                  <dt>{paymentTypeLabel(receipt.paymentType)}</dt>
+                  <dd>{currencyFormatter.format(receipt.amount)}</dd>
+                </div>
+                {receipt.note && (
+                  <div className="flex justify-between">
+                    <dt className="text-muted-foreground">Nota</dt>
+                    <dd className="text-right">{receipt.note}</dd>
+                  </div>
+                )}
+              </dl>
             ) : (
               <dl className="flex flex-col gap-2 text-sm">
                 <div className="flex justify-between">
@@ -151,14 +179,6 @@ export function ReceiptDialog({
                   <dt className="text-muted-foreground">Depósito</dt>
                   <dd>{currencyFormatter.format(receipt.depositAmount)}</dd>
                 </div>
-                {receipt.extras.map((extra) => (
-                  <div className="flex justify-between" key={extra.description}>
-                    <dt className="text-muted-foreground">
-                      {extra.description}
-                    </dt>
-                    <dd>{currencyFormatter.format(extra.price)}</dd>
-                  </div>
-                ))}
                 <div className="flex justify-between font-semibold">
                   <dt>Total</dt>
                   <dd>{currencyFormatter.format(receipt.total)}</dd>

@@ -1,24 +1,22 @@
 import { daysSince } from "@/domain/rentals/dashboard";
 import { rentalItemTypeLabel } from "@/domain/rentals/rental";
 import type { RentalItemType } from "@/domain/rentals/rental";
+import { paymentTypeLabel } from "@/domain/payments/payment";
 
 /**
  * SDD.md §22 (generación de comprobantes — contenido de renta y de
  * devolución). Pure assembly of the receipt content — no rendering, no
  * I/O. `ReceiptDialog` (task 1.9, extended task 3.2) is the only consumer
- * that turns this into HTML — reused as-is for both "Nueva renta" and
- * "Devolver" (§16.6: "Comprobante — sobre Nueva renta... y sobre el modal
- * de Devolver"), discriminated by `kind`.
+ * that turns this into HTML — reused as-is for "Nueva renta", "Devolver"
+ * (§16.6: "Comprobante — sobre Nueva renta... y sobre el modal de
+ * Devolver"), and reprinting a single payment-history row
+ * (`RentalDetailSheet`, post-launch polish — every row is reprintable now,
+ * not just the initial deposit), discriminated by `kind`.
  */
 
 export interface ReceiptItemLine {
   itemType: RentalItemType;
   quantity: number;
-}
-
-export interface ReceiptExtraLine {
-  description: string;
-  price: number;
 }
 
 export interface RentalReceiptData {
@@ -32,7 +30,6 @@ export interface RentalReceiptData {
   items: ReceiptItemLine[];
   initialRentAmount: number;
   depositAmount: number;
-  extras: ReceiptExtraLine[];
   total: number;
 }
 
@@ -46,22 +43,16 @@ export interface BuildRentalReceiptInput {
   items: ReceiptItemLine[];
   initialRentAmount: number;
   depositAmount: number;
-  extras: ReceiptExtraLine[];
 }
 
-// §22: "Renta inicial, depósito, Otros (si aplica), total".
+// §22: "Renta inicial, depósito, total".
 export function buildRentalReceipt(
   input: BuildRentalReceiptInput,
 ): RentalReceiptData {
-  const extrasTotal = input.extras.reduce(
-    (sum, extra) => sum + extra.price,
-    0,
-  );
-
   return {
     kind: "create",
     ...input,
-    total: input.initialRentAmount + input.depositAmount + extrasTotal,
+    total: input.initialRentAmount + input.depositAmount,
   };
 }
 
@@ -103,9 +94,50 @@ export function buildReturnReceipt(
   };
 }
 
+// Reprint of a single payment-history row (RentalDetailSheet) — every row
+// (deposit/rent/adjustment) is reprintable, not just "Depósito inicial".
+// A much smaller receipt than `create`/`return`: one payment, not the whole
+// rental's state.
+export interface PaymentReceiptData {
+  kind: "payment";
+  businessName: string;
+  businessPhone: string;
+  folio: string;
+  customerName: string;
+  customerPhone: string;
+  paymentType: "rent" | "deposit" | "adjustment";
+  amount: number;
+  date: Date;
+  note?: string;
+}
+
+export interface BuildPaymentReceiptInput {
+  businessName: string;
+  businessPhone: string;
+  folio: string;
+  customerName: string;
+  customerPhone: string;
+  paymentType: "rent" | "deposit" | "adjustment";
+  amount: number;
+  date: Date;
+  note?: string;
+}
+
+export function buildPaymentReceipt(
+  input: BuildPaymentReceiptInput,
+): PaymentReceiptData {
+  return {
+    kind: "payment",
+    ...input,
+  };
+}
+
 // Discriminated union: `ReceiptDialog` (task 1.9/3.2) is one shared modal
-// for both flows, per §16.6.
-export type ReceiptData = RentalReceiptData | ReturnReceiptData;
+// for every kind of comprobante, per §16.6.
+export type ReceiptData =
+  | RentalReceiptData
+  | ReturnReceiptData
+  | PaymentReceiptData;
 
 const currencyFormatter = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -122,6 +154,17 @@ const currencyFormatter = new Intl.NumberFormat("es-MX", {
  * which printer backend renders it.
  */
 export function formatReceiptLines(receipt: ReceiptData): string[] {
+  if (receipt.kind === "payment") {
+    return [
+      `${receipt.businessName} · ${receipt.businessPhone}`,
+      `Folio: ${receipt.folio}`,
+      `Cliente: ${receipt.customerName} (${receipt.customerPhone})`,
+      `${paymentTypeLabel(receipt.paymentType)}: ${currencyFormatter.format(receipt.amount)}`,
+      `Fecha: ${receipt.date.toLocaleDateString("es-MX")}`,
+      ...(receipt.note ? [`Nota: ${receipt.note}`] : []),
+    ];
+  }
+
   if (receipt.kind === "return") {
     return [
       `${receipt.businessName} · ${receipt.businessPhone}`,
@@ -142,9 +185,6 @@ export function formatReceiptLines(receipt: ReceiptData): string[] {
     ),
     `Renta inicial: ${currencyFormatter.format(receipt.initialRentAmount)}`,
     `Depósito: ${currencyFormatter.format(receipt.depositAmount)}`,
-    ...receipt.extras.map(
-      (extra) => `${extra.description}: ${currencyFormatter.format(extra.price)}`,
-    ),
     `Total: ${currencyFormatter.format(receipt.total)}`,
   ];
 }

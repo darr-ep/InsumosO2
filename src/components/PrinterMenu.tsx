@@ -82,7 +82,6 @@ export function PrinterMenu() {
         items: [{ itemType: "concentrator", quantity: 1 }],
         initialRentAmount: 100,
         depositAmount: 0,
-        extras: [],
         total: 100,
       };
       await webBluetoothPrinter.print(testReceipt);
@@ -111,12 +110,12 @@ export function PrinterMenu() {
                 ? "Conectando impresora…"
                 : "Impresora desconectada"
           }
-          className="relative"
+          className="relative rounded-full"
         >
           {isConnecting ? (
-            <RefreshCw aria-hidden="true" className="!size-[22px] animate-spin" />
+            <RefreshCw aria-hidden="true" className="!size-[24px] animate-spin" />
           ) : (
-            <Printer aria-hidden="true" className="!size-[22px]" />
+            <Printer aria-hidden="true" className="!size-[24px]" />
           )}
           <span
             className={

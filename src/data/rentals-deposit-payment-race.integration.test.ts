@@ -89,7 +89,6 @@ describe.skipIf(!reachable)(
         ],
         initialRentAmount: 2800,
         depositAmount: 12000,
-        extras: [],
       });
 
       expect(result.rental.folio).toMatch(/^R-\d{3,}$/);
@@ -131,7 +130,6 @@ describe.skipIf(!reachable)(
         ],
         initialRentAmount: 2800,
         depositAmount: 5000,
-        extras: [],
       });
 
       expect(result.items).toHaveLength(3);

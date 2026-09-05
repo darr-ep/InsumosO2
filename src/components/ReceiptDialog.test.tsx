@@ -43,8 +43,7 @@ const receipt: RentalReceiptData = {
   items: [{ itemType: "concentrator", quantity: 1 }],
   initialRentAmount: 2800,
   depositAmount: 1000,
-  extras: [{ description: "2 cubrebocas KF94", price: 50 }],
-  total: 3850,
+  total: 3800,
 };
 
 const returnReceipt: ReturnReceiptData = {
@@ -87,7 +86,7 @@ describe("ReceiptDialog (§22)", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("shows folio, customer, items, extras and the computed total", () => {
+  it("shows folio, customer, items and the computed total", () => {
     vi.stubGlobal("navigator", { share: vi.fn() });
     render(
       <ReceiptDialog open onOpenChange={vi.fn()} receipt={receipt} />,
@@ -98,8 +97,7 @@ describe("ReceiptDialog (§22)", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Juan Pérez")).toBeInTheDocument();
     expect(screen.getByText("Concentrador")).toBeInTheDocument();
-    expect(screen.getByText("2 cubrebocas KF94")).toBeInTheDocument();
-    expect(screen.getByText("$3,850.00")).toBeInTheDocument();
+    expect(screen.getByText("$3,800.00")).toBeInTheDocument();
   });
 
   it("renders the business logo at the top of the receipt (§22 — nombre del negocio + logo + teléfono)", () => {
@@ -278,8 +276,10 @@ describe("ReceiptDialog Bluetooth printing (§23.2/§23.3/§23.4, CU8, task 5.4)
         "La renta se guardó correctamente, pero no se pudo imprimir el comprobante.",
       ),
     ).toBeInTheDocument();
+    // Failed print still just reads "Imprimir" — no separate "reintentar"
+    // wording (post-launch polish, normalized with RentalCreatedSummary).
     expect(
-      screen.getByRole("button", { name: "Reintentar impresión" }),
+      screen.getByRole("button", { name: "Imprimir" }),
     ).toBeInTheDocument();
     expect(onOpenChange).not.toHaveBeenCalled();
   });
@@ -299,9 +299,7 @@ describe("ReceiptDialog Bluetooth printing (§23.2/§23.3/§23.4, CU8, task 5.4)
       "La renta se guardó correctamente, pero no se pudo imprimir el comprobante.",
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "Reintentar impresión" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Imprimir" }));
 
     expect(await screen.findByText("Comprobante impreso.")).toBeInTheDocument();
   });
