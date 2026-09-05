@@ -290,6 +290,8 @@ describe("App", () => {
       // field: a no-results search offers "Crear cliente nuevo", which opens
       // the form pre-filled with the typed name. The customer is only
       // actually created (and this failure surfaces) at "Confirmar renta".
+      // design-fidelity D1: "Nueva renta" is now a 3-step wizard — step 1
+      // (Cliente) → step 2 (Qué se renta + montos) → step 3 (Confirmar).
       searchCustomers.mockResolvedValue([]);
       await user.type(
         screen.getByLabelText("Buscar cliente por nombre o teléfono"),
@@ -299,6 +301,10 @@ describe("App", () => {
         await screen.findByRole("button", { name: /Crear cliente nuevo/ }),
       );
       await user.type(screen.getByLabelText("Teléfono"), "5512345678");
+      await user.click(screen.getByRole("button", { name: "Continuar" }));
+      await user.click(screen.getByLabelText("Agregar un concentrador"));
+      await user.type(screen.getByLabelText("Renta"), "2800");
+      await user.click(screen.getByRole("button", { name: "Continuar" }));
       await user.click(screen.getByRole("button", { name: "Confirmar renta" }));
 
       // Redirected to /login, not left on a confusing generic error.
@@ -320,6 +326,7 @@ describe("App", () => {
 
       await screen.findByRole("heading", { name: "Nueva renta" });
 
+      // design-fidelity D1: "Nueva renta" is now a 3-step wizard.
       searchCustomers.mockResolvedValue([]);
       await user.type(
         screen.getByLabelText("Buscar cliente por nombre o teléfono"),
@@ -329,6 +336,10 @@ describe("App", () => {
         await screen.findByRole("button", { name: /Crear cliente nuevo/ }),
       );
       await user.type(screen.getByLabelText("Teléfono"), "5512345678");
+      await user.click(screen.getByRole("button", { name: "Continuar" }));
+      await user.click(screen.getByLabelText("Agregar un concentrador"));
+      await user.type(screen.getByLabelText("Renta"), "2800");
+      await user.click(screen.getByRole("button", { name: "Continuar" }));
       await user.click(screen.getByRole("button", { name: "Confirmar renta" }));
 
       expect(

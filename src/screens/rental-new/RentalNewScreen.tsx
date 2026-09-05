@@ -20,26 +20,61 @@ import { createCustomer, type CustomerRecord } from "@/data/customers.repo";
 import { createRental, RentalPartiallyCreatedError } from "@/data/rentals.repo";
 import { handleIfStaleSession } from "@/data/staleSession";
 import { customerFormSchema } from "@/domain/customers/customer";
-import { rentalFormSchema } from "@/domain/rentals/rental";
+import { rentalFormSchema, rentalItemTypeLabel } from "@/domain/rentals/rental";
+import {
+  validateCustomerStep,
+  validateItemsStep,
+} from "@/domain/rentals/rentalWizard";
 import {
   buildRentalReceipt,
   type RentalReceiptData,
 } from "@/domain/rentals/receipt";
 import { formatCurrencyMXN } from "@/lib/currency";
+import { cn } from "@/lib/utils";
 
 /**
- * SDD.md §7.1 (flujo Nueva renta) + §16.7 (orden de campos, pantalla
- * única sin wizard) + §18 (confirmar → modal Comprobante → Dashboard) +
- * CU4. `folio`/`status` are never part of this screen's state — the
- * server (task 1.1/1.2) is the only source of truth for those. §16.6:
- * "Ficha de cliente — abierta desde... el buscador de cliente en Nueva
- * renta" — wired here (task 3.5) via `CustomerPicker`'s `onViewCustomer`.
+ * SDD.md §7.1 (flujo Nueva renta) + §16.7 (orden de campos) + §18 (confirmar
+ * → modal Comprobante → Dashboard) + CU4. `folio`/`status` are never part of
+ * this screen's state — the server (task 1.1/1.2) is the only source of
+ * truth for those. §16.6: "Ficha de cliente — abierta desde... el buscador
+ * de cliente en Nueva renta" — wired here (task 3.5) via `CustomerPicker`'s
+ * `onViewCustomer`.
  *
  * Redesign Round 2, Batch 1 (Header Pattern, business-owner brief,
  * verbatim): "En pantallas secundarias: flecha ← + título en el navbar."
  * Replaced the inline `<h1>Nueva renta</h1>` with `AppHeader`'s secondary
  * variant (`showBack`).
+ *
+ * design-fidelity D1 (obs #2224's "D1. Nueva renta wizard"): this screen was
+ * originally a single scrollable page; it is now a 3-step wizard (Cliente →
+ * Qué se renta + montos → Confirmar). §16.7's original field order and
+ * §7.1's flow are unchanged — this only regroups the same fields/controls
+ * into gated steps. All three step panels stay MOUNTED, toggled with the
+ * HTML `hidden` attribute — never conditional rendering — so `CustomerPicker`
+ * never unmounts (preserves its typed search query, the "Cliente nuevo"
+ * branch, and `CustomerForm`'s captured-photo preview across back/forward
+ * navigation). Per-step gating (`validateCustomerStep`/`validateItemsStep`,
+ * `@/domain/rentals/rentalWizard.ts`) reuses the exact same schemas
+ * `handleConfirm` below already validates against — `handleConfirm`'s own
+ * body is intentionally UNCHANGED by this slice: `createCustomer`/
+ * `createRental` are still called from this one function only, invoked from
+ * exactly one button (step 3's "Confirmar renta"). Step navigation itself
+ * (`goBack`/`goToStep2`/`goToStep3` below) calls `setStep` and nothing
+ * else — no other setter, no `resetForm()`, no side effect runs as a
+ * consequence of a step transition.
+ *
+ * The exit-guard (`useBlocker` + the shared `ConfirmDialog`, call site #7)
+ * is a separate, later slice (D1.5-D1.7) — not implemented here. The header
+ * arrow's `showBack` behavior is therefore unchanged for now.
  */
+
+type WizardStep = 1 | 2 | 3;
+
+const STEP_BREADCRUMBS: Record<WizardStep, string> = {
+  1: "Paso 1 de 3 · Cliente",
+  2: "Paso 2 de 3 · Qué se renta",
+  3: "Paso 3 de 3 · Confirmar",
+};
 
 export function RentalNewScreen() {
   const navigate = useNavigate();
@@ -62,12 +97,20 @@ export function RentalNewScreen() {
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [receipt, setReceipt] = useState<RentalReceiptData | null>(null);
 
+  // design-fidelity D1.2 — the only two new pieces of state this slice adds.
+  const [step, setStep] = useState<WizardStep>(1);
+  // Mirrored, display-only — `CustomerPicker` owns the real `creatingNew`
+  // state and reports it here via `onCreatingChange` (D1.3). Feeds only the
+  // "Paso 1 · Cliente · Nuevo" breadcrumb below; never controls the picker.
+  const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
+
   function resetForm() {
     setSelectedCustomer(null);
     setPendingNewCustomer(null);
     setItemQuantities(emptyItemQuantities);
     setInitialRentAmount("");
     setDepositAmount("");
+    setStep(1);
   }
 
   async function handleConfirm() {
@@ -245,111 +288,255 @@ export function RentalNewScreen() {
   // Redesign — UX/UI pass: "Total a cobrar" (business-owner request, same
   // principle as ReturnDialog's "Total a entregar") — Renta + Depósito,
   // live. No fixed/autofilled prices (rejected — prices genuinely vary) —
-  // this only sums whatever the user already typed.
+  // this only sums whatever the user already typed. design-fidelity D1: now
+  // shown in step 3's read-only review, not the footer.
   const totalACobrar =
     Number(initialRentAmount || 0) + Number(depositAmount || 0);
+
+  // design-fidelity D1.2 — per-step gates, reused by both the footer's
+  // "Continuar" `disabled` state and the navigation handlers below.
+  const customerStepValid = validateCustomerStep({
+    selectedCustomer,
+    pendingNewCustomer,
+  });
+  const itemsStepValid = validateItemsStep({
+    itemQuantities,
+    initialRentAmount,
+    depositAmount,
+  });
+
+  // design-fidelity D1.2 invariant: each of these calls `setStep` and
+  // NOTHING else — no other setter, no `resetForm()`, no side effect runs
+  // as a consequence of a step transition. The `if` guards are redundant
+  // defense-in-depth (the calling buttons are already `disabled` when the
+  // gate fails) — they exist so these functions are safe to call from
+  // anywhere, not just from an enabled button.
+  function goBack() {
+    setStep((current) => (current === 3 ? 2 : 1));
+  }
+  function goToStep2() {
+    if (customerStepValid) {
+      setStep(2);
+    }
+  }
+  function goToStep3() {
+    if (itemsStepValid) {
+      setStep(3);
+    }
+  }
+
+  // Step 3's read-only review shows whichever customer will actually be
+  // used at confirm time — a saved selection, or the in-progress draft.
+  const reviewCustomer = selectedCustomer ?? pendingNewCustomer;
+
+  const breadcrumb =
+    step === 1 && isCreatingCustomer
+      ? "Paso 1 de 3 · Cliente · Nuevo"
+      : STEP_BREADCRUMBS[step];
 
   return (
     <div className="mx-auto flex h-dvh w-full max-w-xl flex-col bg-background text-foreground overflow-hidden">
       <AppHeader title="Nueva renta" showBack />
+      <p className="text-muted-foreground px-4 pt-2 text-xs font-medium">
+        {breadcrumb}
+      </p>
 
       <main className="flex flex-1 flex-col overflow-y-auto">
         <div className="flex flex-1 flex-col gap-6 px-4 pt-2 pb-4">
-          <section className="flex flex-col gap-2">
-            <h2 className="text-sm font-semibold text-muted-foreground">
-              Cliente<span className="text-destructive" aria-hidden="true"> *</span>
-            </h2>
-            <CustomerPicker
-              selectedCustomer={selectedCustomer}
-              onSelect={(customer) => {
-                setPendingNewCustomer(null);
-                setSelectedCustomer(customer);
-                setCustomerInvalid(false);
-              }}
-              pendingNewCustomer={pendingNewCustomer}
-              onSelectDraft={(draft) => {
-                setSelectedCustomer(null);
-                setPendingNewCustomer(draft);
-                setCustomerInvalid(false);
-              }}
-              onViewCustomer={() => setCustomerDetailOpen(true)}
-              invalid={customerInvalid}
-              onSearchBlur={() => setCustomerInvalid(true)}
-            />
-            {customerInvalid && (
-              <p className="text-destructive text-sm">
-                Selecciona o crea un cliente.
+          {/* Step 1 — Cliente. Load-bearing (design-fidelity D1): mounted
+              via `hidden`, never conditionally rendered — unmounting
+              `CustomerPicker` would lose its typed search query, the
+              "Cliente nuevo" branch, and `CustomerForm`'s captured-photo
+              preview. */}
+          <div hidden={step !== 1} className="flex flex-col gap-2">
+            <section className="flex flex-col gap-2">
+              <h2 className="text-sm font-semibold text-muted-foreground">
+                Cliente<span className="text-destructive" aria-hidden="true"> *</span>
+              </h2>
+              <CustomerPicker
+                selectedCustomer={selectedCustomer}
+                onSelect={(customer) => {
+                  setPendingNewCustomer(null);
+                  setSelectedCustomer(customer);
+                  setCustomerInvalid(false);
+                }}
+                pendingNewCustomer={pendingNewCustomer}
+                onSelectDraft={(draft) => {
+                  setSelectedCustomer(null);
+                  setPendingNewCustomer(draft);
+                  setCustomerInvalid(false);
+                }}
+                onViewCustomer={() => setCustomerDetailOpen(true)}
+                invalid={customerInvalid}
+                onSearchBlur={() => setCustomerInvalid(true)}
+                onCreatingChange={setIsCreatingCustomer}
+              />
+              {customerInvalid && (
+                <p className="text-destructive text-sm">
+                  Selecciona o crea un cliente.
+                </p>
+              )}
+            </section>
+          </div>
+
+          {/* Step 2 — Qué se renta + montos. */}
+          <div hidden={step !== 2} className="flex flex-col gap-6">
+            <section className="flex flex-col gap-2">
+              <h2 className="text-sm font-semibold text-muted-foreground">
+                Qué se renta<span className="text-destructive" aria-hidden="true"> *</span>
+              </h2>
+              <ItemQuantityPicker
+                value={itemQuantities}
+                onChange={(next) => {
+                  setItemQuantities(next);
+                  if (itemQuantitiesToList(next).length > 0) {
+                    setItemsInvalid(false);
+                  }
+                }}
+                invalid={itemsInvalid}
+              />
+              {itemsInvalid && (
+                <p className="text-destructive text-sm">
+                  Selecciona al menos un producto.
+                </p>
+              )}
+            </section>
+
+            <section className="flex flex-col gap-2">
+              <Label htmlFor="rental-initial-amount">Renta</Label>
+              <CurrencyInput
+                id="rental-initial-amount"
+                value={initialRentAmount}
+                onChange={setInitialRentAmount}
+              />
+            </section>
+
+            <section className="flex flex-col gap-2">
+              <Label htmlFor="rental-deposit-amount">Depósito</Label>
+              <CurrencyInput
+                id="rental-deposit-amount"
+                value={depositAmount}
+                onChange={setDepositAmount}
+              />
+            </section>
+          </div>
+
+          {/* Step 3 — Confirmar (read-only review). By construction this
+              step can only ever fail on a server error, never on
+              client-side validation — steps 1/2 already gated on the exact
+              same schemas (design-fidelity D1). */}
+          <div hidden={step !== 3} className="flex flex-col gap-4">
+            <section className="flex flex-col gap-1 rounded-md border p-3">
+              <h3 className="text-sm font-semibold text-muted-foreground">
+                Cliente
+              </h3>
+              <p className="font-medium">{reviewCustomer?.name}</p>
+              <p className="text-muted-foreground text-sm">
+                {reviewCustomer?.phone}
               </p>
-            )}
-          </section>
+            </section>
 
-          <section className="flex flex-col gap-2">
-            <h2 className="text-sm font-semibold text-muted-foreground">
-              Qué se renta<span className="text-destructive" aria-hidden="true"> *</span>
-            </h2>
-            <ItemQuantityPicker
-              value={itemQuantities}
-              onChange={(next) => {
-                setItemQuantities(next);
-                if (itemQuantitiesToList(next).length > 0) {
-                  setItemsInvalid(false);
-                }
-              }}
-              invalid={itemsInvalid}
-            />
-            {itemsInvalid && (
-              <p className="text-destructive text-sm">
-                Selecciona al menos un producto.
-              </p>
-            )}
-          </section>
+            <section className="flex flex-col gap-1 rounded-md border p-3">
+              <h3 className="text-sm font-semibold text-muted-foreground">
+                Qué se renta
+              </h3>
+              <ul className="flex flex-col gap-1">
+                {itemQuantitiesToList(itemQuantities).map((item) => (
+                  <li
+                    key={item.itemType}
+                    className="flex items-center justify-between"
+                  >
+                    <span>{rentalItemTypeLabel(item.itemType)}</span>
+                    <span className="font-medium">{item.quantity}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
 
-          <section className="flex flex-col gap-2">
-            <Label htmlFor="rental-initial-amount">Renta</Label>
-            <CurrencyInput
-              id="rental-initial-amount"
-              value={initialRentAmount}
-              onChange={setInitialRentAmount}
-            />
-          </section>
-
-          <section className="flex flex-col gap-2">
-            <Label htmlFor="rental-deposit-amount">Depósito</Label>
-            <CurrencyInput
-              id="rental-deposit-amount"
-              value={depositAmount}
-              onChange={setDepositAmount}
-            />
-          </section>
-
+            <section className="flex flex-col gap-1 rounded-md border p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Renta</span>
+                <span>{formatCurrencyMXN(Number(initialRentAmount || 0))}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Depósito</span>
+                <span>{formatCurrencyMXN(Number(depositAmount || 0))}</span>
+              </div>
+              <div className="mt-1 flex items-center justify-between border-t pt-1 text-sm font-semibold">
+                <span>Total a cobrar</span>
+                <span>{formatCurrencyMXN(totalACobrar)}</span>
+              </div>
+            </section>
+          </div>
         </div>
 
-        {/* Business-owner request: the total belongs in the same fixed
-            container as the confirm button (always visible together while
-            scrolling the form), not as the last item of the scrollable
-            content — matches ReturnDialog's "Total a entregar" placement
-            right above its confirm button. This bar now shows real content
-            (not just a floating button), so it gets an opaque background
-            and a top border instead of the transparent/pointer-events-none
-            treatment used where the bar has nothing behind it worth
-            clicking through to. `formError` moved in here too — it needs to
-            stay visible next to the button that caused it, not scroll away
-            at the bottom of a long form. */}
+        {/* Footer: 3-segment progress bar + Atrás (steps 2/3) + Continuar
+            (steps 1/2, disabled until that step's validator passes) /
+            Confirmar renta (step 3) — design-fidelity D1, same sticky
+            container as before (bg-card per Slice A's token audit).
+            `formError` stays here too — visible next to the button that
+            caused it. */}
         <div className="bg-card sticky bottom-0 z-10 mt-auto flex shrink-0 flex-col gap-3 border-t p-4">
-          {formError && <p className="text-destructive text-sm">{formError}</p>}
-          <div className="flex items-center justify-between text-sm font-semibold">
-            <span>Total a cobrar</span>
-            <span>{formatCurrencyMXN(totalACobrar)}</span>
+          <div className="flex gap-1" aria-hidden="true">
+            {([1, 2, 3] as const).map((segment) => (
+              <div
+                key={segment}
+                className={cn(
+                  "h-1 flex-1 rounded-full",
+                  segment <= step ? "bg-primary" : "bg-muted",
+                )}
+              />
+            ))}
           </div>
-          <Button
-            type="button"
-            size="lg"
-            disabled={isSubmitting}
-            onClick={() => void handleConfirm()}
-            className="w-full"
-          >
-            {isSubmitting ? "Guardando…" : "Confirmar renta"}
-          </Button>
+
+          {formError && <p className="text-destructive text-sm">{formError}</p>}
+
+          <div className="flex gap-2">
+            {step > 1 && (
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="flex-1"
+                onClick={goBack}
+              >
+                Atrás
+              </Button>
+            )}
+            {step === 1 && (
+              <Button
+                type="button"
+                size="lg"
+                className="flex-1"
+                disabled={!customerStepValid}
+                onClick={goToStep2}
+              >
+                Continuar
+              </Button>
+            )}
+            {step === 2 && (
+              <Button
+                type="button"
+                size="lg"
+                className="flex-1"
+                disabled={!itemsStepValid}
+                onClick={goToStep3}
+              >
+                Continuar
+              </Button>
+            )}
+            {step === 3 && (
+              <Button
+                type="button"
+                size="lg"
+                className="flex-1"
+                disabled={isSubmitting}
+                onClick={() => void handleConfirm()}
+              >
+                {isSubmitting ? "Guardando…" : "Confirmar renta"}
+              </Button>
+            )}
+          </div>
         </div>
       </main>
 

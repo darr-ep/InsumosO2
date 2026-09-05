@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { ClientResponseError } from "pocketbase";
 import { RentalNewScreen } from "@/screens/rental-new/RentalNewScreen";
@@ -68,12 +68,13 @@ const juan = { id: "c1", name: "Juan Pérez", phone: "5512345678" };
 /**
  * design-fidelity Slice D3 (router migration prep, D3.4): swapped the plain
  * `<MemoryRouter>` for a `createMemoryRouter` data router — `RentalNewScreen`
- * doesn't call `useBlocker` yet (that's Phase D1), but D1's exit-guard test
- * coverage needs a REAL back-navigation entry to block, which a bare
- * `<MemoryRouter>` (no history stack beyond the initial entry) can't
- * exercise. The two-entry history (`/dashboard` → `/nueva-renta`, starting
- * on the second) means "navigate back" is a meaningful, testable action
- * here already, ready for D1 to build on without another router swap.
+ * doesn't call `useBlocker` yet (that's D1.5, a later batch), but D1.5's
+ * exit-guard test coverage needs a REAL back-navigation entry to block,
+ * which a bare `<MemoryRouter>` (no history stack beyond the initial entry)
+ * can't exercise. The two-entry history (`/dashboard` → `/nueva-renta`,
+ * starting on the second) means "navigate back" is a meaningful, testable
+ * action here already, ready for D1.5 to build on without another router
+ * swap.
  */
 function renderScreen() {
   const router = createMemoryRouter(
@@ -90,7 +91,67 @@ function renderScreen() {
   );
 }
 
-describe("RentalNewScreen (§7.1, §16.7, CU4)", () => {
+// design-fidelity D1.2 — the wizard's step navigation. Every step-changing
+// action below goes through the single "Continuar"/"Atrás" footer button
+// for that step, exactly like a real user.
+function continueButton() {
+  return screen.getByRole("button", { name: "Continuar" });
+}
+function backButton() {
+  return screen.getByRole("button", { name: "Atrás" });
+}
+function confirmButton() {
+  return screen.getByRole("button", { name: "Confirmar renta" });
+}
+
+async function selectExistingCustomer(user: UserEvent, name = "Juan") {
+  await user.type(
+    screen.getByLabelText("Buscar cliente por nombre o teléfono"),
+    name,
+  );
+  await user.click(
+    await screen.findByRole("button", { name: /Juan Pérez/ }),
+  );
+}
+
+async function stageNewCustomerDraft(
+  user: UserEvent,
+  { query = "Juan Pérez", phone = "5512345678" } = {},
+) {
+  await user.type(
+    screen.getByLabelText("Buscar cliente por nombre o teléfono"),
+    query,
+  );
+  await user.click(
+    await screen.findByRole("button", { name: /Crear cliente nuevo/ }),
+  );
+  if (phone) {
+    await user.type(screen.getByLabelText("Teléfono"), phone);
+  }
+}
+
+async function goToStep2(user: UserEvent) {
+  await user.click(continueButton());
+}
+
+async function fillItemsAndAmounts(
+  user: UserEvent,
+  { rent = "2800", deposit = "1000" }: { rent?: string; deposit?: string } = {},
+) {
+  await user.click(screen.getByLabelText("Agregar un concentrador"));
+  if (rent) {
+    await user.type(screen.getByLabelText("Renta"), rent);
+  }
+  if (deposit) {
+    await user.type(screen.getByLabelText("Depósito"), deposit);
+  }
+}
+
+async function goToStep3(user: UserEvent) {
+  await user.click(continueButton());
+}
+
+describe("RentalNewScreen (§7.1, §16.7, CU4, design-fidelity D1 wizard)", () => {
   beforeEach(() => {
     searchCustomers.mockReset();
     createCustomer.mockReset();
@@ -114,28 +175,177 @@ describe("RentalNewScreen (§7.1, §16.7, CU4)", () => {
     vi.unstubAllGlobals();
   });
 
-  it("shows a validation error and never calls createRental when confirming with no customer/products", async () => {
-    const user = userEvent.setup();
-    renderScreen();
+  describe("step gating (D1.2)", () => {
+    it("keeps 'Continuar' disabled at step 1 until a customer is selected or a complete draft exists — createRental is structurally unreachable", () => {
+      renderScreen();
 
-    await user.click(screen.getByRole("button", { name: "Confirmar renta" }));
+      expect(continueButton()).toBeDisabled();
+      expect(
+        screen.queryByRole("button", { name: "Confirmar renta" }),
+      ).not.toBeInTheDocument();
+      expect(createRental).not.toHaveBeenCalled();
+    });
 
-    expect(
-      await screen.findByText("Selecciona o crea un cliente."),
-    ).toBeInTheDocument();
-    expect(createRental).not.toHaveBeenCalled();
+    it("enables 'Continuar' at step 1 once an existing customer is selected", async () => {
+      searchCustomers.mockResolvedValue([juan]);
+      const user = userEvent.setup();
+      renderScreen();
+
+      await selectExistingCustomer(user);
+
+      expect(continueButton()).not.toBeDisabled();
+    });
+
+    it("does not advance past step 2 without valid items+amounts, even though step 1 is already complete", async () => {
+      searchCustomers.mockResolvedValue([juan]);
+      const user = userEvent.setup();
+      renderScreen();
+
+      await selectExistingCustomer(user);
+      await goToStep2(user);
+
+      // Zero items — still gated.
+      expect(continueButton()).toBeDisabled();
+
+      await user.click(screen.getByLabelText("Agregar un concentrador"));
+      // Item present, but no rent amount yet (server requires > 0).
+      expect(continueButton()).toBeDisabled();
+
+      await user.type(screen.getByLabelText("Renta"), "2800");
+      expect(continueButton()).not.toBeDisabled();
+
+      expect(createRental).not.toHaveBeenCalled();
+      expect(
+        screen.queryByRole("button", { name: "Confirmar renta" }),
+      ).not.toBeInTheDocument();
+    });
   });
 
-  it("shows a live 'Total a cobrar' summing Renta + Depósito, never a fixed/autofilled price (Redesign — UX/UI pass)", async () => {
+  describe("all-or-nothing persistence (D1.4)", () => {
+    it("never calls createCustomer/createRental during any step transition, and calls each exactly once after the step-3 confirm button is tapped", async () => {
+      searchCustomers.mockResolvedValue([]);
+      createCustomer.mockResolvedValue(juan);
+      createRental.mockResolvedValue({
+        rental: {
+          id: "r1",
+          folio: "R-000001",
+          created: "2026-08-26 10:00:00.000Z",
+        },
+        items: [{ id: "i1" }],
+        depositPayment: { id: "p1" },
+      });
+
+      const user = userEvent.setup();
+      renderScreen();
+
+      await stageNewCustomerDraft(user);
+      expect(createCustomer).not.toHaveBeenCalled();
+      expect(createRental).not.toHaveBeenCalled();
+
+      await goToStep2(user); // 1 → 2
+      expect(createCustomer).not.toHaveBeenCalled();
+      expect(createRental).not.toHaveBeenCalled();
+
+      await fillItemsAndAmounts(user);
+      await goToStep3(user); // 2 → 3
+      expect(createCustomer).not.toHaveBeenCalled();
+      expect(createRental).not.toHaveBeenCalled();
+
+      await user.click(backButton()); // 3 → 2
+      expect(createCustomer).not.toHaveBeenCalled();
+      expect(createRental).not.toHaveBeenCalled();
+
+      await goToStep3(user); // 2 → 3 again
+      expect(createCustomer).not.toHaveBeenCalled();
+      expect(createRental).not.toHaveBeenCalled();
+
+      await user.click(confirmButton());
+
+      await waitFor(() => expect(createRental).toHaveBeenCalledTimes(1));
+      expect(createCustomer).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("back-navigation preservation (D1.3)", () => {
+    it("preserves step 2's item/amount values across a back-then-forward round trip (hidden-gating, not conditional rendering)", async () => {
+      searchCustomers.mockResolvedValue([juan]);
+      const user = userEvent.setup();
+      renderScreen();
+
+      await selectExistingCustomer(user);
+      await goToStep2(user);
+      await fillItemsAndAmounts(user, { rent: "2800", deposit: "1000" });
+
+      await user.click(backButton()); // 2 → 1
+      // The selected customer survived too — CustomerPicker never
+      // unmounted. Scoped via `getByRole` (not `getByText`) because step
+      // 3's always-mounted, currently-`hidden` review panel also renders
+      // "Juan Pérez" — `getByRole` excludes hidden content, `getByText`
+      // does not.
+      expect(
+        screen.getByRole("button", { name: "Ver ficha" }),
+      ).toBeInTheDocument();
+
+      await goToStep2(user); // 1 → 2 again
+
+      expect(
+        screen.getByLabelText("Cantidad de concentrador"),
+      ).toHaveTextContent("1");
+      expect(screen.getByLabelText("Renta")).toHaveValue("$ 2,800");
+      expect(screen.getByLabelText("Depósito")).toHaveValue("$ 1,000");
+    });
+
+    it("still shows the 'Cliente nuevo' form with the previously typed name/phone after going back to step 1", async () => {
+      searchCustomers.mockResolvedValue([]);
+      const user = userEvent.setup();
+      renderScreen();
+
+      await stageNewCustomerDraft(user, {
+        query: "Juan Pérez",
+        phone: "5512345678",
+      });
+      await goToStep2(user); // 1 → 2
+
+      await user.click(backButton()); // 2 → 1
+
+      // Still on the create-customer form (not back to the search field),
+      // with the typed values intact.
+      expect(screen.getByLabelText("Nombre")).toHaveValue("Juan Pérez");
+      expect(screen.getByLabelText("Teléfono")).toHaveValue("5512345678");
+    });
+  });
+
+  it("shows the 'Paso 1 · Cliente · Nuevo' breadcrumb while creating a new customer, mirrored from CustomerPicker's onCreatingChange (D1.3)", async () => {
+    searchCustomers.mockResolvedValue([]);
     const user = userEvent.setup();
     renderScreen();
 
+    expect(screen.getByText("Paso 1 de 3 · Cliente")).toBeInTheDocument();
+
+    await user.type(
+      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
+      "Juan Pérez",
+    );
+    await user.click(
+      await screen.findByRole("button", { name: /Crear cliente nuevo/ }),
+    );
+
+    expect(
+      await screen.findByText("Paso 1 de 3 · Cliente · Nuevo"),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a live 'Total a cobrar' summing Renta + Depósito on step 3's read-only review (Redesign — UX/UI pass, moved by design-fidelity D1)", async () => {
+    searchCustomers.mockResolvedValue([juan]);
+    const user = userEvent.setup();
+    renderScreen();
+
+    await selectExistingCustomer(user);
+    await goToStep2(user);
+    await fillItemsAndAmounts(user, { rent: "2800", deposit: "1000" });
+    await goToStep3(user);
+
     const totalRow = screen.getByText("Total a cobrar").closest("div")!;
-    expect(within(totalRow).getByText("$0.00")).toBeInTheDocument();
-
-    await user.type(screen.getByLabelText("Renta"), "2800");
-    await user.type(screen.getByLabelText("Depósito"), "1000");
-
     expect(within(totalRow).getByText("$3,800.00")).toBeInTheDocument();
   });
 
@@ -154,22 +364,12 @@ describe("RentalNewScreen (§7.1, §16.7, CU4)", () => {
     const user = userEvent.setup();
     renderScreen();
 
-    await user.type(
-      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
-      "Juan",
-    );
-    await user.click(
-      await screen.findByRole("button", { name: /Juan Pérez/ }),
-    );
+    await selectExistingCustomer(user);
+    await goToStep2(user);
+    await fillItemsAndAmounts(user, { rent: "2800", deposit: "1000" });
+    await goToStep3(user);
 
-    await user.click(screen.getByLabelText("Agregar un concentrador"));
-    await user.type(
-      screen.getByLabelText("Renta"),
-      "2800",
-    );
-    await user.type(screen.getByLabelText("Depósito"), "1000");
-
-    await user.click(screen.getByRole("button", { name: "Confirmar renta" }));
+    await user.click(confirmButton());
 
     await waitFor(() => expect(createRental).toHaveBeenCalledTimes(1));
     expect(createRental).toHaveBeenCalledWith({
@@ -200,19 +400,17 @@ describe("RentalNewScreen (§7.1, §16.7, CU4)", () => {
     const user = userEvent.setup();
     renderScreen();
 
-    await user.type(
-      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
-      "Juan",
-    );
-    await user.click(
-      await screen.findByRole("button", { name: /Juan Pérez/ }),
-    );
-    await user.click(screen.getByLabelText("Agregar un concentrador"));
-    await user.type(screen.getByLabelText("Renta"), "2800");
-    await user.type(screen.getByLabelText("Depósito"), "1000");
+    await selectExistingCustomer(user);
+    await goToStep2(user);
+    await fillItemsAndAmounts(user, { rent: "2800", deposit: "1000" });
+    await goToStep3(user);
 
-    await user.click(screen.getByRole("button", { name: "Confirmar renta" }));
+    await user.click(confirmButton());
 
+    // The summary dialog's own "Continuar" is queried after the underlying
+    // wizard has reset back to step 1 (post-success `resetForm`) — Radix
+    // Dialog `aria-hidden`s the rest of the page while open, so this
+    // unambiguously resolves to the dialog's button, not the wizard's.
     await user.click(
       await screen.findByRole("button", { name: "Continuar" }),
     );
@@ -227,13 +425,7 @@ describe("RentalNewScreen (§7.1, §16.7, CU4)", () => {
     const user = userEvent.setup();
     renderScreen();
 
-    await user.type(
-      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
-      "Juan",
-    );
-    await user.click(
-      await screen.findByRole("button", { name: /Juan Pérez/ }),
-    );
+    await selectExistingCustomer(user);
 
     await user.click(screen.getByRole("button", { name: "Ver ficha" }));
 
@@ -249,26 +441,29 @@ describe("RentalNewScreen (§7.1, §16.7, CU4)", () => {
     const user = userEvent.setup();
     renderScreen();
 
-    await user.type(
-      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
-      "Juan",
-    );
-    await user.click(
-      await screen.findByRole("button", { name: /Juan Pérez/ }),
-    );
-    await user.click(screen.getByLabelText("Agregar un tanque"));
-    await user.type(screen.getByLabelText("Renta"), "1500");
+    await selectExistingCustomer(user);
+    await goToStep2(user);
+    await fillItemsAndAmounts(user, { rent: "1500", deposit: "" });
+    await goToStep3(user);
 
-    await user.click(screen.getByRole("button", { name: "Confirmar renta" }));
+    await user.click(confirmButton());
 
     expect(
       await screen.findByText(
         "No se pudo guardar la renta. Verifica tu conexión e intenta de nuevo.",
       ),
     ).toBeInTheDocument();
-    // Customer selection survives the failed attempt (§21 — no recapturing).
-    expect(screen.getByText("Juan Pérez")).toBeInTheDocument();
     expect(clear).not.toHaveBeenCalled();
+
+    // Customer selection survives the failed attempt (§21 — no
+    // recapturing) — still visible once back at step 1. `getByRole` (not
+    // `getByText`): step 3's always-mounted, currently-`hidden` review
+    // panel also renders "Juan Pérez".
+    await user.click(backButton()); // 3 → 2
+    await user.click(backButton()); // 2 → 1
+    expect(
+      screen.getByRole("button", { name: "Ver ficha" }),
+    ).toBeInTheDocument();
   });
 
   it("gap-fill (deposit payment race): shows an honest message with the real folio — never the generic 'no se pudo guardar' — when createRental rejects with RentalPartiallyCreatedError (the rental itself DID save)", async () => {
@@ -283,18 +478,12 @@ describe("RentalNewScreen (§7.1, §16.7, CU4)", () => {
     const user = userEvent.setup();
     renderScreen();
 
-    await user.type(
-      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
-      "Juan",
-    );
-    await user.click(
-      await screen.findByRole("button", { name: /Juan Pérez/ }),
-    );
-    await user.click(screen.getByLabelText("Agregar un tanque"));
-    await user.type(screen.getByLabelText("Renta"), "1500");
-    await user.type(screen.getByLabelText("Depósito"), "12000");
+    await selectExistingCustomer(user);
+    await goToStep2(user);
+    await fillItemsAndAmounts(user, { rent: "1500", deposit: "12000" });
+    await goToStep3(user);
 
-    await user.click(screen.getByRole("button", { name: "Confirmar renta" }));
+    await user.click(confirmButton());
 
     expect(await screen.findByText(/R-000042/)).toBeInTheDocument();
     expect(
@@ -322,18 +511,12 @@ describe("RentalNewScreen (§7.1, §16.7, CU4)", () => {
     const user = userEvent.setup();
     renderScreen();
 
-    await user.type(
-      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
-      "Juan",
-    );
-    await user.click(
-      await screen.findByRole("button", { name: /Juan Pérez/ }),
-    );
-    await user.click(screen.getByLabelText("Agregar un tanque"));
-    await user.type(screen.getByLabelText("Renta"), "1500");
-    await user.type(screen.getByLabelText("Depósito"), "12000");
+    await selectExistingCustomer(user);
+    await goToStep2(user);
+    await fillItemsAndAmounts(user, { rent: "1500", deposit: "12000" });
+    await goToStep3(user);
 
-    await user.click(screen.getByRole("button", { name: "Confirmar renta" }));
+    await user.click(confirmButton());
 
     await waitFor(() => expect(clear).toHaveBeenCalledTimes(1));
     expect(screen.queryByText(/R-000043/)).not.toBeInTheDocument();
@@ -352,17 +535,12 @@ describe("RentalNewScreen (§7.1, §16.7, CU4)", () => {
     const user = userEvent.setup();
     renderScreen();
 
-    await user.type(
-      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
-      "Juan",
-    );
-    await user.click(
-      await screen.findByRole("button", { name: /Juan Pérez/ }),
-    );
-    await user.click(screen.getByLabelText("Agregar un tanque"));
-    await user.type(screen.getByLabelText("Renta"), "1500");
+    await selectExistingCustomer(user);
+    await goToStep2(user);
+    await fillItemsAndAmounts(user, { rent: "1500", deposit: "" });
+    await goToStep3(user);
 
-    await user.click(screen.getByRole("button", { name: "Confirmar renta" }));
+    await user.click(confirmButton());
 
     await waitFor(() => expect(clear).toHaveBeenCalledTimes(1));
     expect(
@@ -390,18 +568,12 @@ describe("RentalNewScreen (§7.1, §16.7, CU4)", () => {
     const user = userEvent.setup();
     renderScreen();
 
-    await user.type(
-      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
-      "Juan",
-    );
-    await user.click(
-      await screen.findByRole("button", { name: /Juan Pérez/ }),
-    );
-    await user.click(screen.getByLabelText("Agregar un concentrador"));
-    await user.type(screen.getByLabelText("Renta"), "2800");
-    await user.type(screen.getByLabelText("Depósito"), "1000");
+    await selectExistingCustomer(user);
+    await goToStep2(user);
+    await fillItemsAndAmounts(user, { rent: "2800", deposit: "1000" });
+    await goToStep3(user);
 
-    await user.click(screen.getByRole("button", { name: "Confirmar renta" }));
+    await user.click(confirmButton());
 
     expect(screen.getByRole("button", { name: "Guardando…" })).toBeDisabled();
 
@@ -443,19 +615,15 @@ describe("RentalNewScreen (§7.1, §16.7, CU4)", () => {
     expect(screen.getByLabelText("Nombre")).toHaveValue("Juan Pérez");
     await user.type(screen.getByLabelText("Teléfono"), "5512345678");
 
-    // Typing alone stages the draft (`CustomerForm`'s `liveReport` mode) —
-    // no "Continuar"/submit button exists in this flow anymore.
-    expect(
-      screen.queryByRole("button", { name: "Continuar" }),
-    ).not.toBeInTheDocument();
     // Staging the draft must not hit the network at all.
     expect(createCustomer).not.toHaveBeenCalled();
+    await waitFor(() => expect(continueButton()).not.toBeDisabled());
 
-    await user.click(screen.getByLabelText("Agregar un concentrador"));
-    await user.type(screen.getByLabelText("Renta"), "2800");
-    await user.type(screen.getByLabelText("Depósito"), "1000");
+    await goToStep2(user);
+    await fillItemsAndAmounts(user, { rent: "2800", deposit: "1000" });
+    await goToStep3(user);
 
-    await user.click(screen.getByRole("button", { name: "Confirmar renta" }));
+    await user.click(confirmButton());
 
     await waitFor(() => expect(createRental).toHaveBeenCalledTimes(1));
     expect(createCustomer).toHaveBeenCalledTimes(1);
@@ -475,50 +643,16 @@ describe("RentalNewScreen (§7.1, §16.7, CU4)", () => {
     const user = userEvent.setup();
     renderScreen();
 
-    await user.type(
-      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
-      "Juan Pérez",
-    );
-    await user.click(
-      await screen.findByRole("button", { name: /Crear cliente nuevo/ }),
-    );
-    await user.type(screen.getByLabelText("Teléfono"), "5512345678");
+    await stageNewCustomerDraft(user);
+    await goToStep2(user);
+    await fillItemsAndAmounts(user, { rent: "2800", deposit: "" });
+    await goToStep3(user);
 
-    await user.click(screen.getByLabelText("Agregar un concentrador"));
-    await user.type(screen.getByLabelText("Renta"), "2800");
-
-    await user.click(screen.getByRole("button", { name: "Confirmar renta" }));
+    await user.click(confirmButton());
 
     expect(
       await screen.findByText("No se pudo guardar el cliente. Intenta de nuevo."),
     ).toBeInTheDocument();
-    expect(createRental).not.toHaveBeenCalled();
-  });
-
-  it("shows a validation error and never calls createCustomer when 'Confirmar renta' is pressed with an incomplete 'Cliente nuevo' draft", async () => {
-    searchCustomers.mockResolvedValue([]);
-    const user = userEvent.setup();
-    renderScreen();
-
-    // Only the name (from the search query) is filled — phone is left empty.
-    await user.type(
-      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
-      "Juan Pérez",
-    );
-    await user.click(
-      await screen.findByRole("button", { name: /Crear cliente nuevo/ }),
-    );
-    expect(screen.getByLabelText("Nombre")).toHaveValue("Juan Pérez");
-
-    await user.click(screen.getByLabelText("Agregar un concentrador"));
-    await user.type(screen.getByLabelText("Renta"), "2800");
-
-    await user.click(screen.getByRole("button", { name: "Confirmar renta" }));
-
-    expect(
-      await screen.findByText("El teléfono debe tener 10 dígitos."),
-    ).toBeInTheDocument();
-    expect(createCustomer).not.toHaveBeenCalled();
     expect(createRental).not.toHaveBeenCalled();
   });
 
@@ -530,26 +664,17 @@ describe("RentalNewScreen (§7.1, §16.7, CU4)", () => {
     const user = userEvent.setup();
     renderScreen();
 
-    await user.type(
-      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
-      "Juan Pérez",
-    );
-    await user.click(
-      await screen.findByRole("button", { name: /Crear cliente nuevo/ }),
-    );
-    await user.type(screen.getByLabelText("Teléfono"), "5512345678");
+    await stageNewCustomerDraft(user);
+    await goToStep2(user);
+    await fillItemsAndAmounts(user, { rent: "2800", deposit: "" });
+    await goToStep3(user);
 
-    await user.click(screen.getByLabelText("Agregar un concentrador"));
-    await user.type(screen.getByLabelText("Renta"), "2800");
-
-    await user.click(screen.getByRole("button", { name: "Confirmar renta" }));
+    await user.click(confirmButton());
 
     await waitFor(() => expect(createRental).toHaveBeenCalledTimes(1));
     expect(createCustomer).toHaveBeenCalledTimes(1);
-    // Promoted to a real, selected customer — no longer the pending draft.
-    expect(screen.getByText("Juan Pérez")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Confirmar renta" }));
+    await user.click(confirmButton());
 
     await waitFor(() => expect(createRental).toHaveBeenCalledTimes(2));
     expect(createCustomer).toHaveBeenCalledTimes(1); // still only once

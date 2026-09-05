@@ -43,6 +43,13 @@ import { searchCustomers, type CustomerRecord } from "@/data/customers.repo";
  * Dismiss label is "Seguir capturando", not "Cancelar" — a "Cancelar" popup
  * triggered by a "‹ Volver a buscar" button reads as cancel-the-cancel to a
  * non-technical user (audit #2221). Synchronous, no `isConfirming` needed.
+ *
+ * design-fidelity (D1.3): `onCreatingChange` reports this component's own
+ * internal `creatingNew` state to the caller — report-only, same
+ * `liveReport` convention `CustomerForm` already uses for its watched
+ * fields (see that file's doc comment). Ownership of `creatingNew` stays
+ * here; `RentalNewScreen` only mirrors it into a display-only breadcrumb
+ * ("Paso 1 · Cliente · Nuevo"), never controls it.
  */
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -61,6 +68,10 @@ export interface CustomerPickerProps {
   // section invalid immediately, not only at submit time — same red
   // border/inline message `invalid` already drives, just triggered earlier.
   onSearchBlur?: () => void;
+  // design-fidelity D1.3 — report-only. Fires with the current value of
+  // this component's internal `creatingNew` state on mount and on every
+  // change; never controls it (see file doc comment).
+  onCreatingChange?: (creating: boolean) => void;
 }
 
 export function CustomerPicker({
@@ -71,8 +82,19 @@ export function CustomerPicker({
   invalid = false,
   onViewCustomer,
   onSearchBlur,
+  onCreatingChange,
 }: CustomerPickerProps) {
   const [creatingNew, setCreatingNew] = useState(false);
+
+  // design-fidelity D1.3 — report-only, same "fires on mount + every
+  // change" shape as `CustomerForm`'s `liveReport` effect. `onCreatingChange`
+  // intentionally excluded from deps: `RentalNewScreen` passes its setter
+  // directly, which is stable, but a defensive inline callback from another
+  // caller shouldn't re-fire this on every render either.
+  useEffect(() => {
+    onCreatingChange?.(creatingNew);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [creatingNew]);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CustomerRecord[]>([]);
   const [isSearching, setIsSearching] = useState(false);

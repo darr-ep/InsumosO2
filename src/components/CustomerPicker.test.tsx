@@ -313,4 +313,44 @@ describe("CustomerPicker (§7.1)", () => {
     // Still on the create-customer form, not back to search.
     expect(screen.getByLabelText("Nombre")).toHaveValue("Juan Pérez");
   });
+
+  it("reports creatingNew via onCreatingChange (design-fidelity D1.3, report-only — RentalNewScreen's breadcrumb)", async () => {
+    searchCustomers.mockResolvedValue([]);
+    const onSelect = vi.fn();
+    const onSelectDraft = vi.fn();
+    const onCreatingChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <CustomerPicker
+        onSelect={onSelect}
+        onSelectDraft={onSelectDraft}
+        onCreatingChange={onCreatingChange}
+      />,
+    );
+
+    // Reported as false on mount — not creating yet.
+    await waitFor(() =>
+      expect(onCreatingChange).toHaveBeenLastCalledWith(false),
+    );
+
+    await user.type(
+      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
+      "Juan Pérez",
+    );
+    await user.click(
+      await screen.findByRole("button", { name: /Crear cliente nuevo/ }),
+    );
+
+    await waitFor(() =>
+      expect(onCreatingChange).toHaveBeenLastCalledWith(true),
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "‹ Volver a buscar" }),
+    );
+
+    await waitFor(() =>
+      expect(onCreatingChange).toHaveBeenLastCalledWith(false),
+    );
+  });
 });
