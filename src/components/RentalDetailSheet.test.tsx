@@ -313,6 +313,7 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
     await user.click(
       screen.getByRole("button", { name: "Confirmar devolución" }),
     );
+    await user.click(screen.getByRole("button", { name: "Sí, devolver" }));
 
     expect(
       await screen.findByRole("heading", {
@@ -344,6 +345,7 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
     await user.click(
       screen.getByRole("button", { name: "Confirmar devolución" }),
     );
+    await user.click(screen.getByRole("button", { name: "Sí, devolver" }));
     await screen.findByRole("heading", { name: "Devolución registrada ✓" });
 
     await user.click(
@@ -398,6 +400,7 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
     await user.click(
       screen.getByRole("button", { name: "Confirmar devolución" }),
     );
+    await user.click(screen.getByRole("button", { name: "Sí, devolver" }));
     await screen.findByRole("heading", { name: "Devolución registrada ✓" });
 
     expect(

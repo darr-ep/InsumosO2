@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate } from "react-router";
 import { LogOut, UserPen, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,6 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { logout } from "@/data/auth.repo";
 
 /**
@@ -29,9 +31,16 @@ import { logout } from "@/data/auth.repo";
  * New gap-fill feature: Self-Service Profile Screen (business owner
  * request, post-Phase-5) — "Perfil" added above "Cerrar sesión", the entry
  * point to `ProfileScreen` (`/perfil`).
+ *
+ * design-fidelity (Slice B1, obs #2221/#2223/#2224, call site #4): logging
+ * out clears the PocketBase session and needs a password re-typed to get
+ * back in — sits one dropdown row below "Perfil", a classic mis-tap. Gated
+ * unconditionally behind the shared `ConfirmDialog`, rendered as a JSX
+ * SIBLING of `DropdownMenu` (design B3 nesting pattern).
  */
 export function AccountMenu() {
   const navigate = useNavigate();
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   function handleLogout() {
     logout();
@@ -39,28 +48,42 @@ export function AccountMenu() {
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label="Cuenta"
-          className="rounded-full"
-        >
-          <UserRound aria-hidden="true" className="!size-[24px]" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onSelect={() => navigate("/perfil")}>
-          <UserPen aria-hidden="true" />
-          Perfil
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={handleLogout}>
-          <LogOut aria-hidden="true" />
-          Cerrar sesión
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Cuenta"
+            className="rounded-full"
+          >
+            <UserRound aria-hidden="true" className="!size-[24px]" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={() => navigate("/perfil")}>
+            <UserPen aria-hidden="true" />
+            Perfil
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setConfirmOpen(true)}>
+            <LogOut aria-hidden="true" />
+            Cerrar sesión
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="¿Cerrar sesión?"
+        description="Tendrás que volver a escribir tu contraseña para entrar de nuevo."
+        confirmLabel="Sí, cerrar sesión"
+        onConfirm={() => {
+          handleLogout();
+          setConfirmOpen(false);
+        }}
+      />
+    </>
   );
 }

@@ -36,15 +36,22 @@ function DialogOverlay({
 
 function DialogContent({
   className,
+  overlayClassName,
   children,
   showCloseButton = true,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
+  // design-fidelity B1 (obs #2224): lets a dialog stacked on top of an
+  // already-open Dialog/Sheet (e.g. ConfirmDialog rendered as a sibling)
+  // use a lighter overlay so two stacked overlays don't compound to
+  // near-black. Additive, default-undefined — zero effect on every
+  // existing caller.
+  overlayClassName?: string;
 }) {
   return (
     <DialogPortal>
-      <DialogOverlay />
+      <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(

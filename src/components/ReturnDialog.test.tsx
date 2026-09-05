@@ -82,6 +82,50 @@ describe("ReturnDialog (§7.3, §16.8, CU6, task 3.2)", () => {
     );
   });
 
+  it("shows a confirmation dialog before calling returnRental, and only calls returnRental after confirming (design-fidelity #1, obs #2223/#2224)", async () => {
+    const user = userEvent.setup();
+    render(<ReturnDialog {...baseProps} />);
+
+    await user.click(
+      screen.getByRole("button", { name: "Confirmar devolución" }),
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "¿Devolver esta renta?" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "La renta R-000001 se marcará como devuelta. Esta acción no se puede deshacer.",
+      ),
+    ).toBeInTheDocument();
+    expect(returnRental).not.toHaveBeenCalled();
+
+    returnRental.mockResolvedValueOnce({
+      id: "rental1",
+      returned_at: "2026-08-26T12:00:00.000Z",
+    });
+    await user.click(screen.getByRole("button", { name: "Sí, devolver" }));
+
+    await waitFor(() => expect(returnRental).toHaveBeenCalledTimes(1));
+  });
+
+  it("keeps the dialog open and the typed amounts intact when the confirmation is cancelled, without calling returnRental (design-fidelity #1, sibling-render pattern)", async () => {
+    const user = userEvent.setup();
+    render(<ReturnDialog {...baseProps} />);
+
+    await user.type(screen.getByLabelText(/monto cobrado/i), "5000");
+    await user.click(
+      screen.getByRole("button", { name: "Confirmar devolución" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Cancelar" }));
+
+    expect(
+      screen.queryByRole("heading", { name: "¿Devolver esta renta?" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/monto cobrado/i)).toHaveValue("$ 5,000");
+    expect(returnRental).not.toHaveBeenCalled();
+  });
+
   it("calls returnRental with the (possibly edited) amounts and builds a return receipt on confirm (CU6 second/third scenarios)", async () => {
     returnRental.mockResolvedValueOnce({
       id: "rental1",
@@ -97,6 +141,7 @@ describe("ReturnDialog (§7.3, §16.8, CU6, task 3.2)", () => {
     await user.click(
       screen.getByRole("button", { name: "Confirmar devolución" }),
     );
+    await user.click(screen.getByRole("button", { name: "Sí, devolver" }));
 
     await waitFor(() => expect(returnRental).toHaveBeenCalledTimes(1));
     expect(returnRental).toHaveBeenCalledWith({
@@ -127,6 +172,7 @@ describe("ReturnDialog (§7.3, §16.8, CU6, task 3.2)", () => {
     await user.click(
       screen.getByRole("button", { name: "Confirmar devolución" }),
     );
+    await user.click(screen.getByRole("button", { name: "Sí, devolver" }));
 
     await waitFor(() => expect(returnRental).toHaveBeenCalledTimes(1));
     expect(toast.success).toHaveBeenCalledWith("Devolución registrada.");
@@ -140,6 +186,7 @@ describe("ReturnDialog (§7.3, §16.8, CU6, task 3.2)", () => {
     await user.click(
       screen.getByRole("button", { name: "Confirmar devolución" }),
     );
+    await user.click(screen.getByRole("button", { name: "Sí, devolver" }));
 
     await screen.findByText(
       "No se pudo registrar la devolución. Verifica tu conexión e intenta de nuevo.",
@@ -167,6 +214,7 @@ describe("ReturnDialog (§7.3, §16.8, CU6, task 3.2)", () => {
     await user.click(
       screen.getByRole("button", { name: "Confirmar devolución" }),
     );
+    await user.click(screen.getByRole("button", { name: "Sí, devolver" }));
 
     await waitFor(() => expect(returnRental).toHaveBeenCalledTimes(1));
     expect(returnRental).toHaveBeenCalledWith(
@@ -182,6 +230,7 @@ describe("ReturnDialog (§7.3, §16.8, CU6, task 3.2)", () => {
     await user.click(
       screen.getByRole("button", { name: "Confirmar devolución" }),
     );
+    await user.click(screen.getByRole("button", { name: "Sí, devolver" }));
 
     expect(
       await screen.findByText(
@@ -205,6 +254,7 @@ describe("ReturnDialog (§7.3, §16.8, CU6, task 3.2)", () => {
     await user.click(
       screen.getByRole("button", { name: "Confirmar devolución" }),
     );
+    await user.click(screen.getByRole("button", { name: "Sí, devolver" }));
 
     expect(
       await screen.findByText(
@@ -227,6 +277,7 @@ describe("ReturnDialog (§7.3, §16.8, CU6, task 3.2)", () => {
     await user.click(
       screen.getByRole("button", { name: "Confirmar devolución" }),
     );
+    await user.click(screen.getByRole("button", { name: "Sí, devolver" }));
 
     await waitFor(() => expect(clear).toHaveBeenCalledTimes(1));
     expect(
@@ -273,6 +324,7 @@ describe("ReturnDialog (§7.3, §16.8, CU6, task 3.2)", () => {
     await user.click(
       screen.getByRole("button", { name: "Confirmar devolución" }),
     );
+    await user.click(screen.getByRole("button", { name: "Sí, devolver" }));
 
     await waitFor(() => expect(returnRental).toHaveBeenCalledTimes(1));
     expect(returnRental).toHaveBeenCalledWith({
@@ -283,7 +335,7 @@ describe("ReturnDialog (§7.3, §16.8, CU6, task 3.2)", () => {
     });
   });
 
-  it("shows a Guardando… loading label on the confirm button while submitting, reverting after success (§16.13)", async () => {
+  it("disables the confirmation dialog's buttons while submitting (isConfirming), reverting to the idle trigger after success (§16.13, design-fidelity #1)", async () => {
     let resolveReturnRental: (value: {
       id: string;
       returned_at: string;
@@ -300,8 +352,14 @@ describe("ReturnDialog (§7.3, §16.8, CU6, task 3.2)", () => {
     await user.click(
       screen.getByRole("button", { name: "Confirmar devolución" }),
     );
+    await user.click(screen.getByRole("button", { name: "Sí, devolver" }));
 
-    expect(screen.getByRole("button", { name: "Guardando…" })).toBeDisabled();
+    // design B2: `isConfirming` disables BOTH ConfirmDialog buttons during
+    // the async mutation — the underlying "Confirmar devolución" trigger is
+    // `aria-hidden` behind the still-open ConfirmDialog while this is
+    // pending (Radix nested-dialog inert behavior), so it's not queryable.
+    expect(screen.getByRole("button", { name: "Sí, devolver" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Cancelar" })).toBeDisabled();
 
     resolveReturnRental({
       id: "rental1",
@@ -311,5 +369,8 @@ describe("ReturnDialog (§7.3, §16.8, CU6, task 3.2)", () => {
     expect(
       await screen.findByRole("button", { name: "Confirmar devolución" }),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "¿Devolver esta renta?" }),
+    ).not.toBeInTheDocument();
   });
 });

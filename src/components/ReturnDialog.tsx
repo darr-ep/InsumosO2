@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { returnRental } from "@/data/rentals.repo";
 import { handleIfStaleSession } from "@/data/staleSession";
 import { daysSince } from "@/domain/rentals/dashboard";
@@ -49,6 +50,14 @@ import { formatCurrencyMXN } from "@/lib/currency";
  * `PaymentSuggestionField`'s exact two-line wording ("Renta acordada" /
  * "Último pago") for consistency between the two places a rent amount gets
  * confirmed.
+ *
+ * design-fidelity (Slice B1, obs #2221/#2223/#2224, call site #1): "Confirmar
+ * devolución" is now a TRIGGER that opens a shared `ConfirmDialog`, not the
+ * mutation itself — devolver is one-way and server-enforced (blocks all
+ * future payments on the rental), so it gates unconditionally, regardless
+ * of pending balance. `ConfirmDialog` renders as a JSX SIBLING of this
+ * `Dialog` (design B3 nesting pattern) so cancelling keeps this dialog
+ * mounted with the typed amounts intact.
  */
 
 export interface ReturnDialogProps {
@@ -98,6 +107,7 @@ export function ReturnDialog({
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [wasOpen, setWasOpen] = useState(open);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const hasDeposit = depositAmount > 0;
 
@@ -187,134 +197,151 @@ export function ReturnDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Devolver renta {folio}</DialogTitle>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Devolver renta {folio}</DialogTitle>
+          </DialogHeader>
 
-        <dl className="flex flex-col gap-2 text-sm">
-          <div className="flex justify-between">
-            <dt className="text-muted-foreground">Cliente</dt>
-            <dd>{customerName}</dd>
-          </div>
-          <div className="flex justify-between gap-2">
-            <dt className="text-muted-foreground">Producto(s)</dt>
-            <dd className="text-right">
-              {items
-                .map(
-                  (item) => `${item.quantity} x ${rentalItemTypeLabel(item.itemType)}`,
-                )
-                .join(", ")}
-            </dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-muted-foreground">Fecha de inicio</dt>
-            <dd>{startedAt.toLocaleDateString("es-MX")}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-muted-foreground">Tiempo transcurrido</dt>
-            <dd>{elapsedDays} días</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-muted-foreground">Depósito</dt>
-            <dd>{formatCurrencyMXN(depositAmount)}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-muted-foreground">Renta inicial</dt>
-            <dd>{formatCurrencyMXN(initialRentAmount)}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-muted-foreground">Total pagado en rentas</dt>
-            <dd>{formatCurrencyMXN(totalRentPaid)}</dd>
-          </div>
-        </dl>
+          <dl className="flex flex-col gap-2 text-sm">
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Cliente</dt>
+              <dd>{customerName}</dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt className="text-muted-foreground">Producto(s)</dt>
+              <dd className="text-right">
+                {items
+                  .map(
+                    (item) => `${item.quantity} x ${rentalItemTypeLabel(item.itemType)}`,
+                  )
+                  .join(", ")}
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Fecha de inicio</dt>
+              <dd>{startedAt.toLocaleDateString("es-MX")}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Tiempo transcurrido</dt>
+              <dd>{elapsedDays} días</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Depósito</dt>
+              <dd>{formatCurrencyMXN(depositAmount)}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Renta inicial</dt>
+              <dd>{formatCurrencyMXN(initialRentAmount)}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Total pagado en rentas</dt>
+              <dd>{formatCurrencyMXN(totalRentPaid)}</dd>
+            </div>
+          </dl>
 
-        <div className="flex flex-col gap-4 border-t pt-4">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="return-amount-collected">Monto cobrado</Label>
-            {hasPreviousRentPayment ? (
-              <>
-                <p className="text-muted-foreground text-sm">
-                  Renta acordada: {formatCurrencyMXN(initialRentAmount)}
-                </p>
-                <p className="text-muted-foreground text-sm">
-                  Último pago: {formatCurrencyMXN(suggestedAmount)}
-                </p>
-              </>
-            ) : (
-              <p className="text-muted-foreground text-sm">
-                Renta: {formatCurrencyMXN(initialRentAmount)}
-              </p>
-            )}
-            <CurrencyInput
-              id="return-amount-collected"
-              placeholder="$ 0"
-              value={amountCollected}
-              onChange={setAmountCollected}
-            />
-          </div>
-
-          {/* §7.3 (business-owner finding, post-launch audit): a rental with
-              no deposit has nothing to give back — showing this field anyway
-              invites confusion (and a stray non-zero "devolución" for money
-              that was never collected). Renta/monto cobrado above always
-              stays, deposit is the only conditional part. */}
-          {hasDeposit && (
+          <div className="flex flex-col gap-4 border-t pt-4">
             <div className="flex flex-col gap-1.5">
-              {/* Business-owner finding: `suggestedDepositReturn` always
-                  equals `depositAmount` (see its own docblock) — a
-                  "Sugerido: $X" line here would just repeat the read-only
-                  "Depósito" row shown a few lines above, verbatim, every
-                  single time. Removed. Post-launch UX pass: the placeholder
-                  no longer carries the suggested number either (now a
-                  static "$ 0", matching "Monto cobrado") — the read-only
-                  "Depósito" row above is the only remaining reference for
-                  this amount. */}
-              <Label htmlFor="return-deposit-returned">
-                Depósito a devolver
-              </Label>
+              <Label htmlFor="return-amount-collected">Monto cobrado</Label>
+              {hasPreviousRentPayment ? (
+                <>
+                  <p className="text-muted-foreground text-sm">
+                    Renta acordada: {formatCurrencyMXN(initialRentAmount)}
+                  </p>
+                  <p className="text-muted-foreground text-sm">
+                    Último pago: {formatCurrencyMXN(suggestedAmount)}
+                  </p>
+                </>
+              ) : (
+                <p className="text-muted-foreground text-sm">
+                  Renta: {formatCurrencyMXN(initialRentAmount)}
+                </p>
+              )}
               <CurrencyInput
-                id="return-deposit-returned"
+                id="return-amount-collected"
                 placeholder="$ 0"
-                value={depositReturned}
-                onChange={setDepositReturned}
+                value={amountCollected}
+                onChange={setAmountCollected}
               />
             </div>
-          )}
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="return-note">Nota (opcional)</Label>
-            <Input
-              id="return-note"
-              placeholder="Observaciones sobre la devolución"
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-            />
+            {/* §7.3 (business-owner finding, post-launch audit): a rental with
+                no deposit has nothing to give back — showing this field anyway
+                invites confusion (and a stray non-zero "devolución" for money
+                that was never collected). Renta/monto cobrado above always
+                stays, deposit is the only conditional part. */}
+            {hasDeposit && (
+              <div className="flex flex-col gap-1.5">
+                {/* Business-owner finding: `suggestedDepositReturn` always
+                    equals `depositAmount` (see its own docblock) — a
+                    "Sugerido: $X" line here would just repeat the read-only
+                    "Depósito" row shown a few lines above, verbatim, every
+                    single time. Removed. Post-launch UX pass: the placeholder
+                    no longer carries the suggested number either (now a
+                    static "$ 0", matching "Monto cobrado") — the read-only
+                    "Depósito" row above is the only remaining reference for
+                    this amount. */}
+                <Label htmlFor="return-deposit-returned">
+                  Depósito a devolver
+                </Label>
+                <CurrencyInput
+                  id="return-deposit-returned"
+                  placeholder="$ 0"
+                  value={depositReturned}
+                  onChange={setDepositReturned}
+                />
+              </div>
+            )}
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="return-note">Nota (opcional)</Label>
+              <Input
+                id="return-note"
+                placeholder="Observaciones sobre la devolución"
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+              />
+            </div>
+
+            {formError && (
+              <p className="text-destructive text-sm">{formError}</p>
+            )}
           </div>
 
-          {formError && <p className="text-destructive text-sm">{formError}</p>}
-        </div>
+          <div className="sticky -bottom-4 -mx-4 -mb-4 mt-auto z-20 flex flex-col gap-3 bg-card px-4 pb-4 pt-3 border-t">
+            <div className="flex items-center justify-between text-sm font-semibold">
+              <span>Total a entregar</span>
+              <span>{formatCurrencyMXN(totalToHandBack)}</span>
+            </div>
 
-        <div className="sticky -bottom-4 -mx-4 -mb-4 mt-auto z-20 flex flex-col gap-3 bg-card px-4 pb-4 pt-3 border-t">
-          <div className="flex items-center justify-between text-sm font-semibold">
-            <span>Total a entregar</span>
-            <span>{formatCurrencyMXN(totalToHandBack)}</span>
+            <DialogFooter className="flex-col items-stretch">
+              <Button
+                type="button"
+                size="lg"
+                disabled={isSubmitting}
+                onClick={() => setConfirmOpen(true)}
+                className="w-full"
+              >
+                {isSubmitting ? "Guardando…" : "Confirmar devolución"}
+              </Button>
+            </DialogFooter>
           </div>
+        </DialogContent>
+      </Dialog>
 
-          <DialogFooter className="flex-col items-stretch">
-            <Button
-              type="button"
-              size="lg"
-              disabled={isSubmitting}
-              onClick={() => void handleConfirm()}
-              className="w-full"
-            >
-              {isSubmitting ? "Guardando…" : "Confirmar devolución"}
-            </Button>
-          </DialogFooter>
-        </div>
-      </DialogContent>
-    </Dialog>
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="¿Devolver esta renta?"
+        description={`La renta ${folio} se marcará como devuelta. Esta acción no se puede deshacer.`}
+        confirmLabel="Sí, devolver"
+        isConfirming={isSubmitting}
+        onConfirm={async () => {
+          await handleConfirm();
+          setConfirmOpen(false);
+        }}
+      />
+    </>
   );
 }

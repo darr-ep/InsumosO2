@@ -364,6 +364,7 @@ export function RentalDetailSheet({
           open={paymentDialogOpen}
           onOpenChange={setPaymentDialogOpen}
           rentalId={rental.id}
+          folio={rental.folio}
           suggestedAmount={suggestedAmount}
           initialRentAmount={rental.initial_rent_amount}
           hasPreviousRentPayment={!!lastRentPayment}

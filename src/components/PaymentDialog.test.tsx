@@ -48,6 +48,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         open
         onOpenChange={onOpenChange}
         rentalId="r1"
+        folio="R-000001"
         suggestedAmount={3000}
         initialRentAmount={2800}
         hasPreviousRentPayment
@@ -68,6 +69,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
 
     await user.type(amountInput, "3000");
     await user.click(screen.getByRole("button", { name: "Confirmar" }));
+    await user.click(screen.getByRole("button", { name: "Sí, registrar" }));
 
     expect(createPayment).toHaveBeenCalledWith({
       rentalId: "r1",
@@ -79,6 +81,80 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
+  it("shows a confirmation dialog with the payment copy before calling createPayment, and only calls createPayment after confirming (design-fidelity #2, owner decision #2222: always confirm)", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <PaymentDialog
+        open
+        onOpenChange={() => {}}
+        rentalId="r1"
+        folio="R-000001"
+        suggestedAmount={3000}
+        initialRentAmount={2800}
+        hasPreviousRentPayment
+      />,
+    );
+
+    await user.type(screen.getByLabelText("Monto"), "3000");
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
+
+    expect(
+      screen.getByRole("heading", { name: "¿Registrar este pago?" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Se registrará un pago de $3,000.00 en la renta R-000001. Los pagos no se pueden editar ni borrar después.",
+      ),
+    ).toBeInTheDocument();
+    expect(createPayment).not.toHaveBeenCalled();
+
+    createPayment.mockResolvedValueOnce({ id: "p1" });
+    await user.click(screen.getByRole("button", { name: "Sí, registrar" }));
+
+    await waitFor(() => expect(createPayment).toHaveBeenCalledTimes(1));
+  });
+
+  it("shows a confirmation dialog with the adjustment copy before calling createPayment, and only calls createPayment after confirming (design-fidelity #3, owner decision #2222: always confirm)", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <PaymentDialog
+        open
+        onOpenChange={() => {}}
+        rentalId="r1"
+        folio="R-000001"
+        suggestedAmount={3000}
+        initialRentAmount={2800}
+        hasPreviousRentPayment
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Ajuste" }));
+    await user.clear(screen.getByLabelText("Monto del ajuste"));
+    await user.type(screen.getByLabelText("Monto del ajuste"), "-200");
+    await user.type(
+      screen.getByLabelText("Nota"),
+      "se cobró de más por error",
+    );
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
+
+    expect(
+      screen.getByRole("heading", { name: "¿Registrar este ajuste?" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Se registrará un ajuste de -$200.00 en la renta R-000001. Los ajustes no se pueden editar ni borrar después.",
+      ),
+    ).toBeInTheDocument();
+    expect(createPayment).not.toHaveBeenCalled();
+
+    createPayment.mockResolvedValueOnce({ id: "p3" });
+    await user.click(screen.getByRole("button", { name: "Sí, registrar" }));
+
+    await waitFor(() => expect(createPayment).toHaveBeenCalledTimes(1));
+  });
+
   it("fires a success toast when the payment is registered (§16.13/§17, gap-fill finding 4)", async () => {
     createPayment.mockResolvedValueOnce({ id: "p1" });
     const user = userEvent.setup();
@@ -88,6 +164,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         open
         onOpenChange={() => {}}
         rentalId="r1"
+        folio="R-000001"
         suggestedAmount={3000}
         initialRentAmount={2800}
         hasPreviousRentPayment
@@ -96,6 +173,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
 
     await user.type(screen.getByLabelText("Monto"), "3000");
     await user.click(screen.getByRole("button", { name: "Confirmar" }));
+    await user.click(screen.getByRole("button", { name: "Sí, registrar" }));
 
     expect(toast.success).toHaveBeenCalledWith("Pago registrado.");
   });
@@ -109,6 +187,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         open
         onOpenChange={() => {}}
         rentalId="r1"
+        folio="R-000001"
         suggestedAmount={3000}
         initialRentAmount={2800}
         hasPreviousRentPayment
@@ -117,6 +196,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
 
     await user.type(screen.getByLabelText("Monto"), "3000");
     await user.click(screen.getByRole("button", { name: "Confirmar" }));
+    await user.click(screen.getByRole("button", { name: "Sí, registrar" }));
 
     await screen.findByText(
       "No se pudo registrar el pago. Verifica tu conexión e intenta de nuevo.",
@@ -133,6 +213,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         open
         onOpenChange={() => {}}
         rentalId="r1"
+        folio="R-000001"
         suggestedAmount={3000}
         initialRentAmount={2800}
         hasPreviousRentPayment
@@ -142,6 +223,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
     await user.clear(screen.getByLabelText("Monto"));
     await user.type(screen.getByLabelText("Monto"), "3500");
     await user.click(screen.getByRole("button", { name: "Confirmar" }));
+    await user.click(screen.getByRole("button", { name: "Sí, registrar" }));
 
     expect(createPayment).toHaveBeenCalledWith(
       expect.objectContaining({ amount: 3500 }),
@@ -156,6 +238,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         open
         onOpenChange={() => {}}
         rentalId="r1"
+        folio="R-000001"
         suggestedAmount={3000}
         initialRentAmount={2800}
         hasPreviousRentPayment
@@ -170,6 +253,11 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
     expect(
       await screen.findByText("La nota es obligatoria para un ajuste."),
     ).toBeInTheDocument();
+    // design-fidelity B4: a validation error must never show the confirm
+    // popup — the gate sits AFTER local validation.
+    expect(
+      screen.queryByRole("heading", { name: "¿Registrar este ajuste?" }),
+    ).not.toBeInTheDocument();
     expect(createPayment).not.toHaveBeenCalled();
   });
 
@@ -182,6 +270,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         open
         onOpenChange={() => {}}
         rentalId="r1"
+        folio="R-000001"
         suggestedAmount={3000}
         initialRentAmount={2800}
         hasPreviousRentPayment
@@ -196,6 +285,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
       "se cobró de más por error",
     );
     await user.click(screen.getByRole("button", { name: "Confirmar" }));
+    await user.click(screen.getByRole("button", { name: "Sí, registrar" }));
 
     expect(createPayment).toHaveBeenCalledWith({
       rentalId: "r1",
@@ -214,6 +304,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         open
         onOpenChange={() => {}}
         rentalId="r1"
+        folio="R-000001"
         suggestedAmount={3000}
         initialRentAmount={2800}
         hasPreviousRentPayment
@@ -222,6 +313,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
 
     await user.type(screen.getByLabelText("Monto"), "3000");
     await user.click(screen.getByRole("button", { name: "Confirmar" }));
+    await user.click(screen.getByRole("button", { name: "Sí, registrar" }));
 
     expect(
       await screen.findByText(
@@ -248,6 +340,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         open
         onOpenChange={() => {}}
         rentalId="r1"
+        folio="R-000001"
         suggestedAmount={3000}
         initialRentAmount={2800}
         hasPreviousRentPayment
@@ -256,6 +349,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
 
     await user.type(screen.getByLabelText("Monto"), "3000");
     await user.click(screen.getByRole("button", { name: "Confirmar" }));
+    await user.click(screen.getByRole("button", { name: "Sí, registrar" }));
 
     expect(
       await screen.findByText(
@@ -279,6 +373,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         open
         onOpenChange={() => {}}
         rentalId="r1"
+        folio="R-000001"
         suggestedAmount={3000}
         initialRentAmount={2800}
         hasPreviousRentPayment
@@ -287,6 +382,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
 
     await user.type(screen.getByLabelText("Monto"), "3000");
     await user.click(screen.getByRole("button", { name: "Confirmar" }));
+    await user.click(screen.getByRole("button", { name: "Sí, registrar" }));
 
     await waitFor(() => expect(clear).toHaveBeenCalledTimes(1));
     expect(
@@ -297,7 +393,33 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
     expect(consumeSessionMessage()).toBe(STALE_SESSION_MESSAGE);
   });
 
-  it("shows a Guardando… loading label on the confirm button while submitting, reverting after success (§16.13)", async () => {
+  it("cancelling the confirmation dialog does not call createPayment and keeps the typed amount (design-fidelity, sibling-render pattern)", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <PaymentDialog
+        open
+        onOpenChange={() => {}}
+        rentalId="r1"
+        folio="R-000001"
+        suggestedAmount={3000}
+        initialRentAmount={2800}
+        hasPreviousRentPayment
+      />,
+    );
+
+    await user.type(screen.getByLabelText("Monto"), "3000");
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
+    await user.click(screen.getByRole("button", { name: "Cancelar" }));
+
+    expect(
+      screen.queryByRole("heading", { name: "¿Registrar este pago?" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Monto")).toHaveValue("$ 3,000");
+    expect(createPayment).not.toHaveBeenCalled();
+  });
+
+  it("disables the confirmation dialog's buttons while submitting (isConfirming), reverting to the idle trigger after success (§16.13, design-fidelity #2/#3)", async () => {
     let resolveCreatePayment: (value: { id: string }) => void = () => {};
     createPayment.mockImplementationOnce(
       () =>
@@ -312,6 +434,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         open
         onOpenChange={() => {}}
         rentalId="r1"
+        folio="R-000001"
         suggestedAmount={3000}
         initialRentAmount={2800}
         hasPreviousRentPayment
@@ -320,13 +443,24 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
 
     await user.type(screen.getByLabelText("Monto"), "3000");
     await user.click(screen.getByRole("button", { name: "Confirmar" }));
+    await user.click(screen.getByRole("button", { name: "Sí, registrar" }));
 
-    expect(screen.getByRole("button", { name: "Guardando…" })).toBeDisabled();
+    // design B2: `isConfirming` disables BOTH ConfirmDialog buttons during
+    // the async mutation — the underlying "Confirmar" trigger is
+    // `aria-hidden` behind the still-open ConfirmDialog while this is
+    // pending (Radix nested-dialog inert behavior), so it's not queryable.
+    expect(
+      screen.getByRole("button", { name: "Sí, registrar" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Cancelar" })).toBeDisabled();
 
     resolveCreatePayment({ id: "p1" });
 
     expect(
       await screen.findByRole("button", { name: "Confirmar" }),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "¿Registrar este pago?" }),
+    ).not.toBeInTheDocument();
   });
 });

@@ -73,12 +73,46 @@ describe("AccountMenu (extracted from AppLayout, Redesign Round 2 Batch 1: Heade
     expect(navigate).toHaveBeenCalledWith("/perfil");
   });
 
-  it("clears the session and redirects to /login when Cerrar sesión is tapped", async () => {
+  it("shows a confirmation dialog before logging out, and does not log out until confirmed (design-fidelity #4, obs #2221/#2223/#2224)", async () => {
     const user = userEvent.setup();
     renderMenu();
 
     await user.click(screen.getByRole("button", { name: "Cuenta" }));
     await user.click(screen.getByRole("menuitem", { name: "Cerrar sesión" }));
+
+    expect(
+      screen.getByRole("heading", { name: "¿Cerrar sesión?" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Tendrás que volver a escribir tu contraseña para entrar de nuevo.",
+      ),
+    ).toBeInTheDocument();
+    expect(logout).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalledWith("/login");
+  });
+
+  it("cancelling the confirmation dialog does not log out (design-fidelity, sibling-render pattern)", async () => {
+    const user = userEvent.setup();
+    renderMenu();
+
+    await user.click(screen.getByRole("button", { name: "Cuenta" }));
+    await user.click(screen.getByRole("menuitem", { name: "Cerrar sesión" }));
+    await user.click(screen.getByRole("button", { name: "Cancelar" }));
+
+    expect(
+      screen.queryByRole("heading", { name: "¿Cerrar sesión?" }),
+    ).not.toBeInTheDocument();
+    expect(logout).not.toHaveBeenCalled();
+  });
+
+  it("clears the session and redirects to /login when Cerrar sesión is confirmed", async () => {
+    const user = userEvent.setup();
+    renderMenu();
+
+    await user.click(screen.getByRole("button", { name: "Cuenta" }));
+    await user.click(screen.getByRole("menuitem", { name: "Cerrar sesión" }));
+    await user.click(screen.getByRole("button", { name: "Sí, cerrar sesión" }));
 
     expect(logout).toHaveBeenCalled();
     expect(navigate).toHaveBeenCalledWith("/login");
