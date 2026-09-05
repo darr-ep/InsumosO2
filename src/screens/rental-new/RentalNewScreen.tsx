@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useBlocker, useNavigate } from "react-router";
 import { ClientResponseError } from "pocketbase";
 import { Button } from "@/components/ui/button";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { AppHeader } from "@/components/AppHeader";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useDataCache } from "@/app/DataCacheContext";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import {
@@ -63,9 +64,18 @@ import { cn } from "@/lib/utils";
  * else — no other setter, no `resetForm()`, no side effect runs as a
  * consequence of a step transition.
  *
- * The exit-guard (`useBlocker` + the shared `ConfirmDialog`, call site #7)
- * is a separate, later slice (D1.5-D1.7) — not implemented here. The header
- * arrow's `showBack` behavior is therefore unchanged for now.
+ * design-fidelity D1.5-D1.7 (obs #2224's D3.3 "one dialog, one code path,
+ * both triggers"): the exit guard. `AppHeader`'s back arrow already calls
+ * `navigate(-1)` internally (`AppHeader.tsx` — NOT modified by this slice),
+ * which is itself a React Router navigation, so `useBlocker(hasCapturedData)`
+ * intercepts the arrow tap AND hardware/gesture back (also a `navigate(-1)`-
+ * shaped POP, per D3's router migration) through the identical mechanism.
+ * No `onBack` prop, no second piece of state, no second dialog instance —
+ * `blocker.state === "blocked"` is the single source of truth for whether
+ * the shared `ConfirmDialog` (call site #7) is open. The footer's "Atrás"
+ * (`goBack`, above) is a different control with a different meaning — it
+ * only ever calls `setStep`, never `navigate`, so it can never trip this
+ * guard.
  */
 
 type WizardStep = 1 | 2 | 3;
@@ -305,6 +315,19 @@ export function RentalNewScreen() {
     depositAmount,
   });
 
+  // design-fidelity D1.5 — the exit-guard predicate (obs #2224's D1 exit
+  // guard). `useBlocker` intercepts any real navigation attempt away from
+  // this screen (header arrow's `navigate(-1)`, hardware/gesture back) while
+  // this is true; it never fires for in-wizard step changes, which don't
+  // call `navigate` at all.
+  const hasCapturedData =
+    selectedCustomer !== null ||
+    pendingNewCustomer !== null ||
+    itemQuantitiesToList(itemQuantities).length > 0 ||
+    initialRentAmount !== "" ||
+    depositAmount !== "";
+  const blocker = useBlocker(hasCapturedData);
+
   // design-fidelity D1.2 invariant: each of these calls `setStep` and
   // NOTHING else — no other setter, no `resetForm()`, no side effect runs
   // as a consequence of a step transition. The `if` guards are redundant
@@ -335,227 +358,259 @@ export function RentalNewScreen() {
       : STEP_BREADCRUMBS[step];
 
   return (
-    <div className="mx-auto flex h-dvh w-full max-w-xl flex-col bg-background text-foreground overflow-hidden">
-      <AppHeader title="Nueva renta" showBack />
-      <p className="text-muted-foreground px-4 pt-2 text-xs font-medium">
-        {breadcrumb}
-      </p>
+    <>
+      <div className="mx-auto flex h-dvh w-full max-w-xl flex-col bg-background text-foreground overflow-hidden">
+        <AppHeader title="Nueva renta" showBack />
+        <p className="text-muted-foreground px-4 pt-2 text-xs font-medium">
+          {breadcrumb}
+        </p>
 
-      <main className="flex flex-1 flex-col overflow-y-auto">
-        <div className="flex flex-1 flex-col gap-6 px-4 pt-2 pb-4">
-          {/* Step 1 — Cliente. Load-bearing (design-fidelity D1): mounted
+        <main className="flex flex-1 flex-col overflow-y-auto">
+          <div className="flex flex-1 flex-col gap-6 px-4 pt-2 pb-4">
+            {/* Step 1 — Cliente. Load-bearing (design-fidelity D1): mounted
               via `hidden`, never conditionally rendered — unmounting
               `CustomerPicker` would lose its typed search query, the
               "Cliente nuevo" branch, and `CustomerForm`'s captured-photo
               preview. */}
-          <div hidden={step !== 1} className="flex flex-col gap-2">
-            <section className="flex flex-col gap-2">
-              <h2 className="text-sm font-semibold text-muted-foreground">
-                Cliente<span className="text-destructive" aria-hidden="true"> *</span>
-              </h2>
-              <CustomerPicker
-                selectedCustomer={selectedCustomer}
-                onSelect={(customer) => {
-                  setPendingNewCustomer(null);
-                  setSelectedCustomer(customer);
-                  setCustomerInvalid(false);
-                }}
-                pendingNewCustomer={pendingNewCustomer}
-                onSelectDraft={(draft) => {
-                  setSelectedCustomer(null);
-                  setPendingNewCustomer(draft);
-                  setCustomerInvalid(false);
-                }}
-                onViewCustomer={() => setCustomerDetailOpen(true)}
-                invalid={customerInvalid}
-                onSearchBlur={() => setCustomerInvalid(true)}
-                onCreatingChange={setIsCreatingCustomer}
-              />
-              {customerInvalid && (
-                <p className="text-destructive text-sm">
-                  Selecciona o crea un cliente.
-                </p>
-              )}
-            </section>
-          </div>
+            <div hidden={step !== 1} className="flex flex-col gap-2">
+              <section className="flex flex-col gap-2">
+                <h2 className="text-sm font-semibold text-muted-foreground">
+                  Cliente
+                  <span className="text-destructive" aria-hidden="true">
+                    {" "}
+                    *
+                  </span>
+                </h2>
+                <CustomerPicker
+                  selectedCustomer={selectedCustomer}
+                  onSelect={(customer) => {
+                    setPendingNewCustomer(null);
+                    setSelectedCustomer(customer);
+                    setCustomerInvalid(false);
+                  }}
+                  pendingNewCustomer={pendingNewCustomer}
+                  onSelectDraft={(draft) => {
+                    setSelectedCustomer(null);
+                    setPendingNewCustomer(draft);
+                    setCustomerInvalid(false);
+                  }}
+                  onViewCustomer={() => setCustomerDetailOpen(true)}
+                  invalid={customerInvalid}
+                  onSearchBlur={() => setCustomerInvalid(true)}
+                  onCreatingChange={setIsCreatingCustomer}
+                />
+                {customerInvalid && (
+                  <p className="text-destructive text-sm">
+                    Selecciona o crea un cliente.
+                  </p>
+                )}
+              </section>
+            </div>
 
-          {/* Step 2 — Qué se renta + montos. */}
-          <div hidden={step !== 2} className="flex flex-col gap-6">
-            <section className="flex flex-col gap-2">
-              <h2 className="text-sm font-semibold text-muted-foreground">
-                Qué se renta<span className="text-destructive" aria-hidden="true"> *</span>
-              </h2>
-              <ItemQuantityPicker
-                value={itemQuantities}
-                onChange={(next) => {
-                  setItemQuantities(next);
-                  if (itemQuantitiesToList(next).length > 0) {
-                    setItemsInvalid(false);
-                  }
-                }}
-                invalid={itemsInvalid}
-              />
-              {itemsInvalid && (
-                <p className="text-destructive text-sm">
-                  Selecciona al menos un producto.
-                </p>
-              )}
-            </section>
+            {/* Step 2 — Qué se renta + montos. */}
+            <div hidden={step !== 2} className="flex flex-col gap-6">
+              <section className="flex flex-col gap-2">
+                <h2 className="text-sm font-semibold text-muted-foreground">
+                  Qué se renta
+                  <span className="text-destructive" aria-hidden="true">
+                    {" "}
+                    *
+                  </span>
+                </h2>
+                <ItemQuantityPicker
+                  value={itemQuantities}
+                  onChange={(next) => {
+                    setItemQuantities(next);
+                    if (itemQuantitiesToList(next).length > 0) {
+                      setItemsInvalid(false);
+                    }
+                  }}
+                  invalid={itemsInvalid}
+                />
+                {itemsInvalid && (
+                  <p className="text-destructive text-sm">
+                    Selecciona al menos un producto.
+                  </p>
+                )}
+              </section>
 
-            <section className="flex flex-col gap-2">
-              <Label htmlFor="rental-initial-amount">Renta</Label>
-              <CurrencyInput
-                id="rental-initial-amount"
-                value={initialRentAmount}
-                onChange={setInitialRentAmount}
-              />
-            </section>
+              <section className="flex flex-col gap-2">
+                <Label htmlFor="rental-initial-amount">Renta</Label>
+                <CurrencyInput
+                  id="rental-initial-amount"
+                  value={initialRentAmount}
+                  onChange={setInitialRentAmount}
+                />
+              </section>
 
-            <section className="flex flex-col gap-2">
-              <Label htmlFor="rental-deposit-amount">Depósito</Label>
-              <CurrencyInput
-                id="rental-deposit-amount"
-                value={depositAmount}
-                onChange={setDepositAmount}
-              />
-            </section>
-          </div>
+              <section className="flex flex-col gap-2">
+                <Label htmlFor="rental-deposit-amount">Depósito</Label>
+                <CurrencyInput
+                  id="rental-deposit-amount"
+                  value={depositAmount}
+                  onChange={setDepositAmount}
+                />
+              </section>
+            </div>
 
-          {/* Step 3 — Confirmar (read-only review). By construction this
+            {/* Step 3 — Confirmar (read-only review). By construction this
               step can only ever fail on a server error, never on
               client-side validation — steps 1/2 already gated on the exact
               same schemas (design-fidelity D1). */}
-          <div hidden={step !== 3} className="flex flex-col gap-4">
-            <section className="flex flex-col gap-1 rounded-md border p-3">
-              <h3 className="text-sm font-semibold text-muted-foreground">
-                Cliente
-              </h3>
-              <p className="font-medium">{reviewCustomer?.name}</p>
-              <p className="text-muted-foreground text-sm">
-                {reviewCustomer?.phone}
-              </p>
-            </section>
+            <div hidden={step !== 3} className="flex flex-col gap-4">
+              <section className="flex flex-col gap-1 rounded-md border p-3">
+                <h3 className="text-sm font-semibold text-muted-foreground">
+                  Cliente
+                </h3>
+                <p className="font-medium">{reviewCustomer?.name}</p>
+                <p className="text-muted-foreground text-sm">
+                  {reviewCustomer?.phone}
+                </p>
+              </section>
 
-            <section className="flex flex-col gap-1 rounded-md border p-3">
-              <h3 className="text-sm font-semibold text-muted-foreground">
-                Qué se renta
-              </h3>
-              <ul className="flex flex-col gap-1">
-                {itemQuantitiesToList(itemQuantities).map((item) => (
-                  <li
-                    key={item.itemType}
-                    className="flex items-center justify-between"
-                  >
-                    <span>{rentalItemTypeLabel(item.itemType)}</span>
-                    <span className="font-medium">{item.quantity}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
+              <section className="flex flex-col gap-1 rounded-md border p-3">
+                <h3 className="text-sm font-semibold text-muted-foreground">
+                  Qué se renta
+                </h3>
+                <ul className="flex flex-col gap-1">
+                  {itemQuantitiesToList(itemQuantities).map((item) => (
+                    <li
+                      key={item.itemType}
+                      className="flex items-center justify-between"
+                    >
+                      <span>{rentalItemTypeLabel(item.itemType)}</span>
+                      <span className="font-medium">{item.quantity}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
 
-            <section className="flex flex-col gap-1 rounded-md border p-3">
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Renta</span>
-                <span>{formatCurrencyMXN(Number(initialRentAmount || 0))}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Depósito</span>
-                <span>{formatCurrencyMXN(Number(depositAmount || 0))}</span>
-              </div>
-              <div className="mt-1 flex items-center justify-between border-t pt-1 text-sm font-semibold">
-                <span>Total a cobrar</span>
-                <span>{formatCurrencyMXN(totalACobrar)}</span>
-              </div>
-            </section>
+              <section className="flex flex-col gap-1 rounded-md border p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Renta</span>
+                  <span>
+                    {formatCurrencyMXN(Number(initialRentAmount || 0))}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Depósito</span>
+                  <span>{formatCurrencyMXN(Number(depositAmount || 0))}</span>
+                </div>
+                <div className="mt-1 flex items-center justify-between border-t pt-1 text-sm font-semibold">
+                  <span>Total a cobrar</span>
+                  <span>{formatCurrencyMXN(totalACobrar)}</span>
+                </div>
+              </section>
+            </div>
           </div>
-        </div>
 
-        {/* Footer: 3-segment progress bar + Atrás (steps 2/3) + Continuar
+          {/* Footer: 3-segment progress bar + Atrás (steps 2/3) + Continuar
             (steps 1/2, disabled until that step's validator passes) /
             Confirmar renta (step 3) — design-fidelity D1, same sticky
             container as before (bg-card per Slice A's token audit).
             `formError` stays here too — visible next to the button that
             caused it. */}
-        <div className="bg-card sticky bottom-0 z-10 mt-auto flex shrink-0 flex-col gap-3 border-t p-4">
-          <div className="flex gap-1" aria-hidden="true">
-            {([1, 2, 3] as const).map((segment) => (
-              <div
-                key={segment}
-                className={cn(
-                  "h-1 flex-1 rounded-full",
-                  segment <= step ? "bg-primary" : "bg-muted",
-                )}
-              />
-            ))}
+          <div className="bg-card sticky bottom-0 z-10 mt-auto flex shrink-0 flex-col gap-3 border-t p-4">
+            <div className="flex gap-1" aria-hidden="true">
+              {([1, 2, 3] as const).map((segment) => (
+                <div
+                  key={segment}
+                  className={cn(
+                    "h-1 flex-1 rounded-full",
+                    segment <= step ? "bg-primary" : "bg-muted",
+                  )}
+                />
+              ))}
+            </div>
+
+            {formError && (
+              <p className="text-destructive text-sm">{formError}</p>
+            )}
+
+            <div className="flex gap-2">
+              {step > 1 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="flex-1"
+                  disabled={isSubmitting}
+                  onClick={goBack}
+                >
+                  Atrás
+                </Button>
+              )}
+              {step === 1 && (
+                <Button
+                  type="button"
+                  size="lg"
+                  className="flex-1"
+                  disabled={!customerStepValid}
+                  onClick={goToStep2}
+                >
+                  Continuar
+                </Button>
+              )}
+              {step === 2 && (
+                <Button
+                  type="button"
+                  size="lg"
+                  className="flex-1"
+                  disabled={!itemsStepValid}
+                  onClick={goToStep3}
+                >
+                  Continuar
+                </Button>
+              )}
+              {step === 3 && (
+                <Button
+                  type="button"
+                  size="lg"
+                  className="flex-1"
+                  disabled={isSubmitting}
+                  onClick={() => void handleConfirm()}
+                >
+                  {isSubmitting ? "Guardando…" : "Confirmar renta"}
+                </Button>
+              )}
+            </div>
           </div>
+        </main>
 
-          {formError && <p className="text-destructive text-sm">{formError}</p>}
+        <RentalCreatedSummary
+          open={summaryOpen}
+          onOpenChange={setSummaryOpen}
+          receipt={receipt}
+          onContinue={() => {
+            setSummaryOpen(false);
+            navigate("/dashboard");
+          }}
+        />
 
-          <div className="flex gap-2">
-            {step > 1 && (
-              <Button
-                type="button"
-                variant="outline"
-                size="lg"
-                className="flex-1"
-                disabled={isSubmitting}
-                onClick={goBack}
-              >
-                Atrás
-              </Button>
-            )}
-            {step === 1 && (
-              <Button
-                type="button"
-                size="lg"
-                className="flex-1"
-                disabled={!customerStepValid}
-                onClick={goToStep2}
-              >
-                Continuar
-              </Button>
-            )}
-            {step === 2 && (
-              <Button
-                type="button"
-                size="lg"
-                className="flex-1"
-                disabled={!itemsStepValid}
-                onClick={goToStep3}
-              >
-                Continuar
-              </Button>
-            )}
-            {step === 3 && (
-              <Button
-                type="button"
-                size="lg"
-                className="flex-1"
-                disabled={isSubmitting}
-                onClick={() => void handleConfirm()}
-              >
-                {isSubmitting ? "Guardando…" : "Confirmar renta"}
-              </Button>
-            )}
-          </div>
-        </div>
-      </main>
+        <CustomerDetailSheet
+          open={customerDetailOpen}
+          onOpenChange={setCustomerDetailOpen}
+          customerId={selectedCustomer?.id ?? null}
+        />
+      </div>
 
-      <RentalCreatedSummary
-        open={summaryOpen}
-        onOpenChange={setSummaryOpen}
-        receipt={receipt}
-        onContinue={() => {
-          setSummaryOpen(false);
-          navigate("/dashboard");
+      {/* design-fidelity D1.5-D1.7, call site #7 (obs #2224's B3 nesting
+        rule): rendered as a JSX SIBLING of the screen's root div, never
+        inside it — same rule every other ConfirmDialog call site follows.
+        `blocker.state === "blocked"` is the ONLY thing that opens it, so
+        the header arrow and hardware/gesture back are structurally
+        incapable of showing different copy or diverging in behavior. */}
+      <ConfirmDialog
+        open={blocker.state === "blocked"}
+        onOpenChange={(next) => {
+          if (!next) blocker.reset?.();
         }}
+        title="¿Salir sin guardar la renta?"
+        description="Se perderá todo lo que capturaste: cliente, productos y montos. La renta no se creará."
+        cancelLabel="Seguir aquí"
+        confirmLabel="Sí, salir"
+        onConfirm={() => blocker.proceed?.()}
       />
-
-      <CustomerDetailSheet
-        open={customerDetailOpen}
-        onOpenChange={setCustomerDetailOpen}
-        customerId={selectedCustomer?.id ?? null}
-      />
-    </div>
+    </>
   );
 }

@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { ClientResponseError } from "pocketbase";
 import { RentalNewScreen } from "@/screens/rental-new/RentalNewScreen";
 import { DataCacheProvider } from "@/app/DataCacheContext";
-import { consumeSessionMessage, STALE_SESSION_MESSAGE } from "@/data/staleSession";
+import {
+  consumeSessionMessage,
+  STALE_SESSION_MESSAGE,
+} from "@/data/staleSession";
 import { RentalPartiallyCreatedError } from "@/data/rentals.repo";
 
 const searchCustomers = vi.fn();
@@ -16,7 +19,6 @@ const listRentalsForCustomer = vi.fn();
 const listActiveRentals = vi.fn();
 const listActiveRentalItems = vi.fn();
 const getBusinessSettings = vi.fn();
-const navigate = vi.fn();
 const clear = vi.fn();
 
 // §14 gap-fill: `handleConfirm`'s catch block calls the real
@@ -33,22 +35,23 @@ vi.mock("@/data/customers.repo", () => ({
 }));
 
 vi.mock("@/data/rentals.repo", async () => {
-  const actual =
-    await vi.importActual<typeof import("@/data/rentals.repo")>(
-      "@/data/rentals.repo",
-    );
+  const actual = await vi.importActual<typeof import("@/data/rentals.repo")>(
+    "@/data/rentals.repo",
+  );
   return {
     // `RentalPartiallyCreatedError` is real (not mocked) so `instanceof`
     // checks in both this file and `RentalNewScreen.tsx` keep working.
     RentalPartiallyCreatedError: actual.RentalPartiallyCreatedError,
     createRental: (...args: unknown[]) => createRental(...args),
-    listRentalsForCustomer: (...args: unknown[]) => listRentalsForCustomer(...args),
+    listRentalsForCustomer: (...args: unknown[]) =>
+      listRentalsForCustomer(...args),
     // DataCacheContext's `refreshRentals` (fired fire-and-forget after a
     // successful createRental, see RentalNewScreen.tsx) pulls in these two
     // too — without them mocked here, the background refresh rejects with a
     // real TypeError (undefined mock) instead of the intended no-op.
     listActiveRentals: (...args: unknown[]) => listActiveRentals(...args),
-    listActiveRentalItems: (...args: unknown[]) => listActiveRentalItems(...args),
+    listActiveRentalItems: (...args: unknown[]) =>
+      listActiveRentalItems(...args),
   };
 });
 
@@ -56,39 +59,39 @@ vi.mock("@/data/settings.repo", () => ({
   getBusinessSettings: (...args: unknown[]) => getBusinessSettings(...args),
 }));
 
-vi.mock("react-router", async () => {
-  const actual = await vi.importActual<typeof import("react-router")>(
-    "react-router",
-  );
-  return { ...actual, useNavigate: () => navigate };
-});
-
 const juan = { id: "c1", name: "Juan Pérez", phone: "5512345678" };
 
 /**
- * design-fidelity Slice D3 (router migration prep, D3.4): swapped the plain
- * `<MemoryRouter>` for a `createMemoryRouter` data router — `RentalNewScreen`
- * doesn't call `useBlocker` yet (that's D1.5, a later batch), but D1.5's
- * exit-guard test coverage needs a REAL back-navigation entry to block,
- * which a bare `<MemoryRouter>` (no history stack beyond the initial entry)
- * can't exercise. The two-entry history (`/dashboard` → `/nueva-renta`,
- * starting on the second) means "navigate back" is a meaningful, testable
- * action here already, ready for D1.5 to build on without another router
- * swap.
+ * design-fidelity Slice D3 (router migration prep, D3.4) + D1.5-D1.7 (exit
+ * guard): a plain `<MemoryRouter>` can't exercise `useBlocker` at all (it
+ * throws outside a data router) or produce a meaningful "back" navigation
+ * (no history stack beyond the initial entry). `createMemoryRouter` +
+ * `RouterProvider` gives both: a real two-entry history (`/dashboard` →
+ * `/nueva-renta`, starting on the second) so "navigate back" — via the
+ * header arrow's `navigate(-1)` OR a direct `router.navigate(-1)` call
+ * simulating Android hardware/gesture back — is a real, blockable
+ * navigation. `react-router`'s `useNavigate`/`useBlocker` are deliberately
+ * NOT mocked (unlike most other screen tests) specifically so both exit
+ * paths go through the SAME real router mechanism the design (D3.3)
+ * requires — mocking `useNavigate` here would make the arrow a no-op spy
+ * and the exit-guard tests would prove nothing. The router is returned so
+ * tests can assert real post-navigation location (`router.state.location`)
+ * and drive a direct `router.navigate(-1)` call.
  */
 function renderScreen() {
   const router = createMemoryRouter(
     [
-      { path: "/dashboard", element: <div /> },
+      { path: "/dashboard", element: <div>Dashboard placeholder</div> },
       { path: "/nueva-renta", element: <RentalNewScreen /> },
     ],
     { initialEntries: ["/dashboard", "/nueva-renta"], initialIndex: 1 },
   );
-  return render(
+  const view = render(
     <DataCacheProvider>
       <RouterProvider router={router} />
     </DataCacheProvider>,
   );
+  return { router, ...view };
 }
 
 // design-fidelity D1.2 — the wizard's step navigation. Every step-changing
@@ -109,9 +112,7 @@ async function selectExistingCustomer(user: UserEvent, name = "Juan") {
     screen.getByLabelText("Buscar cliente por nombre o teléfono"),
     name,
   );
-  await user.click(
-    await screen.findByRole("button", { name: /Juan Pérez/ }),
-  );
+  await user.click(await screen.findByRole("button", { name: /Juan Pérez/ }));
 }
 
 async function stageNewCustomerDraft(
@@ -165,7 +166,6 @@ describe("RentalNewScreen (§7.1, §16.7, CU4, design-fidelity D1 wizard)", () =
       total_concentradores: 0,
       total_tanques: 0,
     });
-    navigate.mockReset();
     clear.mockReset();
     consumeSessionMessage();
     vi.stubGlobal("navigator", {});
@@ -399,7 +399,7 @@ describe("RentalNewScreen (§7.1, §16.7, CU4, design-fidelity D1 wizard)", () =
     expect(screen.getByText("Folio R-000001")).toBeInTheDocument();
   });
 
-  it("navigates to /dashboard when Continuar is pressed on the short confirmation (Redesign Round 3)", async () => {
+  it("navigates to /dashboard when Continuar is pressed on the short confirmation, with no exit dialog appearing (Redesign Round 3; design-fidelity D1.7)", async () => {
     searchCustomers.mockResolvedValue([juan]);
     createRental.mockResolvedValue({
       rental: {
@@ -412,7 +412,7 @@ describe("RentalNewScreen (§7.1, §16.7, CU4, design-fidelity D1 wizard)", () =
     });
 
     const user = userEvent.setup();
-    renderScreen();
+    const { router } = renderScreen();
 
     await selectExistingCustomer(user);
     await goToStep2(user);
@@ -425,11 +425,18 @@ describe("RentalNewScreen (§7.1, §16.7, CU4, design-fidelity D1 wizard)", () =
     // wizard has reset back to step 1 (post-success `resetForm`) — Radix
     // Dialog `aria-hidden`s the rest of the page while open, so this
     // unambiguously resolves to the dialog's button, not the wizard's.
-    await user.click(
-      await screen.findByRole("button", { name: "Continuar" }),
-    );
+    await user.click(await screen.findByRole("button", { name: "Continuar" }));
 
-    expect(navigate).toHaveBeenCalledWith("/dashboard");
+    // design-fidelity D1.7: `resetForm()` (already called on success, above)
+    // clears every field `hasCapturedData` checks, so by the time this
+    // "Continuar" navigation fires, the exit guard is unarmed — real
+    // navigation to /dashboard completes with no `ConfirmDialog` in the way.
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe("/dashboard"),
+    );
+    expect(
+      screen.queryByText("¿Salir sin guardar la renta?"),
+    ).not.toBeInTheDocument();
   });
 
   it("opens Ficha de cliente from the customer picker once a customer is selected (§16.6, task 3.5)", async () => {
@@ -592,7 +599,11 @@ describe("RentalNewScreen (§7.1, §16.7, CU4, design-fidelity D1 wizard)", () =
     expect(screen.getByRole("button", { name: "Guardando…" })).toBeDisabled();
 
     resolveCreateRental({
-      rental: { id: "r1", folio: "R-000001", created: "2026-08-26 10:00:00.000Z" },
+      rental: {
+        id: "r1",
+        folio: "R-000001",
+        created: "2026-08-26 10:00:00.000Z",
+      },
       items: [{ id: "i1" }],
       depositPayment: { id: "p1" },
     });
@@ -634,10 +645,16 @@ describe("RentalNewScreen (§7.1, §16.7, CU4, design-fidelity D1 wizard)", () =
     // `goBack` fired here, step would flip to 2 and the "Guardando…"/
     // "Confirmar renta" button (step-3-only) would disappear.
     await user.click(atrasButton);
-    expect(screen.getByRole("button", { name: "Guardando…" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Guardando…" }),
+    ).toBeInTheDocument();
 
     resolveCreateRental({
-      rental: { id: "r1", folio: "R-000001", created: "2026-08-26 10:00:00.000Z" },
+      rental: {
+        id: "r1",
+        folio: "R-000001",
+        created: "2026-08-26 10:00:00.000Z",
+      },
       items: [{ id: "i1" }],
       depositPayment: { id: "p1" },
     });
@@ -710,7 +727,9 @@ describe("RentalNewScreen (§7.1, §16.7, CU4, design-fidelity D1 wizard)", () =
     await user.click(confirmButton());
 
     expect(
-      await screen.findByText("No se pudo guardar el cliente. Intenta de nuevo."),
+      await screen.findByText(
+        "No se pudo guardar el cliente. Intenta de nuevo.",
+      ),
     ).toBeInTheDocument();
     expect(createRental).not.toHaveBeenCalled();
   });
@@ -737,5 +756,111 @@ describe("RentalNewScreen (§7.1, §16.7, CU4, design-fidelity D1 wizard)", () =
 
     await waitFor(() => expect(createRental).toHaveBeenCalledTimes(2));
     expect(createCustomer).toHaveBeenCalledTimes(1); // still only once
+  });
+
+  // design-fidelity D1.5-D1.7 (obs #2224's D3.3 "one dialog, one code path,
+  // both triggers"): the header back arrow's own `navigate(-1)` and a
+  // direct `router.navigate(-1)` (simulating Android hardware/gesture back)
+  // are both real navigations against the same data router, so `useBlocker`
+  // intercepts either one through the identical mechanism. Every test below
+  // exercises the real router (no `useNavigate` mock) so this is actually
+  // proven, not assumed.
+  describe("exit guard (D1.5-D1.7, useBlocker + ConfirmDialog call site #7)", () => {
+    const EXIT_DIALOG_TITLE = "¿Salir sin guardar la renta?";
+
+    function backArrowButton() {
+      return screen.getByRole("button", { name: "Volver" });
+    }
+
+    it("navigates immediately with no exit dialog when the header back arrow is tapped on an empty form", async () => {
+      const user = userEvent.setup();
+      const { router } = renderScreen();
+
+      await user.click(backArrowButton());
+
+      await waitFor(() =>
+        expect(router.state.location.pathname).toBe("/dashboard"),
+      );
+      expect(screen.queryByText(EXIT_DIALOG_TITLE)).not.toBeInTheDocument();
+    });
+
+    it("navigates immediately with no exit dialog on a direct hardware/gesture back (router.navigate(-1)) with an empty form", async () => {
+      const { router } = renderScreen();
+
+      await act(async () => {
+        await router.navigate(-1);
+      });
+
+      await waitFor(() =>
+        expect(router.state.location.pathname).toBe("/dashboard"),
+      );
+      expect(screen.queryByText(EXIT_DIALOG_TITLE)).not.toBeInTheDocument();
+    });
+
+    it("shows the exit ConfirmDialog when the header back arrow is tapped with captured data (a selected customer)", async () => {
+      searchCustomers.mockResolvedValue([juan]);
+      const user = userEvent.setup();
+      const { router } = renderScreen();
+
+      await selectExistingCustomer(user);
+
+      await user.click(backArrowButton());
+
+      expect(await screen.findByText(EXIT_DIALOG_TITLE)).toBeInTheDocument();
+      // The navigation is genuinely paused, not merely visually blocked.
+      expect(router.state.location.pathname).toBe("/nueva-renta");
+    });
+
+    it("shows the SAME exit ConfirmDialog on a direct hardware/gesture back with identical captured data — proving both trigger paths converge on one code path", async () => {
+      searchCustomers.mockResolvedValue([juan]);
+      const user = userEvent.setup();
+      const { router } = renderScreen();
+
+      await selectExistingCustomer(user);
+
+      await act(async () => {
+        await router.navigate(-1);
+      });
+
+      expect(await screen.findByText(EXIT_DIALOG_TITLE)).toBeInTheDocument();
+      expect(router.state.location.pathname).toBe("/nueva-renta");
+    });
+
+    it("closes the exit dialog and keeps all captured data intact when 'Seguir aquí' is clicked", async () => {
+      searchCustomers.mockResolvedValue([juan]);
+      const user = userEvent.setup();
+      const { router } = renderScreen();
+
+      await selectExistingCustomer(user);
+      await user.click(backArrowButton());
+      await screen.findByText(EXIT_DIALOG_TITLE);
+
+      await user.click(screen.getByRole("button", { name: "Seguir aquí" }));
+
+      await waitFor(() =>
+        expect(screen.queryByText(EXIT_DIALOG_TITLE)).not.toBeInTheDocument(),
+      );
+      expect(router.state.location.pathname).toBe("/nueva-renta");
+      // Data untouched — the selected customer is still visible.
+      expect(
+        screen.getByRole("button", { name: "Ver ficha" }),
+      ).toBeInTheDocument();
+    });
+
+    it("completes the navigation away from /nueva-renta when 'Sí, salir' is clicked", async () => {
+      searchCustomers.mockResolvedValue([juan]);
+      const user = userEvent.setup();
+      const { router } = renderScreen();
+
+      await selectExistingCustomer(user);
+      await user.click(backArrowButton());
+      await screen.findByText(EXIT_DIALOG_TITLE);
+
+      await user.click(screen.getByRole("button", { name: "Sí, salir" }));
+
+      await waitFor(() =>
+        expect(router.state.location.pathname).toBe("/dashboard"),
+      );
+    });
   });
 });
