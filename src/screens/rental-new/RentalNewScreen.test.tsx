@@ -276,6 +276,16 @@ describe("RentalNewScreen (§7.1, §16.7, CU4, design-fidelity D1 wizard)", () =
       await goToStep2(user);
       await fillItemsAndAmounts(user, { rent: "2800", deposit: "1000" });
 
+      // DOM node identity, captured BEFORE navigating away — a remount
+      // (regression to `{step === 2 && (...)}` conditional rendering) always
+      // produces a brand-new node, even though `ItemQuantityPicker`/
+      // `CurrencyInput` are fully-controlled and their VALUES would survive
+      // a remount too (both are stateless — the values live in this
+      // screen's own lifted state). Node identity is the only assertion
+      // that actually distinguishes hidden-gating from conditional
+      // rendering; value-equality checks alone do not (RELIABILITY-002).
+      const rentaInputBefore = screen.getByLabelText("Renta");
+
       await user.click(backButton()); // 2 → 1
       // The selected customer survived too — CustomerPicker never
       // unmounted. Scoped via `getByRole` (not `getByText`) because step
@@ -287,6 +297,10 @@ describe("RentalNewScreen (§7.1, §16.7, CU4, design-fidelity D1 wizard)", () =
       ).toBeInTheDocument();
 
       await goToStep2(user); // 1 → 2 again
+
+      // Same DOM node reference — proves step 2 stayed mounted (hidden),
+      // not unmounted+remounted, while step 1 was visible.
+      expect(screen.getByLabelText("Renta")).toBe(rentaInputBefore);
 
       expect(
         screen.getByLabelText("Cantidad de concentrador"),
@@ -576,6 +590,51 @@ describe("RentalNewScreen (§7.1, §16.7, CU4, design-fidelity D1 wizard)", () =
     await user.click(confirmButton());
 
     expect(screen.getByRole("button", { name: "Guardando…" })).toBeDisabled();
+
+    resolveCreateRental({
+      rental: { id: "r1", folio: "R-000001", created: "2026-08-26 10:00:00.000Z" },
+      items: [{ id: "i1" }],
+      depositPayment: { id: "p1" },
+    });
+
+    expect(
+      await screen.findByRole("heading", { name: "Renta creada ✓" }),
+    ).toBeInTheDocument();
+  });
+
+  it("disables 'Atrás' while a submission is in flight, so clicking it cannot navigate away and race handleConfirm's async continuation (design-fidelity D1a correction, RESILIENCE-001/RELIABILITY-001)", async () => {
+    searchCustomers.mockResolvedValue([juan]);
+    let resolveCreateRental: (value: {
+      rental: { id: string; folio: string; created: string };
+      items: { id: string }[];
+      depositPayment: { id: string };
+    }) => void = () => {};
+    createRental.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveCreateRental = resolve;
+        }),
+    );
+
+    const user = userEvent.setup();
+    renderScreen();
+
+    await selectExistingCustomer(user);
+    await goToStep2(user);
+    await fillItemsAndAmounts(user, { rent: "2800", deposit: "1000" });
+    await goToStep3(user);
+
+    await user.click(confirmButton());
+
+    const atrasButton = backButton();
+    expect(atrasButton).toBeDisabled();
+
+    // A click on a genuinely disabled button never fires its click handler
+    // (real DOM/jsdom behavior, not just a `disabled` attribute check) — if
+    // `goBack` fired here, step would flip to 2 and the "Guardando…"/
+    // "Confirmar renta" button (step-3-only) would disappear.
+    await user.click(atrasButton);
+    expect(screen.getByRole("button", { name: "Guardando…" })).toBeInTheDocument();
 
     resolveCreateRental({
       rental: { id: "r1", folio: "R-000001", created: "2026-08-26 10:00:00.000Z" },

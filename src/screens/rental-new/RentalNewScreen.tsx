@@ -498,6 +498,7 @@ export function RentalNewScreen() {
                 variant="outline"
                 size="lg"
                 className="flex-1"
+                disabled={isSubmitting}
                 onClick={goBack}
               >
                 Atrás
