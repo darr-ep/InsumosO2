@@ -1,13 +1,10 @@
 import { memo, useEffect, useState } from "react";
-import { Link } from "react-router";
 import {
   CalendarDays,
   Droplet,
   PackageOpen,
-  Plus,
   Wind,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { RentalCard } from "@/components/RentalCard";
 import { DashboardStats } from "@/components/DashboardStats";
 import { EmptyState } from "@/components/EmptyState";
@@ -65,27 +62,15 @@ import { formatCurrencyMXN } from "@/lib/currency";
  *
  * Two decisions already confirmed by the business owner directly (not
  * re-litigated here):
- * 1. The CTA is a pinned, ALWAYS-VISIBLE bottom bar — not "sticky only
- *    after scrolling past its literal DOM position". It's rendered as a
- *    separate `sticky bottom-0 mt-auto` block, a flex sibling AFTER the
- *    scrollable content block, both inside a `flex min-h-full flex-col`
- *    root. `<main>` (AppLayout) is `flex-1 overflow-y-auto` — the nearest
- *    scrolling ancestor — so `sticky bottom-0` here correctly pins within
- *    it (confirmed structurally, not just assumed; see
- *    `DashboardScreen.test.tsx`'s pinned-bar test). `mt-auto` makes the CTA
- *    hug the bottom even when content is shorter than the viewport.
- *    **Correction (business-owner finding, post-launch-audit):** this
- *    block originally added `pb-20` (80px) on the scrollable content,
- *    reasoning the CTA bar would otherwise sit on top of the last
- *    `RentalCard`. That was wrong — the CTA is a normal flex sibling
- *    (not `position: fixed`/absolute), so it always reserves its own
- *    80px of layout space regardless of padding, exactly like
- *    `AppLayout.tsx`'s own bottom nav already documents ("no `pb-20`
- *    -style compensating padding hack is needed anywhere" — same
- *    sticky-flex-sibling pattern). The padding was pure double-spacing:
- *    it never prevented an overlap that couldn't happen, it just left a
- *    visibly oversized empty gap between the last card and the CTA.
- *    Removed; the CTA's own box is the only spacing needed.
+ * 1. **Correction (post-audit bugfix, design-fidelity obs #2228 batch):**
+ *    this screen used to render its OWN pinned "Nueva renta" CTA bar here
+ *    (a `sticky bottom-0 mt-auto` block) — a leftover from before the
+ *    bottom-nav's floating pill CTA existed. That pill (added in Slice D2,
+ *    `AppLayout.tsx` — see its own docblock) is now the single correct
+ *    "+ Nueva renta" entry point app-wide (visible from both Dashboard and
+ *    Clientes), so the duplicate local CTA and its `pb-20`-avoidance
+ *    reasoning were removed entirely; there is nothing left for this
+ *    screen to reserve space for.
  * 2. The former full "Requiere revisión" section (duplicated `RentalCard`s)
  *    is now a single compact, tappable banner — explicit go-ahead to
  *    simplify existing tested behavior, not just a color tweak. Tapping it
@@ -449,14 +434,6 @@ export const DashboardScreen = memo(function DashboardScreen({
         />
       </div>
 
-      <div className="sticky bottom-0 z-10 mt-auto shrink-0 p-4 pointer-events-none">
-        <Button asChild size="lg" className="w-full pointer-events-auto shadow-lg">
-          <Link to="/nueva-renta">
-            <Plus aria-hidden="true" />
-            Nueva renta
-          </Link>
-        </Button>
-      </div>
     </div>
   );
 });

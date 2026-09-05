@@ -109,7 +109,11 @@ export function ConfirmDialog({
             type="button"
             variant={tone === "destructive" ? "destructive" : "default"}
             size="lg"
-            className="flex-1"
+            className={
+              tone === "destructive"
+                ? "flex-1"
+                : "flex-1 bg-neutral-900 text-white hover:bg-neutral-800"
+            }
             disabled={isConfirming}
             onClick={() => void onConfirm()}
           >

@@ -165,6 +165,27 @@ describe("LoginScreen — real login (§14, §16.6, CU1, gap-fill)", () => {
     ).toBeInTheDocument();
   });
 
+  // Post-audit bugfix (design-fidelity, obs #2228 batch): design spec (§14
+  // /Layer C6) calls for the login error to render inside a rose banner
+  // (`bg-rose-50 border border-rose-200 text-red-700 rounded-lg p-3`), not
+  // bare destructive text with no container.
+  it("renders the login error inside the designed rose banner container", async () => {
+    getLoginDirectory.mockResolvedValue([juan]);
+    loginWithPassword.mockRejectedValue(makeClientResponseError(400));
+    const user = userEvent.setup();
+
+    renderScreen();
+
+    await user.click(await screen.findByRole("button", { name: "Juan Pérez" }));
+    await user.type(await screen.findByLabelText("Contraseña"), "wrong");
+    await user.click(screen.getByRole("button", { name: "Entrar" }));
+
+    const errorText = await screen.findByText("Credenciales incorrectas.");
+    const banner = errorText.closest(".bg-rose-50");
+    expect(banner).not.toBeNull();
+    expect(banner).toHaveClass("border", "border-rose-200", "rounded-lg", "p-3");
+  });
+
   it("shows a clear rate-limit message on a 429 instead of a raw error", async () => {
     getLoginDirectory.mockResolvedValue([juan]);
     loginWithPassword.mockRejectedValue(makeClientResponseError(429));

@@ -203,6 +203,46 @@ describe("ConfirmDialog (design-fidelity, shared component)", () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
+  // Post-audit bugfix (design-fidelity, obs #2228 batch): this component's
+  // own docblock says the confirm button is "default/black unless
+  // tone=\"destructive\"" — but `Button`'s `default` variant is
+  // `bg-primary` (the app's blue). Asserts the non-destructive confirm
+  // button renders black/neutral-dark, not blue.
+  it("renders the confirm button black (not primary-blue) when tone is default (non-destructive)", () => {
+    render(
+      <ConfirmDialog
+        open
+        onOpenChange={() => {}}
+        title="¿Devolver esta renta?"
+        description="La renta R-000001 se marcará como devuelta. Esta acción no se puede deshacer."
+        confirmLabel="Sí, devolver"
+        onConfirm={() => {}}
+      />,
+    );
+
+    const confirmButton = screen.getByRole("button", { name: "Sí, devolver" });
+    expect(confirmButton).not.toHaveClass("bg-primary");
+    expect(confirmButton).toHaveClass("bg-neutral-900");
+  });
+
+  it("still renders the confirm button with the destructive variant when tone is destructive (no regression)", () => {
+    render(
+      <ConfirmDialog
+        open
+        onOpenChange={() => {}}
+        title="¿Eliminar este registro?"
+        description="Esta acción no se puede deshacer."
+        confirmLabel="Sí, eliminar"
+        onConfirm={() => {}}
+        tone="destructive"
+      />,
+    );
+
+    const confirmButton = screen.getByRole("button", { name: "Sí, eliminar" });
+    expect(confirmButton).toHaveClass("bg-destructive");
+    expect(confirmButton).not.toHaveClass("bg-neutral-900");
+  });
+
   it("does not render when open is false", () => {
     render(
       <ConfirmDialog

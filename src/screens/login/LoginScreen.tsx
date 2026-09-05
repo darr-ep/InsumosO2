@@ -208,7 +208,9 @@ export function LoginScreen() {
           </div>
 
           {loginError && (
-            <p className="text-destructive text-sm">{loginError}</p>
+            <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-red-700">
+              {loginError}
+            </div>
           )}
 
           <Button type="submit" size="lg" disabled={isSubmitting}>

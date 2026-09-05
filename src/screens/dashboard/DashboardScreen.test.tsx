@@ -448,39 +448,21 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
     ).toBeInTheDocument();
   });
 
-  it("links to Nueva renta (§16.6: botón 'Nueva renta')", async () => {
+  // Post-audit bugfix (design-fidelity, obs #2228 batch): DashboardScreen
+  // used to render its OWN sticky-bottom "Nueva renta" CTA — a leftover
+  // from before the bottom-nav's floating pill CTA existed (added in
+  // design-fidelity Slice D2, `AppLayout.tsx`). The bottom-nav pill is now
+  // the single correct "+ Nueva renta" entry point app-wide, so this
+  // screen must NOT render a duplicate of its own.
+  it("does not render its own 'Nueva renta' CTA (the bottom-nav pill is the single entry point, Slice D2)", async () => {
     listActiveRentals.mockResolvedValue([]);
 
     renderScreen();
 
     await screen.findByText("No hay rentas activas todavía.");
     expect(
-      screen.getByRole("link", { name: "Nueva renta" }),
-    ).toHaveAttribute("href", "/nueva-renta");
-  });
-
-  /**
-   * Redesign Round 2, Batch 4 (business-owner brief, verbatim, decision
-   * already confirmed — see this batch's own docblock in DashboardScreen):
-   * the CTA is a pinned, always-visible bottom bar (not an inline scroll-
-   * flow element) — this takes priority over the brief's literal DOM-order
-   * wording for the CTA specifically. This is the presentational-change
-   * exception this batch's own scope note allows: structural class
-   * assertions, since there's genuinely nothing else to unit-test about a
-   * CSS-only sticky/pinned layout.
-   */
-  it("renders 'Nueva renta' as a pinned, always-visible bottom bar (sticky bottom-0), separate from the scrollable content", async () => {
-    listActiveRentals.mockResolvedValue([]);
-
-    const { container } = renderScreen();
-
-    await screen.findByText("No hay rentas activas todavía.");
-
-    const ctaBar = container.querySelector(".sticky.bottom-0");
-    expect(ctaBar).not.toBeNull();
-    expect(
-      within(ctaBar as HTMLElement).getByRole("link", { name: "Nueva renta" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("link", { name: "Nueva renta" }),
+    ).not.toBeInTheDocument();
   });
 
   it("does not add compensating bottom padding for the pinned CTA bar (it's a flex sibling, not an overlay — see DashboardScreen.tsx's docblock correction)", async () => {
