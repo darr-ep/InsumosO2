@@ -8,41 +8,40 @@
  * sent (and the `:isset = false` rules from task 1.1 already reject a
  * request body that even tries to include these fields):
  *
- *   1. Computes the next sequential folio as MAX(existing folio) + 1,
- *      formatted "R-001" (3-digit minimum, zero-padded, §A.2 — global,
- *      never resets, grows past the minimum width once the count exceeds
- *      it, e.g. "R-1000"). SQLite serializes writes (confirmed in §11.1),
- *      so this read-then-insert within the same request is safe without a
- *      Postgres-style sequence; the unique index on `folio` added in the
- *      task 1.1 migration is the safety net regardless of that assumption.
+ *   1. Assigns the next sequential folio, formatted "R-001" (3-digit
+ *      minimum, zero-padded, §A.2 — global, never resets, grows past the
+ *      minimum width once the count exceeds it, e.g. "R-1000"). Sourced
+ *      from `rental_folio_counter` (pb_migrations/1787760080), a
+ *      single-row counter incremented atomically inside
+ *      `app.runInTransaction` — NOT computed by reading "the most recently
+ *      created rental" (the previous approach). That approach was
+ *      confirmed live to be racy under concurrent creates AND simply wrong
+ *      whenever two rentals share a `created` timestamp (ties sort
+ *      non-deterministically, so it could return an older record than the
+ *      true highest folio and keep recomputing the same already-taken
+ *      number on every retry). The counter has neither failure mode: no
+ *      read-then-insert window, no dependence on `created` ordering.
  *   2. Forces status = "ACTIVE" — a brand new rental is always active.
  *   3. Sets created_by = updated_by = the authenticated user (§26) — never
  *      trusted from the client body.
  */
 onRecordCreateRequest((e) => {
-  const nextFolioNumber = (() => {
-    const lastRentals = e.app.findRecordsByFilter(
-      "rentals",
-      "id != ''",
-      "-created",
-      1,
-      0,
-    );
-
-    if (lastRentals.length === 0) {
-      return 1;
-    }
-
-    const match = String(lastRentals[0].get("folio")).match(/(\d+)$/);
-    const lastNumber = match ? parseInt(match[1], 10) : 0;
-
-    return lastNumber + 1;
-  })();
-
-  e.record.set("folio", "R-" + String(nextFolioNumber).padStart(3, "0"));
   e.record.set("status", "ACTIVE");
   e.record.set("created_by", e.auth ? e.auth.id : "");
   e.record.set("updated_by", e.auth ? e.auth.id : "");
+
+  let nextFolioNumber;
+  e.app.runInTransaction((txApp) => {
+    const counter = txApp.findFirstRecordByFilter(
+      "rental_folio_counter",
+      "id != ''",
+    );
+    nextFolioNumber = counter.get("value") + 1;
+    counter.set("value", nextFolioNumber);
+    txApp.save(counter);
+  });
+
+  e.record.set("folio", "R-" + String(nextFolioNumber).padStart(3, "0"));
 
   e.next();
 }, "rentals");
