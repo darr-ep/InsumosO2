@@ -38,12 +38,21 @@ interface ErrorBoundaryState {
  * resets `hasError` in place (same component tree, same location, freshly
  * re-rendered children) — useful wherever `ErrorBoundary` is still used
  * directly around a non-routed subtree. The route version's "Reintentar"
- * instead calls `navigate(0)`, which re-runs the CURRENT route through the
- * router (re-invoking its loader/element) rather than resetting local
- * component state, because a route `errorElement` swaps out the entire
- * crashed route's subtree — there is no parent boundary instance with
- * `hasError` state to reset. Both land the user on a fresh render of the
- * crashed screen; only the underlying recovery mechanism differs.
+ * instead calls `navigate(".", { replace: true })`, which re-triggers the
+ * CURRENT route's render (re-invoking its loader/element) rather than
+ * resetting local component state, because a route `errorElement` swaps out
+ * the entire crashed route's subtree — there is no parent boundary instance
+ * with `hasError` state to reset. Both land the user on a fresh render of
+ * the crashed screen; only the underlying recovery mechanism differs.
+ *
+ * design-fidelity Slice D3 scoped correction (RESILIENCE-001): the retry was
+ * originally wired to `navigate(0)`, which forwards to `history.go(0)` —
+ * for the app's real `createBrowserRouter` this is `window.history.go(0)`,
+ * i.e. an actual full document reload, making "Reintentar" and "Recargar
+ * página" do the identical expensive thing and defeating the point of having
+ * two separate recovery actions. `navigate(".", { replace: true })` is
+ * react-router's idiomatic way to re-render the current route in place
+ * without touching browser history or reloading the document.
  */
 export function ErrorFallback({ onRetry }: { onRetry: () => void }) {
   return (
@@ -105,5 +114,5 @@ export function RouteErrorBoundary() {
 
   console.error("RouteErrorBoundary caught a route error:", error);
 
-  return <ErrorFallback onRetry={() => navigate(0)} />;
+  return <ErrorFallback onRetry={() => navigate(".", { replace: true })} />;
 }

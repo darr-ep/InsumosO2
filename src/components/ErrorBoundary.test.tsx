@@ -8,6 +8,23 @@ import {
 } from "react-router";
 import { ErrorBoundary, RouteErrorBoundary } from "@/components/ErrorBoundary";
 
+// design-fidelity Slice D3 scoped correction (RELIABILITY-002, closed
+// together with RESILIENCE-001's navigate(".", { replace: true }) fix): the
+// pre-correction "Reintentar" test only asserted the same fallback heading
+// was present before/after the click, which can't distinguish a working
+// retry from a no-op handler. Spying on the real `useNavigate` (mocked here,
+// actual module preserved otherwise) lets the test assert the exact
+// navigate call the retry mechanism is supposed to make.
+const { navigateSpy } = vi.hoisted(() => ({ navigateSpy: vi.fn() }));
+
+vi.mock("react-router", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react-router")>();
+  return {
+    ...actual,
+    useNavigate: () => navigateSpy,
+  };
+});
+
 // Throws on the first render only, so "Reintentar" (which just resets
 // internal state and re-renders the same children) can be proven to
 // recover once the underlying condition clears — a real render crash
@@ -133,6 +150,7 @@ function renderWithRouteError(children: RouteObject["children"]) {
 describe("RouteErrorBoundary", () => {
   beforeEach(() => {
     vi.spyOn(console, "error").mockImplementation(() => {});
+    navigateSpy.mockClear();
   });
 
   afterEach(() => {
@@ -152,24 +170,25 @@ describe("RouteErrorBoundary", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("'Reintentar' re-runs the current route via navigate(0) instead of resetting local state", async () => {
+  it("'Reintentar' calls navigate('.', { replace: true }) to re-render the current route in place, not a full reload", async () => {
     const user = userEvent.setup();
     renderWithRouteError([{ path: "/", element: <ThrowingScreen /> }]);
 
     expect(
       screen.getByRole("heading", { name: "Algo salió mal" }),
     ).toBeInTheDocument();
+    expect(navigateSpy).not.toHaveBeenCalled();
 
-    // The thrown route never recovers on its own (it always throws), so
-    // clicking "Reintentar" re-navigates to the same route and hits the
-    // same throw again — proving it's wired to navigate(0), not a local
-    // hasError reset (which would behave identically here and not actually
-    // distinguish the two implementations on its own, but a missing/miswired
-    // handler would throw synchronously or leave the button inert instead).
     await user.click(screen.getByRole("button", { name: "Reintentar" }));
 
-    expect(
-      screen.getByRole("heading", { name: "Algo salió mal" }),
-    ).toBeInTheDocument();
+    // Asserts the exact retry mechanism fired, not just that the same
+    // fallback heading is still on screen afterwards (that alone can't tell
+    // a working retry apart from a no-op handler). `.` + `replace: true` is
+    // the idiomatic react-router way to re-trigger the current route's
+    // render without a new history entry or a browser document reload —
+    // deliberately NOT `navigate(0)`, which forwards to `history.go(0)` and,
+    // for the app's real createBrowserRouter, is an actual full reload.
+    expect(navigateSpy).toHaveBeenCalledTimes(1);
+    expect(navigateSpy).toHaveBeenCalledWith(".", { replace: true });
   });
 });

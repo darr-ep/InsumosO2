@@ -1,8 +1,10 @@
+import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ClientResponseError } from "pocketbase";
-import { App } from "@/app/App";
+import { App, appRoutes } from "@/app/App";
+import { RouteErrorBoundary } from "@/components/ErrorBoundary";
 import { STALE_SESSION_MESSAGE } from "@/data/staleSession";
 
 // DashboardScreen fetches active rentals (and, once folded, search results)
@@ -338,5 +340,29 @@ describe("App", () => {
         ).toBeInTheDocument(),
       );
     });
+  });
+});
+
+/**
+ * design-fidelity Slice D3 scoped correction (RELIABILITY-001): the
+ * `RouteErrorBoundary` behavior tests in `ErrorBoundary.test.tsx` build a
+ * private ad-hoc route array and never exercise the REAL exported
+ * `appRoutes` from this file — so a future regression that drops, moves, or
+ * misconfigures the real root route's `errorElement` wiring would ship with
+ * every test green. This pins the exact real wiring: cheap and deterministic
+ * (no render needed — `appRoutes` is a plain module-scope array literal,
+ * already fully constructed the moment this file's own `import { App,
+ * appRoutes } from "@/app/App"` above runs), complementing rather than
+ * replacing `ErrorBoundary.test.tsx`'s isolated behavior coverage of
+ * `RouteErrorBoundary` itself.
+ */
+describe("appRoutes wiring (design-fidelity Slice D3 correction, RELIABILITY-001)", () => {
+  it("wires the real root route's errorElement to RouteErrorBoundary", () => {
+    const [rootRoute] = appRoutes;
+
+    expect(rootRoute.errorElement).toBeTruthy();
+    expect((rootRoute.errorElement as ReactElement).type).toBe(
+      RouteErrorBoundary,
+    );
   });
 });
