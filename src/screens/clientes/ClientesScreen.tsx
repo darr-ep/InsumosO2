@@ -1,7 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { Users } from "lucide-react";
-import { AppHeader } from "@/components/AppHeader";
-import { SearchBar } from "@/components/SearchBar";
 import { CustomerCard } from "@/components/CustomerCard";
 import { CustomerDetailSheet } from "@/components/CustomerDetailSheet";
 import { EmptyState } from "@/components/EmptyState";
@@ -24,26 +22,42 @@ import {
  * (`CustomerDetailSheet`, with its own active/historial split and
  * credential access) already existed — this only adds a new entry point.
  * Structurally mirrors `HistorialScreen`'s fetch/loading/error/empty-state
- * pattern (idle-state fetch via `listCustomers`), layered with
- * `DashboardScreen`'s idle-vs-active-search split (`SearchBar` +
- * debounced `searchCustomers`, same 300ms debounce, same
- * "one list visible at a time" rule).
+ * pattern (idle-state fetch via `listCustomers`), layered with the same
+ * idle-vs-active-search split `DashboardScreen` established (debounced
+ * `searchCustomers`, same 300ms debounce, same "one list visible at a
+ * time" rule) — though the search box itself lives in `AppLayout` now, see
+ * below.
  *
- * AppHeader variant: home variant (no `showBack`). Documented judgment
- * call — the business-owner brief's header pattern describes "perfil"
- * (`AccountMenu`) as appearing on Dashboard specifically, and every other
- * screen using `AppHeader` so far (`HistorialScreen`, `RentalNewScreen`)
- * is a genuine drill-down reached via navigation, so it uses the
- * secondary (`showBack`) variant. Clientes is different: round 3's own
- * bottom-nav plan (not yet wired — that's Batch 3) makes it one of only 2
- * PRIMARY destinations (Inicio, Clientes), reachable directly from the
- * tab bar. A primary tab has nowhere obviously "back" to, so it gets the
- * home variant (title + `AccountMenu`) instead — same as Dashboard.
+ * `AppHeader`/`SearchBar` moved out of this screen (Inicio/Clientes swipe,
+ * post-launch) — both are now shared, single instances in `AppLayout`
+ * itself, so the original "home variant vs showBack" reasoning for this
+ * screen's header lives there, not here.
  */
 
 const SEARCH_DEBOUNCE_MS = 300;
 
-export function ClientesScreen() {
+// Post-launch feature (Inicio/Clientes swipe): the search box itself now
+// lives once, shared, in `AppLayout` — this screen only owns what it does
+// with the typed text (the debounce/results/loading/error state below),
+// receiving the text itself as a controlled prop instead of its own
+// `useState`. See `AppLayout.tsx`'s own docblock for the full picture.
+// Optional/defaulted to "" — `App.tsx` still instantiates
+// `<ClientesScreen />` bare as a route `element` that's never actually
+// rendered via `<Outlet/>` (only used for `useLocation()` path-matching,
+// see `AppLayout.tsx`), so this must tolerate being constructed with no
+// props at all.
+export interface ClientesScreenProps {
+  query?: string;
+}
+
+// See DashboardScreen.tsx's own comment for the full live-tested root
+// cause: memoizing both permanently-mounted panels stops a pure
+// route/pathname switch (or the other panel's search keystroke) from
+// forcing a full reconciliation of this screen's list, which was
+// competing with Embla's swipe-settle animation for main-thread time.
+export const ClientesScreen = memo(function ClientesScreen({
+  query = "",
+}: ClientesScreenProps) {
   const {
     customers,
     customersError,
@@ -53,7 +67,6 @@ export function ClientesScreen() {
     loadRentalsIfNeeded,
   } = useDataCache();
 
-  const [query, setQuery] = useState("");
   const [results, setResults] = useState<CustomerRecord[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -138,84 +151,70 @@ export function ClientesScreen() {
   const visibleCustomers = isSearchActive ? visibleResults : (customers ?? []);
 
   return (
-    <>
-      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 pb-2">
-        <AppHeader title="Clientes" />
-        <div className="px-4">
-          <SearchBar
-            value={query}
-            onChange={setQuery}
-            placeholder="Nombre del cliente"
-          />
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-4 px-4 pt-2 pb-8">
-
-        {isSearchActive ? (
-          <>
-            {searchError && (
-              <p className="text-destructive text-sm">{searchError}</p>
+    <div className="flex flex-col gap-4 px-4 pt-2 pb-8">
+      {isSearchActive ? (
+        <>
+          {searchError && (
+            <p className="text-destructive text-sm">{searchError}</p>
+          )}
+          {isSearching && (
+            <p className="text-muted-foreground text-sm">Buscando…</p>
+          )}
+          {!isSearching &&
+            !searchError &&
+            visibleResults.length === 0 && (
+              <p className="text-muted-foreground text-sm">
+                Sin resultados.
+              </p>
             )}
-            {isSearching && (
-              <p className="text-muted-foreground text-sm">Buscando…</p>
-            )}
-            {!isSearching &&
-              !searchError &&
-              visibleResults.length === 0 && (
-                <p className="text-muted-foreground text-sm">
-                  Sin resultados.
-                </p>
-              )}
-          </>
-        ) : (
-          <>
-            {customersError && (
-              <p className="text-destructive text-sm">{customersError}</p>
-            )}
+        </>
+      ) : (
+        <>
+          {customersError && (
+            <p className="text-destructive text-sm">{customersError}</p>
+          )}
 
-            {customers === null && !customersError && (
-              <p className="text-muted-foreground text-sm">Cargando…</p>
-            )}
+          {customers === null && !customersError && (
+            <p className="text-muted-foreground text-sm">Cargando…</p>
+          )}
 
-            {customers !== null && customers.length === 0 && !customersError && (
-              <EmptyState
-                icon={Users}
-                title="Aún no hay clientes registrados."
-              />
-            )}
-          </>
-        )}
+          {customers !== null && customers.length === 0 && !customersError && (
+            <EmptyState
+              icon={Users}
+              title="Aún no hay clientes registrados."
+            />
+          )}
+        </>
+      )}
 
-        {visibleCustomers.length > 0 && (
-          <ul className="flex flex-col gap-2">
-            {visibleCustomers.map((customer, index) => {
-              const activeCount = activeRentalCounts.get(customer.id) ?? 0;
-              return (
-                <li
-                  key={customer.id}
-                  className="animate-card-enter"
-                  style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
-                >
-                  <CustomerCard
-                    name={customer.name}
-                    phone={customer.phone}
-                    activeCount={activeCount}
-                    onClick={() => openCustomerDetail(customer.id)}
-                  />
-                </li>
-              );
-            })}
-          </ul>
-        )}
+      {visibleCustomers.length > 0 && (
+        <ul className="flex flex-col gap-2">
+          {visibleCustomers.map((customer, index) => {
+            const activeCount = activeRentalCounts.get(customer.id) ?? 0;
+            return (
+              <li
+                key={customer.id}
+                className="animate-card-enter"
+                style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
+              >
+                <CustomerCard
+                  name={customer.name}
+                  phone={customer.phone}
+                  activeCount={activeCount}
+                  onClick={() => openCustomerDetail(customer.id)}
+                />
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
-        <CustomerDetailSheet
-          open={customerDetailOpen}
-          onOpenChange={setCustomerDetailOpen}
-          customerId={selectedCustomerId}
-          onCustomerChanged={refreshCustomers}
-        />
-      </div>
-    </>
+      <CustomerDetailSheet
+        open={customerDetailOpen}
+        onOpenChange={setCustomerDetailOpen}
+        customerId={selectedCustomerId}
+        onCustomerChanged={refreshCustomers}
+      />
+    </div>
   );
-}
+});

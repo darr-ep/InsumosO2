@@ -10,11 +10,14 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  /* Azul sobrio (design brief: "un color primario azul sobrio"). L=0.52 keeps
-     white text (--primary-foreground, oklch(0.985 0 0)) at ~5.3:1 contrast,
-     comfortably above WCAG AA (4.5:1) for normal text — verified via an
-     OKLCH→linear-sRGB→relative-luminance script, not eyeballed. */
-  --primary: oklch(0.52 0.16 254);
+  /* Azul sobrio (design brief: "un color primario azul sobrio"). L=0.55/C=0.20
+     keeps white text (--primary-foreground, oklch(0.985 0 0)) at ~4.66:1
+     contrast — still passes WCAG AA (4.5:1) for normal text but with much
+     less margin than the original L=0.52/C=0.16 (~5.33:1) — verified via an
+     OKLCH→linear-sRGB→relative-luminance script, not eyeballed. Don't push
+     this any lighter/more saturated without re-checking; it's close to the
+     AA floor now. */
+  --primary: oklch(0.55 0.20 254);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
@@ -30,8 +33,16 @@
      it pairs with dark text (not white) — dark-text contrast ~8.5:1 (AAA). */
   --warning: oklch(0.77 0.15 75);
   --warning-foreground: oklch(0.205 0 0);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
+  /* Redesign — UX/UI pass (form polish, round 3): a touch darker than the
+     original 0.922 (which read as invisible against --background) but well
+     short of the 0.80 tried in between (felt too heavy paired with a 2px
+     border). Paired with Input's 1px border (not border-2) this is meant to
+     read as a clean, understated line — visible, not loud. --border and
+     --input share one value again (they'd drifted apart) since both still
+     drive the same visual language (Input's own border, plus border-input
+     boxes like LoginScreen's provider picker). */
+  --border: oklch(0.85 0 0);
+  --input: oklch(0.85 0 0);
   --ring: oklch(0.708 0 0);
 }
 
@@ -116,6 +127,28 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* Runtime-debugging fix (pull-to-refresh redesign): live-tested via
+     Playwright CLI CDP touch events — `usePanelPullToRefresh.ts`'s
+     `pulltorefreshjs` wiring is correctly scoped per panel (confirmed:
+     pulling on the Inicio panel fires ONLY the rentals/rental_items/
+     business_settings requests, pulling on Clientes fires ONLY the
+     customers request, no navigation event either way). The reported
+     "reloads the WHOLE app" behavior is a DIFFERENT mechanism the JS
+     library can't fully suppress on its own: without `overscroll-behavior`
+     set, a vigorous pull at the top of the page can still trigger the
+     browser's/PWA's OWN native pull-to-refresh (a real navigation reload,
+     independent of any JS `onRefresh` wiring) alongside — or instead of —
+     the library's. `overscroll-behavior-y: contain` is the standard,
+     documented fix (MDN/web.dev) for exactly this "custom pull-to-refresh
+     fights the browser's native one" conflict, letting the JS-driven,
+     correctly-scoped refresh be the only thing that happens. (Desktop
+     Chromium — this repo's only available runtime tool — cannot itself
+     reproduce Android Chrome's native PTR chrome to prove the conflict
+     end-to-end; see the task write-up for that boundary.) */
+  html,
+  body {
+    overscroll-behavior-y: contain;
+  }
   body {
     @apply bg-background text-foreground;
   }
@@ -132,6 +165,24 @@
     -webkit-appearance: none;
     margin: 0;
   }
+}
+
+/* Post-launch: pull-to-refresh (`src/lib/usePanelPullToRefresh.ts`) is now
+   backed by `pulltorefreshjs` after two rounds of hand-rolled touch-event
+   jank. Its public API has no live-pull-distance callback to drive a fully
+   custom Tailwind indicator (see that file's own docblock) — kept its
+   default markup, restyled here to use this app's own design tokens
+   instead of the library's own gray/black defaults, so it reads as part
+   of the app. `.ptr--` is the library's default `classPrefix`. */
+.ptr--ptr {
+  color: var(--muted-foreground);
+}
+.ptr--text {
+  color: var(--muted-foreground);
+  font-weight: 500;
+}
+.ptr--icon {
+  color: var(--muted-foreground);
 }
 
 

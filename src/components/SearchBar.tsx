@@ -1,14 +1,19 @@
-import { Search } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 /**
  * SDD.md §7.4/§16.9 ("un único campo de búsqueda") + CU3. Purely
- * presentational — `SearchScreen` (task 2.6) owns the debounce and the
- * actual `searchRentals` call.
+ * presentational — the caller owns the debounce and the actual search call.
  *
  * Redesign — UX/UI pass: added a leading magnifying-glass icon — the
  * placeholder text alone wasn't as instantly recognizable as "search" as
  * the icon is.
+ *
+ * Post-launch polish: trailing clear ("×") button, shown only once there's
+ * text — a real `<button>` (not a decorative div) so it's keyboard/screen-
+ * reader reachable, `pr-10` instead of `pr-4` only while it's rendered so
+ * typed text never sits underneath it.
  */
 
 export interface SearchBarProps {
@@ -35,8 +40,21 @@ export function SearchBar({
         placeholder={placeholder}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="border-0 bg-muted/70 shadow-none rounded-full pr-4 pl-10 focus-visible:ring-1 focus-visible:ring-ring/30"
+        className={cn(
+          "border-0 bg-muted/70 shadow-none rounded-full pl-10 focus-visible:ring-1 focus-visible:ring-ring/30",
+          value ? "pr-10" : "pr-4",
+        )}
       />
+      {value && (
+        <button
+          type="button"
+          aria-label="Limpiar búsqueda"
+          onClick={() => onChange("")}
+          className="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-1.5"
+        >
+          <X aria-hidden="true" className="size-4" />
+        </button>
+      )}
     </div>
   );
 }

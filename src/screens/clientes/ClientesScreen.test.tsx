@@ -38,14 +38,31 @@ vi.mock("@/data/settings.repo", () => ({
   getBusinessSettings: (...args: unknown[]) => getBusinessSettings(...args),
 }));
 
-function renderScreen() {
-  return render(
+// Post-launch feature (Inicio/Clientes swipe): `ClientesScreen` no longer
+// owns/renders its own `AppHeader`/`SearchBar` — both are shared, fixed
+// chrome rendered once in `AppLayout` now (see `AppLayout.tsx`'s own
+// docblock). `query` arrives as a plain controlled prop; `setQuery`
+// re-renders with a new one, standing in for what typing into the now-
+// external `SearchBar` would do.
+function renderScreen(query = "") {
+  const utils = render(
     <MemoryRouter>
       <DataCacheProvider>
-        <ClientesScreen />
+        <ClientesScreen query={query} />
       </DataCacheProvider>
     </MemoryRouter>,
   );
+  return {
+    ...utils,
+    setQuery: (next: string) =>
+      utils.rerender(
+        <MemoryRouter>
+          <DataCacheProvider>
+            <ClientesScreen query={next} />
+          </DataCacheProvider>
+        </MemoryRouter>,
+      ),
+  };
 }
 
 const juan = { id: "c1", name: "Juan Pérez", phone: "5512345678" };
@@ -85,19 +102,10 @@ describe("ClientesScreen (Redesign Round 2, Batch 2 — Clientes screen)", () =>
     });
   });
 
-  it("shows a header without a back arrow (Clientes is a primary destination, not a drill-down screen)", async () => {
-    listCustomers.mockResolvedValue([]);
-
-    renderScreen();
-
-    expect(
-      await screen.findByRole("heading", { name: "Clientes" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Volver" }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Cuenta" })).toBeInTheDocument();
-  });
+  // The header-without-back-arrow assertion this test used to make now
+  // belongs to `AppLayout.test.tsx` — `ClientesScreen` no longer renders
+  // `AppHeader` at all (post-launch, Inicio/Clientes swipe: it's shared,
+  // fixed chrome rendered once in `AppLayout`).
 
   it("shows a loading state before the customer list arrives", () => {
     listCustomers.mockReturnValue(new Promise(() => {}));
@@ -156,15 +164,11 @@ describe("ClientesScreen (Redesign Round 2, Batch 2 — Clientes screen)", () =>
   it("replaces the idle list with debounced search results while a query is active", async () => {
     listCustomers.mockResolvedValue([juan]);
     searchCustomers.mockResolvedValue([ana]);
-    const user = userEvent.setup();
 
-    renderScreen();
+    const { setQuery } = renderScreen();
     await screen.findByText("Juan Pérez");
 
-    await user.type(
-      screen.getByLabelText("Buscar por folio, nombre o teléfono"),
-      "Ana",
-    );
+    setQuery("Ana");
 
     expect(await screen.findByText("Ana Ruiz")).toBeInTheDocument();
     expect(screen.queryByText("Juan Pérez")).not.toBeInTheDocument();
@@ -173,15 +177,11 @@ describe("ClientesScreen (Redesign Round 2, Batch 2 — Clientes screen)", () =>
   it("shows 'sin resultados' when a search matches nothing", async () => {
     listCustomers.mockResolvedValue([juan]);
     searchCustomers.mockResolvedValue([]);
-    const user = userEvent.setup();
 
-    renderScreen();
+    const { setQuery } = renderScreen();
     await screen.findByText("Juan Pérez");
 
-    await user.type(
-      screen.getByLabelText("Buscar por folio, nombre o teléfono"),
-      "zzz",
-    );
+    setQuery("zzz");
 
     expect(await screen.findByText("Sin resultados.")).toBeInTheDocument();
   });
@@ -189,15 +189,11 @@ describe("ClientesScreen (Redesign Round 2, Batch 2 — Clientes screen)", () =>
   it("shows a search error and does not crash when the search fails", async () => {
     listCustomers.mockResolvedValue([juan]);
     searchCustomers.mockRejectedValue(new Error("network down"));
-    const user = userEvent.setup();
 
-    renderScreen();
+    const { setQuery } = renderScreen();
     await screen.findByText("Juan Pérez");
 
-    await user.type(
-      screen.getByLabelText("Buscar por folio, nombre o teléfono"),
-      "Ana",
-    );
+    setQuery("Ana");
 
     expect(
       await screen.findByText("No se pudo buscar. Intenta de nuevo."),

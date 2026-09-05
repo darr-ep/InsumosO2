@@ -33,14 +33,31 @@ vi.mock("@/data/settings.repo", () => ({
   updateBusinessSettings: (...args: unknown[]) => updateBusinessSettings(...args),
 }));
 
-function renderScreen() {
-  return render(
+// Post-launch feature (Inicio/Clientes swipe): `DashboardScreen` no longer
+// owns/renders its own `SearchBar` — `query` arrives as a plain controlled
+// prop from `AppLayout` now (see `DashboardScreen.tsx`'s own docblock).
+// `setQuery` here re-renders with a new `query`, standing in for what
+// typing into the now-shared, now-external `SearchBar` would do — the
+// debounce/search-call behavior this triggers is identical either way.
+function renderScreen(query = "") {
+  const utils = render(
     <MemoryRouter>
       <DataCacheProvider>
-        <DashboardScreen />
+        <DashboardScreen query={query} />
       </DataCacheProvider>
     </MemoryRouter>,
   );
+  return {
+    ...utils,
+    setQuery: (next: string) =>
+      utils.rerender(
+        <MemoryRouter>
+          <DataCacheProvider>
+            <DashboardScreen query={next} />
+          </DataCacheProvider>
+        </MemoryRouter>,
+      ),
+  };
 }
 
 const juan = { id: "c1", name: "Juan Pérez", phone: "5512345678" };
@@ -476,7 +493,7 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
 
     const { container } = renderScreen();
 
-    await screen.findByLabelText("Buscar por folio, nombre o teléfono");
+    await screen.findByRole("group", { name: "Rentas activas: 1" });
 
     // The CTA bar (`sticky bottom-0 shrink-0`) is a flex sibling of the
     // scrollable content, not an overlay — it always reserves its own
@@ -496,8 +513,15 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
    * bar test above) — decision #1, already confirmed by the business
    * owner, takes priority over the brief's literal DOM-order wording for
    * the CTA specifically.
+   *
+   * Post-launch (Inicio/Clientes swipe): "buscador" is no longer part of
+   * THIS screen's own content order — it's shared, fixed chrome rendered
+   * once in `AppLayout`, above the whole swipeable panel (see
+   * `AppLayout.tsx`'s own docblock), not inside `DashboardScreen`'s tree at
+   * all anymore. This test only verifies what `DashboardScreen` itself
+   * still orders: estadísticas, indicador de antiguas, lista.
    */
-  it("orders content as: buscador, estadísticas, indicador de antiguas, lista (business-owner brief, Batch 4)", async () => {
+  it("orders content as: estadísticas, indicador de antiguas, lista (business-owner brief, Batch 4 — buscador now lives in AppLayout)", async () => {
     const oldDate = new Date();
     oldDate.setDate(oldDate.getDate() - 45);
 
@@ -514,9 +538,6 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
 
     renderScreen();
 
-    const searchInput = await screen.findByLabelText(
-      "Buscar por folio, nombre o teléfono",
-    );
     const statsTile = await screen.findByRole("group", {
       name: "Rentas activas: 1",
     });
@@ -531,7 +552,6 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
       );
     }
 
-    expect(isBefore(searchInput, statsTile)).toBe(true);
     expect(isBefore(statsTile, banner)).toBe(true);
     expect(isBefore(banner, listItem)).toBe(true);
   });
@@ -561,15 +581,11 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
           expand: { customer_id: juan },
         },
       ]);
-      const user = userEvent.setup();
 
-      renderScreen();
+      const { setQuery } = renderScreen();
       await screen.findByText("No hay rentas activas todavía.");
 
-      await user.type(
-        screen.getByLabelText("Buscar por folio, nombre o teléfono"),
-        "184",
-      );
+      setQuery("184");
 
       expect(await screen.findByText("Juan Pérez")).toBeInTheDocument();
       expect(screen.getByText("Folio: R-000184")).toBeInTheDocument();
@@ -591,45 +607,33 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
           expand: { customer_id: juan },
         },
       ]);
-      const user = userEvent.setup();
 
-      renderScreen();
+      const { setQuery } = renderScreen();
       await screen.findByText("No hay rentas activas todavía.");
 
-      await user.type(
-        screen.getByLabelText("Buscar por folio, nombre o teléfono"),
-        "184",
-      );
+      setQuery("184");
 
       expect(await screen.findByText("Devuelta")).toBeInTheDocument();
     });
 
     it("shows 'sin resultados' when nothing matches (CU3's last scenario)", async () => {
       searchRentals.mockResolvedValue([]);
-      const user = userEvent.setup();
 
-      renderScreen();
+      const { setQuery } = renderScreen();
       await screen.findByText("No hay rentas activas todavía.");
 
-      await user.type(
-        screen.getByLabelText("Buscar por folio, nombre o teléfono"),
-        "xyz123",
-      );
+      setQuery("xyz123");
 
       expect(await screen.findByText("Sin resultados.")).toBeInTheDocument();
     });
 
     it("shows an error message when the search fails", async () => {
       searchRentals.mockRejectedValue(new Error("network down"));
-      const user = userEvent.setup();
 
-      renderScreen();
+      const { setQuery } = renderScreen();
       await screen.findByText("No hay rentas activas todavía.");
 
-      await user.type(
-        screen.getByLabelText("Buscar por folio, nombre o teléfono"),
-        "184",
-      );
+      setQuery("184");
 
       expect(
         await screen.findByText("No se pudo buscar. Intenta de nuevo."),
@@ -659,13 +663,10 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
       listPaymentsForRental.mockResolvedValue([]);
       const user = userEvent.setup();
 
-      renderScreen();
+      const { setQuery } = renderScreen();
       await screen.findByText("No hay rentas activas todavía.");
 
-      await user.type(
-        screen.getByLabelText("Buscar por folio, nombre o teléfono"),
-        "184",
-      );
+      setQuery("184");
       await user.click(await screen.findByText("Juan Pérez"));
 
       expect(
@@ -694,18 +695,13 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
           expand: { customer_id: juan },
         },
       ]);
-      const user = userEvent.setup();
-
-      renderScreen();
+      const { setQuery } = renderScreen();
       await screen.findByRole("group", { name: "Rentas activas: 1" });
       expect(
         await screen.findByRole("button", { name: /1 renta requiere revisión/i }),
       ).toBeInTheDocument();
 
-      await user.type(
-        screen.getByLabelText("Buscar por folio, nombre o teléfono"),
-        "184",
-      );
+      setQuery("184");
 
       expect(await screen.findByText("Folio: R-000184")).toBeInTheDocument();
       expect(

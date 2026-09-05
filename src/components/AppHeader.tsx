@@ -15,6 +15,12 @@ import { cn } from "@/lib/utils";
  * used to render its own `<h1>` title now renders `AppHeader` instead.
  * `title` renders as a real `<h1>` for correct heading hierarchy (there is
  * exactly one per screen, same as before).
+ *
+ * Post-launch polish: the `showBack` (secondary-screen, "Nueva renta"/
+ * "Perfil") title is deliberately `text-xl`, one step down from the
+ * `text-2xl` the Inicio/Clientes variant keeps — a size pass on secondary
+ * screens over-applied to Inicio/Clientes too the first time; reverted
+ * there specifically, the `showBack` size stays.
  */
 export interface AppHeaderProps {
   title: string;
@@ -32,7 +38,7 @@ export function AppHeader({
 
   if (showBack) {
     return (
-      <header className="flex items-center justify-between px-4 py-2">
+      <header className="flex items-center justify-between px-2 py-2">
         <div className="flex items-center gap-2">
           <Button
             type="button"
@@ -40,12 +46,13 @@ export function AppHeader({
             size="icon"
             aria-label="Volver"
             onClick={() => navigate(-1)}
+            className="rounded-full"
           >
-            <ArrowLeft aria-hidden="true" className="!size-[22px]" />
+            <ArrowLeft aria-hidden="true" className="!size-[24px]" />
           </Button>
           <h1
             className={cn(
-              "text-2xl font-bold tracking-tight",
+              "text-xl font-bold tracking-tight",
               titleClassName,
             )}
           >
@@ -58,7 +65,7 @@ export function AppHeader({
   }
 
   return (
-    <header className="flex items-center justify-between px-4 py-2">
+    <header className="flex items-center justify-between pl-4 pr-2 py-2">
       <h1
         className={cn(
           "text-2xl font-bold tracking-tight",

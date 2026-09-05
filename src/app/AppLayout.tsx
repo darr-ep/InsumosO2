@@ -1,9 +1,14 @@
-import { useRef } from "react";
-import { NavLink, Outlet, useLocation } from "react-router";
-import { LayoutDashboard, RefreshCw, Users } from "lucide-react";
+import { useEffect, useState } from "react";
+import { NavLink, useLocation, useNavigate } from "react-router";
+import { LayoutDashboard, Users } from "lucide-react";
+import useEmblaCarousel from "embla-carousel-react";
 import { cn } from "@/lib/utils";
 import { useDataCache } from "@/app/DataCacheContext";
-import { usePullToRefresh } from "@/lib/usePullToRefresh";
+import { usePanelPullToRefresh } from "@/lib/usePanelPullToRefresh";
+import { AppHeader } from "@/components/AppHeader";
+import { SearchBar } from "@/components/SearchBar";
+import { DashboardScreen } from "@/screens/dashboard/DashboardScreen";
+import { ClientesScreen } from "@/screens/clientes/ClientesScreen";
 
 /**
  * Redesign Round 2, Batch 3: Bottom Nav Wiring (business-owner brief,
@@ -18,74 +23,248 @@ const TABS = [
   { to: "/clientes", label: "Clientes", icon: Users },
 ] as const;
 
+const DASHBOARD_PANEL_ID = "app-layout-dashboard-panel";
+const CLIENTES_PANEL_ID = "app-layout-clientes-panel";
+// Separate from the panel ids on purpose — see `usePanelPullToRefresh.ts`'s
+// docblock for why `pulltorefreshjs`'s injected indicator must land on one
+// of these, never directly on a panel id (an Embla slide).
+const DASHBOARD_CONTENT_ID = "app-layout-dashboard-content";
+const CLIENTES_CONTENT_ID = "app-layout-clientes-content";
+
 /**
- * Root chrome for the authenticated area. Redesign Round 2, Batch 1
- * (Header Pattern, business-owner brief): the per-screen title and the
- * account menu both moved into `AppHeader`/`AccountMenu`, composed by each
- * screen itself instead of by this layout.
+ * Root chrome for the authenticated area.
  *
- * Redesign Round 2, Batch 3 (Bottom Nav Wiring) reintroduces a minimal
- * 2-item bottom nav (Inicio, Clientes) — Nueva renta stays reachable via
- * Dashboard's main CTA, Buscar via the search bar, per the business
- * owner's brief above. Reuses the exact `NavLink`/icon/label/
- * `min-h-[44px]`/active-state pattern from the original pre-redesign
- * 3-tab bar (`git show 127faec~1:src/app/AppLayout.tsx`), trimmed to 2
- * items and swapping `LogOut`/header for `AppHeader`/`AccountMenu`
- * (Batch 1's job, unaffected here).
+ * Post-launch feature (business-owner request): Inicio and Clientes are
+ * swipeable, like a two-page carousel, with a header/search/bottom-nav that
+ * never visibly remount or flash mid-swipe. `AppHeader` and `SearchBar` are
+ * rendered ONCE here, shared — genuinely fixed chrome, never inside either
+ * swiping panel (a prior version duplicated them per-screen; the owner's
+ * explicit preference is one shared instance, kept as-is here).
  *
- * Deliberately NOT `position: fixed` (unlike the old 3-tab bar): `<nav>`
- * is a normal `shrink-0` flex sibling of `<main>` (which is `flex-1
- * overflow-y-auto`), so the nav can never overlap scrollable content —
- * no `pb-20`-style compensating padding hack is needed anywhere. This
- * also sidesteps the well-known iOS Safari `position: fixed` + on-screen
- * -keyboard-jitter bug.
+ * Second post-launch revision: the swipe itself and pull-to-refresh were
+ * both originally hand-rolled (raw `overflow-x-auto`/`scroll-snap` +
+ * manual scroll-position math for the swipe; raw touch-event math for the
+ * pull). After two rounds of manually patching real jank bugs in both, the
+ * owner tested live again and reported the swipe "no sirve o no es
+ * usable" and pull-to-refresh "todavía se siente lento" — confirmation
+ * that hand-rolling gesture physics correctly is genuinely hard, not that
+ * the specific bugs found so far were the only ones. Both are now backed
+ * by dedicated, battle-tested libraries instead:
+ *   - `embla-carousel-react` (docs fetched live via context7, not
+ *     assumed) drives the swipe. Its own documented pattern for "a
+ *     horizontal carousel with vertically-scrollable content inside each
+ *     slide" is `touch-action: pan-y pinch-zoom` on the viewport — applied
+ *     below — which lets the browser handle vertical scrolling/pulling
+ *     natively while Embla's own pointer-event drag detection owns the
+ *     horizontal axis, instead of two competing hand-rolled touch
+ *     handlers guessing at each other.
+ *   - `usePanelPullToRefresh` (`src/lib/usePanelPullToRefresh.ts`) wraps
+ *     `pulltorefreshjs` — see that file's own docblock for why a full
+ *     custom-Tailwind-UI replacement wasn't possible with this library's
+ *     public API, and what was kept/traded off.
  *
- * The `min-h-dvh flex flex-col` wrapper is kept because `<main>`'s
- * `flex-1 overflow-y-auto` needs a flex/bounded-height ancestor to
- * actually constrain scrolling — removing it would be a real layout
- * regression, not just chrome. `bg-background text-foreground` are
- * redundant with `body`'s own `@layer base` rule (index.css) but kept for
- * clarity/no behavior change.
+ * The swipeable BODY still works the same way as before: `DashboardScreen`
+ * and `ClientesScreen` are imported and rendered directly (not via
+ * `<Outlet/>`), permanently mounted side by side — neither screen's tree
+ * is ever destroyed by swiping between them. `DataCacheContext` already
+ * handles cross-screen data staying warm (its own docblock: it was built
+ * specifically because these two screens used to unmount on navigation),
+ * so having both mounted from the start doesn't introduce a new fetch
+ * problem — `loadRentalsIfNeeded`/`loadCustomersIfNeeded` are already
+ * idempotent no-ops once loaded.
  *
- * Redesign Round 3, Batch B (visual consistency pass): `mx-auto max-w-xl`
- * on this root — the app had no width cap anywhere, so header/list/nav all
- * stretched edge-to-edge on tablet. `RentalNewScreen.tsx` mirrors this same
- * root treatment since it renders outside this layout (own route, no bottom
- * nav — see `App.tsx`), so both variants of the app shell stay capped the
- * same way instead of one being full-bleed.
+ * Search: `query` is a single piece of state owned here, passed down to
+ * both `DashboardScreen`/`ClientesScreen` as a plain controlled prop —
+ * each screen keeps its OWN debounce/results/loading/error state and
+ * search call (`searchRentals`/`searchCustomers` are different endpoints,
+ * different result shapes) exactly as before, just reading `query` from a
+ * prop instead of its own `useState`. Both screens' debounce effects fire
+ * on every `query` change regardless of which panel is active — harmless
+ * and simpler than gating one of them off.
  *
- * Commit 3 (pull-to-refresh): `<main>` is the one scroll container both
- * `DashboardScreen` and `ClientesScreen` render inside via `<Outlet/>`, so
- * `usePullToRefresh` is wired here once instead of per-screen. Which cache
- * domain to refresh is picked from the current route — `AppLayout` only
- * ever renders `/dashboard` and `/clientes` (see `App.tsx`'s route tree),
- * so that's exhaustive without a fallback branch.
+ * `<Route path="/dashboard" element={<DashboardScreen/>}>`/
+ * `<Route path="/clientes" element={<ClientesScreen/>}>` still exist in
+ * `App.tsx` (untouched) purely so `useLocation()` correctly resolves
+ * `/dashboard` vs `/clientes` for deep-linking and `NavLink`'s
+ * active-state — their `element` is never actually rendered via
+ * `<Outlet/>` here (this layout renders both screens directly,
+ * unconditionally), an intentional, documented trade-off.
  */
 export function AppLayout() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { refreshRentals, refreshCustomers } = useDataCache();
-  const mainRef = useRef<HTMLElement>(null);
-  const onRefresh =
-    location.pathname === "/clientes" ? refreshCustomers : refreshRentals;
-  const { pullDistance, isRefreshing } = usePullToRefresh(mainRef, onRefresh);
+
+  const initialIndex = location.pathname === "/clientes" ? 1 : 0;
+  const [emblaRef, emblaApi] = useEmblaCarousel({
+    loop: false,
+    align: "start",
+    startIndex: initialIndex,
+  });
+
+  // Derived from the route on every render, NOT from Embla's own 'select'
+  // event — the route is the single, synchronously-updated source of
+  // truth. An earlier version set this from `emblaApi.on('select', ...)`
+  // instead; that meant the header title/active-panel-dependent state only
+  // updated once Embla's own scroll ANIMATION visually settled, which (a)
+  // lagged a beat behind tapping a bottom-nav tab even in a real browser
+  // (the tab shows "active" immediately via `NavLink`, but the header
+  // title used to sit on the old text until the swipe animation finished)
+  // and (b) never resolved at all inside jsdom's test environment, where
+  // Embla's requestAnimationFrame-driven tweening doesn't advance the way
+  // it does in a real browser — found via this component's own test suite
+  // failing to see the header title update after a simulated tab click.
+  const activePanel: 0 | 1 = location.pathname === "/clientes" ? 1 : 0;
+
+  const [query, setQuery] = useState("");
+
+  // A real user-driven SWIPE only tells us anything happened via Embla's
+  // own event — sync the URL to match once the swipe settles on a slide.
+  // Guarded so it's a no-op when the resolved slide already matches the
+  // current route (e.g. this fired from the PROGRAMMATIC `scrollTo` the
+  // effect below triggers for a tab tap/deep link, not a real swipe) —
+  // otherwise this would immediately re-navigate right back.
+  useEffect(() => {
+    if (!emblaApi) {
+      return;
+    }
+
+    function onSelect() {
+      const index = emblaApi!.selectedScrollSnap() as 0 | 1;
+      const targetPath = index === 1 ? "/clientes" : "/dashboard";
+      if (location.pathname === targetPath) {
+        return;
+      }
+      navigate(targetPath, { replace: true });
+    }
+
+    emblaApi.on("select", onSelect);
+    return () => {
+      emblaApi.off("select", onSelect);
+    };
+  }, [emblaApi, navigate, location.pathname]);
+
+  // Keep the swipe position in sync with non-swipe navigation (tapping a
+  // bottom-nav tab, or a deep link straight to /clientes). Guarded so it's
+  // a no-op once Embla is already sitting on the matching slide (e.g.
+  // right after the swipe itself caused this exact pathname change via
+  // the `navigate(..., {replace:true})` call above) — otherwise this
+  // would fight the user's own swipe by re-scrolling back on every render.
+  useEffect(() => {
+    if (!emblaApi) {
+      return;
+    }
+    const targetIndex = location.pathname === "/clientes" ? 1 : 0;
+    if (emblaApi.selectedScrollSnap() === targetIndex) {
+      return;
+    }
+    emblaApi.scrollTo(targetIndex);
+  }, [emblaApi, location.pathname]);
+
+  // Live-tested finding (not assumed): Embla's `duration` option — per its
+  // own docs — only governs API-triggered `scrollTo()`, never a drag
+  // release; a release's settle speed is derived purely from drag force
+  // (`DragHandler`'s hardcoded `baseSpeed`/friction, read from Embla's own
+  // source, v8.6.0). For a real fast flick this resolves to a duration so
+  // low it renders the ENTIRE remaining distance in a single frame —
+  // confirmed via a live drag probe sampling the container's *computed*
+  // transform every animation frame across a release (a real
+  // touch-release couldn't be reproduced reliably via CDP in this desktop
+  // environment; a mouse drag exercises the identical `DragHandler` code
+  // path and reproduced the same single-frame jump). Embla
+  // exposes no event that fires before that frame renders, so the release
+  // can't be intercepted before the jump happens — but a CSS transition on
+  // the SAME element still animates it: the browser compares the
+  // last-painted transform to whatever Embla sets next, regardless of how
+  // many synchronous JS writes happened in between. Toggled off on
+  // `pointerDown` so an active drag still tracks the finger 1:1 (Embla
+  // rewrites `transform` every frame while dragging; transitioning that
+  // would lag behind the touch). This only wraps how Embla's OWN
+  // `transform` value is painted — never sets it — matching Embla's own
+  // guidance for adding a transition without fighting its rendering.
+  useEffect(() => {
+    if (!emblaApi) {
+      return;
+    }
+
+    const container = emblaApi.containerNode();
+
+    function onPointerDown() {
+      container.style.transition = "";
+    }
+
+    function onPointerUp() {
+      container.style.transition = "transform 280ms cubic-bezier(0.22, 1, 0.36, 1)";
+    }
+
+    emblaApi.on("pointerDown", onPointerDown);
+    emblaApi.on("pointerUp", onPointerUp);
+    return () => {
+      emblaApi.off("pointerDown", onPointerDown);
+      emblaApi.off("pointerUp", onPointerUp);
+    };
+  }, [emblaApi]);
+
+  const onRefresh = activePanel === 1 ? refreshCustomers : refreshRentals;
+  usePanelPullToRefresh({
+    dashboardPanelId: DASHBOARD_PANEL_ID,
+    clientesPanelId: CLIENTES_PANEL_ID,
+    dashboardContentId: DASHBOARD_CONTENT_ID,
+    clientesContentId: CLIENTES_CONTENT_ID,
+    activePanel,
+    onRefresh,
+  });
+
+  const isClientesActive = activePanel === 1;
 
   return (
     <div className="mx-auto flex h-dvh w-full max-w-xl flex-col bg-background text-foreground overflow-hidden">
-      <main ref={mainRef} className="flex flex-1 flex-col overflow-y-auto">
-        <div
-          aria-hidden="true"
-          className="flex shrink-0 items-center justify-center overflow-hidden transition-[height] motion-reduce:transition-none"
-          style={{ height: isRefreshing ? 40 : pullDistance }}
-        >
-          <RefreshCw
-            className={cn(
-              "size-5 text-muted-foreground",
-              isRefreshing && "animate-spin motion-reduce:animate-none",
-            )}
-          />
+      <AppHeader
+        title={
+          isClientesActive
+            ? "Clientes"
+            : import.meta.env.VITE_BUSINESS_NAME || "Inicio"
+        }
+        titleClassName={isClientesActive ? "font-normal" : "text-primary"}
+      />
+      <div className="px-4 pb-2">
+        <SearchBar
+          value={query}
+          onChange={setQuery}
+          placeholder={isClientesActive ? "Nombre del cliente" : undefined}
+        />
+      </div>
+      {/* Embla's own documented pattern for a horizontal carousel with
+          vertically-scrollable content inside each slide (fetched from its
+          live docs, not assumed): `touch-action: pan-y pinch-zoom` on the
+          viewport lets the browser handle vertical scrolling/pull-to-
+          refresh natively, while Embla's pointer-event drag handling owns
+          the horizontal swipe — no more hand-rolled gesture-direction
+          detection fighting the browser for the same touch. */}
+      <div
+        ref={emblaRef}
+        className="flex-1 overflow-hidden"
+        style={{ touchAction: "pan-y pinch-zoom" }}
+      >
+        <div className="flex h-full">
+          <div
+            id={DASHBOARD_PANEL_ID}
+            className="h-full min-w-0 shrink-0 grow-0 basis-full overflow-y-auto"
+          >
+            <div id={DASHBOARD_CONTENT_ID}>
+              <DashboardScreen query={query} />
+            </div>
+          </div>
+          <div
+            id={CLIENTES_PANEL_ID}
+            className="h-full min-w-0 shrink-0 grow-0 basis-full overflow-y-auto"
+          >
+            <div id={CLIENTES_CONTENT_ID}>
+              <ClientesScreen query={query} />
+            </div>
+          </div>
         </div>
-        <Outlet />
-      </main>
+      </div>
       <nav
         aria-label="Navegación principal"
         className="flex shrink-0 border-t bg-background py-1.5"

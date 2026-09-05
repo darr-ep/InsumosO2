@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { Link } from "react-router";
 import {
   CalendarDays,
@@ -9,8 +9,6 @@ import {
   Wind,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { AppHeader } from "@/components/AppHeader";
-import { SearchBar } from "@/components/SearchBar";
 import { RentalCard } from "@/components/RentalCard";
 import { DashboardStats } from "@/components/DashboardStats";
 import { EmptyState } from "@/components/EmptyState";
@@ -120,7 +118,50 @@ import { formatCurrencyMXN } from "@/lib/currency";
 
 const SEARCH_DEBOUNCE_MS = 300;
 
-export function DashboardScreen() {
+// Post-launch feature (Inicio/Clientes swipe): the search box itself now
+// lives once, shared, in `AppLayout` — this screen only owns what it does
+// with the typed text (the debounce/results/loading/error state below),
+// receiving the text itself as a controlled prop instead of its own
+// `useState`. No `onChange`-style prop back out — this screen never
+// renders the search input anymore, only reacts to its value. See
+// `AppLayout.tsx`'s own docblock for the full picture. Optional/defaulted
+// to "" — `App.tsx` still instantiates `<DashboardScreen />` bare as a
+// route `element` that's never actually rendered via `<Outlet/>` (only
+// used for `useLocation()` path-matching, see `AppLayout.tsx`), so this
+// must tolerate being constructed with no props at all.
+export interface DashboardScreenProps {
+  query?: string;
+}
+
+// Runtime-debugging fix (Inicio/Clientes swipe redesign, live-tested via
+// Playwright CLI + CDP CPU throttling): `AppLayout` renders both
+// `DashboardScreen` and `ClientesScreen` permanently mounted side by side
+// (see `AppLayout.tsx`'s own docblock) — neither was memoized, so ANY
+// `AppLayout` re-render (a route/pathname change from the swipe settling,
+// every keystroke in the shared search box, any `DataCacheContext` state
+// tick) forced React to fully reconcile BOTH screens' entire lists (43+
+// rental cards and 100+ customer cards against the live dev dataset used
+// for this reproduction), even though a pure route switch changes neither
+// screen's own `query` prop. That reconciliation work competes with
+// Embla's own requestAnimationFrame-driven settle loop for main-thread
+// time — confirmed live: under 6x CPU throttling (Chrome DevTools
+// Protocol `Emulation.setCPUThrottlingRate`, a standard proxy for a real
+// mid/low-end phone), a swipe-release settle that finishes in ~110ms
+// unthrottled instead took over 2 seconds to visually reach its final
+// resting transform — the exact "se junta unos segundos después" symptom
+// reported live, and the same mechanism behind "switching feels slower"
+// and the swipe reading as sluggish/animated rather than snappy. (Embla
+// v8.6.0 itself has no public option for this: `duration` only affects
+// `scrollTo()`-triggered scrolls, not drag-release settle — confirmed by
+// reading `node_modules/embla-carousel`'s source; the actual release
+// physics use a hardcoded `friction = 0.68` local constant, never read
+// from `options`.) Wrapping both screens in `memo()` — they take only a
+// primitive `query` prop — makes a pure route/pathname switch a no-op
+// render for whichever screen's own data didn't change, freeing the main
+// thread for Embla's settle animation.
+export const DashboardScreen = memo(function DashboardScreen({
+  query = "",
+}: DashboardScreenProps) {
   const {
     rentals,
     activeItems,
@@ -132,7 +173,6 @@ export function DashboardScreen() {
     setBusinessSettings,
   } = useDataCache();
 
-  const [query, setQuery] = useState("");
   const [results, setResults] = useState<RentalWithCustomer[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -254,16 +294,6 @@ export function DashboardScreen() {
 
   return (
     <div className="flex flex-1 min-h-full flex-col">
-      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 pb-2">
-        <AppHeader
-          title={import.meta.env.VITE_BUSINESS_NAME || "Inicio"}
-          titleClassName="text-primary"
-        />
-        <div className="px-4">
-          <SearchBar value={query} onChange={setQuery} />
-        </div>
-      </div>
-
       <div className="flex flex-1 flex-col gap-6 px-4 pt-2">
 
         {isSearchActive ? (
@@ -420,4 +450,4 @@ export function DashboardScreen() {
       </div>
     </div>
   );
-}
+});

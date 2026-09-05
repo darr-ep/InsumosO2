@@ -41,8 +41,14 @@ export function AccountMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button type="button" variant="ghost" size="icon" aria-label="Cuenta">
-          <UserRound aria-hidden="true" className="!size-[22px]" />
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label="Cuenta"
+          className="rounded-full"
+        >
+          <UserRound aria-hidden="true" className="!size-[24px]" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">

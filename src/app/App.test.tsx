@@ -121,9 +121,11 @@ describe("App", () => {
       expect(
         within(nav).getByRole("link", { name: "Clientes" }),
       ).toBeInTheDocument();
-      expect(
-        screen.getByRole("button", { name: "Cuenta" }),
-      ).toBeInTheDocument();
+      // Post-launch swipe feature: Inicio/Clientes bodies are both
+      // permanently mounted side by side (AppLayout.tsx), but the header —
+      // and its "Cuenta" button — is a single shared instance, not
+      // duplicated per screen. Exactly one at a time.
+      expect(screen.getByRole("button", { name: "Cuenta" })).toBeInTheDocument();
     });
 
     it("navigates via the bottom nav from Inicio to Clientes and back, updating the active tab each time (Redesign Round 2, Batch 3)", async () => {

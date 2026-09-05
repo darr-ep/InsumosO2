@@ -1,9 +1,37 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { AppLayout } from "@/app/AppLayout";
 import { DataCacheProvider } from "@/app/DataCacheContext";
+
+// AppLayout now imports and renders the real DashboardScreen/ClientesScreen
+// directly (see AppLayout.tsx's own docblock — the swipeable-panels
+// redesign), not an arbitrary routed `<Outlet/>` child, so this file needs
+// the same minimal data-layer mocking those screens' own tests use, just
+// enough to render without a real network call.
+const listActiveRentals = vi.fn();
+const listActiveRentalItems = vi.fn();
+const searchRentals = vi.fn();
+const getBusinessSettings = vi.fn();
+const searchCustomers = vi.fn();
+const listCustomers = vi.fn();
+
+vi.mock("@/data/rentals.repo", () => ({
+  listActiveRentals: (...args: unknown[]) => listActiveRentals(...args),
+  listActiveRentalItems: (...args: unknown[]) => listActiveRentalItems(...args),
+  searchRentals: (...args: unknown[]) => searchRentals(...args),
+}));
+
+vi.mock("@/data/settings.repo", () => ({
+  getBusinessSettings: (...args: unknown[]) => getBusinessSettings(...args),
+  updateBusinessSettings: vi.fn(),
+}));
+
+vi.mock("@/data/customers.repo", () => ({
+  searchCustomers: (...args: unknown[]) => searchCustomers(...args),
+  listCustomers: (...args: unknown[]) => listCustomers(...args),
+}));
 
 function renderLayout(initialPath = "/dashboard") {
   return render(
@@ -11,8 +39,8 @@ function renderLayout(initialPath = "/dashboard") {
       <MemoryRouter initialEntries={[initialPath]}>
         <Routes>
           <Route element={<AppLayout />}>
-            <Route path="/dashboard" element={<p>Dashboard content</p>} />
-            <Route path="/clientes" element={<p>Clientes content</p>} />
+            <Route path="/dashboard" element={null} />
+            <Route path="/clientes" element={null} />
           </Route>
         </Routes>
       </MemoryRouter>
@@ -20,41 +48,78 @@ function renderLayout(initialPath = "/dashboard") {
   );
 }
 
-/**
- * Redesign Round 2, Batch 1 (Header Pattern, business-owner brief):
- * `AppLayout` is now pure chrome — no header, no account menu of its own.
- * That behavior (the account menu trigger, Cerrar sesión item,
- * `logout()`+navigate) was extracted verbatim into `AccountMenu`, composed
- * by `AppHeader` per-screen instead — its own ported test coverage now
- * lives in `AccountMenu.test.tsx`. This file only proves `AppLayout` still
- * renders the routed `Outlet` content and nothing else on top.
- */
-describe("AppLayout (Redesign Round 2, Batch 1: pure chrome)", () => {
-  it("renders routed content inside <main>, with no header/account menu of its own", () => {
-    renderLayout();
+describe("AppLayout", () => {
+  beforeEach(() => {
+    vi.stubEnv("VITE_BUSINESS_NAME", "");
+    listActiveRentals.mockReset().mockResolvedValue([]);
+    listActiveRentalItems.mockReset().mockResolvedValue([]);
+    getBusinessSettings.mockReset().mockResolvedValue({
+      id: "s1",
+      total_concentradores: 0,
+      total_tanques: 0,
+    });
+    searchRentals.mockReset().mockResolvedValue([]);
+    searchCustomers.mockReset();
+    listCustomers.mockReset().mockResolvedValue([]);
+  });
 
-    expect(screen.getByText("Dashboard content")).toBeInTheDocument();
-    expect(screen.queryByRole("banner")).not.toBeInTheDocument();
+  /**
+   * Post-launch swipe feature (business-owner request), REVISED: Inicio and
+   * Clientes are swipeable, with a header/search/bottom-nav that never
+   * visibly flash mid-swipe. Header+search are shared, single instances
+   * rendered once here (not duplicated per screen anymore — see
+   * `AppLayout.tsx`'s own docblock for why this replaced the first version
+   * of the feature) — so there is exactly ONE heading and ONE search input
+   * at any time, its text switching with `activePanel`. What DOES stay
+   * permanently mounted, and what this test proves instead, is each
+   * screen's own BODY content (below the shared header): Dashboard's own
+   * stats tile and Clientes' own empty state both exist in the DOM at
+   * once, regardless of which tab is "active" — proof the swipeable panels
+   * never unmount each other.
+   */
+  it("keeps both Inicio and Clientes bodies permanently mounted side by side (no remount/flash on swipe)", async () => {
+    renderLayout("/dashboard");
+
     expect(
-      screen.queryByRole("button", { name: "Cuenta" }),
+      await screen.findByRole("group", { name: "Rentas activas: 0" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Aún no hay clientes registrados."),
+    ).toBeInTheDocument();
+    // Exactly one shared header/account button/search input, not one per
+    // screen — the whole point of lifting them into AppLayout.
+    expect(screen.getByRole("button", { name: "Cuenta" })).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Buscar por folio, nombre o teléfono"),
+    ).toBeInTheDocument();
+  });
+
+  it("shows only the Inicio title on /dashboard (no Clientes title present)", async () => {
+    renderLayout("/dashboard");
+
+    expect(
+      await screen.findByRole("heading", { name: "Inicio" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Clientes" }),
     ).not.toBeInTheDocument();
   });
-});
 
-/**
- * Redesign Round 2, Batch 3: Bottom Nav Wiring (business-owner brief,
- * verbatim): "No usar la barra inferior actual con Dashboard/Nueva
- * renta/Buscar. Sí quiero una barra inferior mínima con únicamente:
- * Inicio, Clientes. Nueva renta se accede mediante el CTA principal.
- * Buscar se accede mediante el buscador. No agregar más elementos a la
- * navegación primaria." This replaces the prior "no bottom bar" assertion
- * (from the earlier nav-removal redesign batch) with real coverage of the
- * reintroduced 2-item bar: exactly 2 items, correct hrefs, real navigation
- * on click, and correct active-state styling driven by the current route.
- */
-describe("AppLayout (Redesign Round 2, Batch 3: bottom nav — Inicio/Clientes only)", () => {
-  it("renders exactly 2 nav items — Inicio and Clientes — with the correct hrefs", () => {
+  it("shows only the (non-bold) Clientes title on /clientes (no Inicio title present)", async () => {
+    renderLayout("/clientes");
+
+    const clientesHeading = await screen.findByRole("heading", {
+      name: "Clientes",
+    });
+    expect(clientesHeading.className).toContain("font-normal");
+    expect(
+      screen.queryByRole("heading", { name: "Inicio" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders exactly 2 nav items — Inicio and Clientes — with the correct hrefs", async () => {
     renderLayout();
+    await screen.findByRole("group", { name: "Rentas activas: 0" });
 
     const nav = screen.getByRole("navigation", {
       name: "Navegación principal",
@@ -71,8 +136,9 @@ describe("AppLayout (Redesign Round 2, Batch 3: bottom nav — Inicio/Clientes o
     ).toHaveAttribute("href", "/clientes");
   });
 
-  it("marks Inicio as the active tab when the current route is /dashboard", () => {
+  it("marks Inicio as the active tab when the current route is /dashboard", async () => {
     renderLayout("/dashboard");
+    await screen.findByRole("group", { name: "Rentas activas: 0" });
 
     const nav = screen.getByRole("navigation", {
       name: "Navegación principal",
@@ -87,8 +153,9 @@ describe("AppLayout (Redesign Round 2, Batch 3: bottom nav — Inicio/Clientes o
     ).not.toHaveAttribute("aria-current");
   });
 
-  it("marks Clientes as the active tab when the current route is /clientes", () => {
+  it("marks Clientes as the active tab when the current route is /clientes", async () => {
     renderLayout("/clientes");
+    await screen.findByRole("heading", { name: "Clientes" });
 
     const nav = screen.getByRole("navigation", {
       name: "Navegación principal",
@@ -102,9 +169,10 @@ describe("AppLayout (Redesign Round 2, Batch 3: bottom nav — Inicio/Clientes o
     ).not.toHaveAttribute("aria-current");
   });
 
-  it("navigates to Clientes when its tab is tapped, updating the active state", async () => {
+  it("updates the active tab and header title when Clientes is tapped, without unmounting Inicio's own body content", async () => {
     const user = userEvent.setup();
     renderLayout("/dashboard");
+    await screen.findByRole("group", { name: "Rentas activas: 0" });
 
     const nav = screen.getByRole("navigation", {
       name: "Navegación principal",
@@ -112,12 +180,18 @@ describe("AppLayout (Redesign Round 2, Batch 3: bottom nav — Inicio/Clientes o
 
     await user.click(within(nav).getByRole("link", { name: "Clientes" }));
 
-    expect(screen.getByText("Clientes content")).toBeInTheDocument();
     expect(
       within(nav).getByRole("link", { name: "Clientes" }),
     ).toHaveAttribute("aria-current", "page");
     expect(
       within(nav).getByRole("link", { name: "Inicio" }),
     ).not.toHaveAttribute("aria-current");
+    expect(
+      await screen.findByRole("heading", { name: "Clientes" }),
+    ).toBeInTheDocument();
+    // Still mounted — tapping the tab scrolls, it never routes exclusively.
+    expect(
+      screen.getByRole("group", { name: "Rentas activas: 0" }),
+    ).toBeInTheDocument();
   });
 });
