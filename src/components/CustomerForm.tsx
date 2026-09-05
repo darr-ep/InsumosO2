@@ -211,10 +211,11 @@ export function CustomerForm({
       noValidate
     >
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="customer-name">Nombre</Label>
+        <Label htmlFor="customer-name" required>Nombre</Label>
         <Input
           id="customer-name"
           autoComplete="name"
+          placeholder="Ej. Juan Pérez"
           aria-invalid={!!errors.name}
           {...register("name")}
         />
@@ -224,12 +225,13 @@ export function CustomerForm({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="customer-phone">Teléfono</Label>
+        <Label htmlFor="customer-phone" required>Teléfono</Label>
         <Input
           id="customer-phone"
           type="tel"
           inputMode="numeric"
           autoComplete="tel"
+          placeholder="5512345678"
           aria-invalid={!!errors.phone}
           {...register("phone")}
         />

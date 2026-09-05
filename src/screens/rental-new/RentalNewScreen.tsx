@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
+import { ClientResponseError } from "pocketbase";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { AppHeader } from "@/components/AppHeader";
 import { useDataCache } from "@/app/DataCacheContext";
@@ -12,8 +13,6 @@ import {
   itemQuantitiesToList,
   type ItemQuantities,
 } from "@/components/ItemQuantityPicker";
-import { ExtrasList } from "@/components/ExtrasList";
-import { ReceiptDialog } from "@/components/ReceiptDialog";
 import { RentalCreatedSummary } from "@/components/RentalCreatedSummary";
 import { CustomerDetailSheet } from "@/components/CustomerDetailSheet";
 import { type CustomerFormSubmitValues } from "@/components/CustomerForm";
@@ -21,10 +20,7 @@ import { createCustomer, type CustomerRecord } from "@/data/customers.repo";
 import { createRental, RentalPartiallyCreatedError } from "@/data/rentals.repo";
 import { handleIfStaleSession } from "@/data/staleSession";
 import { customerFormSchema } from "@/domain/customers/customer";
-import {
-  rentalFormSchema,
-  type RentalExtraFormValues,
-} from "@/domain/rentals/rental";
+import { rentalFormSchema } from "@/domain/rentals/rental";
 import {
   buildRentalReceipt,
   type RentalReceiptData,
@@ -58,12 +54,12 @@ export function RentalNewScreen() {
     useState<ItemQuantities>(emptyItemQuantities);
   const [initialRentAmount, setInitialRentAmount] = useState("");
   const [depositAmount, setDepositAmount] = useState("");
-  const [extras, setExtras] = useState<RentalExtraFormValues[]>([]);
 
   const [formError, setFormError] = useState<string | null>(null);
+  const [customerInvalid, setCustomerInvalid] = useState(false);
+  const [itemsInvalid, setItemsInvalid] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
-  const [receiptOpen, setReceiptOpen] = useState(false);
   const [receipt, setReceipt] = useState<RentalReceiptData | null>(null);
 
   function resetForm() {
@@ -72,14 +68,15 @@ export function RentalNewScreen() {
     setItemQuantities(emptyItemQuantities);
     setInitialRentAmount("");
     setDepositAmount("");
-    setExtras([]);
   }
 
   async function handleConfirm() {
     setFormError(null);
+    setCustomerInvalid(false);
+    setItemsInvalid(false);
 
     if (!selectedCustomer && !pendingNewCustomer) {
-      setFormError("Selecciona o crea un cliente.");
+      setCustomerInvalid(true);
       return;
     }
 
@@ -98,7 +95,7 @@ export function RentalNewScreen() {
       if (!draft) {
         // Unreachable given the guard above, but keeps this branch type-safe.
         setIsSubmitting(false);
-        setFormError("Selecciona o crea un cliente.");
+        setCustomerInvalid(true);
         return;
       }
       // `draft` is live-reported by `CustomerForm`'s `liveReport` mode (see
@@ -140,14 +137,22 @@ export function RentalNewScreen() {
       })),
       initial_rent_amount: Number(initialRentAmount || 0),
       deposit_amount: Number(depositAmount || 0),
-      extras,
     });
 
     if (!parsed.success) {
       setIsSubmitting(false);
-      setFormError(
-        parsed.error.issues[0]?.message ?? "Revisa los datos de la renta.",
-      );
+
+      let otherIssueMessage: string | null = null;
+      for (const issue of parsed.error.issues) {
+        if (issue.path[0] === "customer_id") {
+          setCustomerInvalid(true);
+        } else if (issue.path[0] === "items") {
+          setItemsInvalid(true);
+        } else if (!otherIssueMessage) {
+          otherIssueMessage = issue.message;
+        }
+      }
+      setFormError(otherIssueMessage);
       return;
     }
 
@@ -162,7 +167,6 @@ export function RentalNewScreen() {
         items,
         initialRentAmount: parsed.data.initial_rent_amount,
         depositAmount: parsed.data.deposit_amount,
-        extras: parsed.data.extras,
       });
 
       setReceipt(
@@ -176,7 +180,6 @@ export function RentalNewScreen() {
           items,
           initialRentAmount: parsed.data.initial_rent_amount,
           depositAmount: parsed.data.deposit_amount,
-          extras: parsed.data.extras,
         }),
       );
       setSummaryOpen(true);
@@ -210,90 +213,115 @@ export function RentalNewScreen() {
       }
       // §21: never show "saved" when the write failed — keep the form
       // exactly as the user left it so they can retry without recapturing
-      // everything.
-      setFormError(
-        "No se pudo guardar la renta. Verifica tu conexión e intenta de nuevo.",
-      );
+      // everything. `status !== 0` means the server actually answered (a
+      // real rejection, not a network-reachability failure) — show its own
+      // message instead of blaming "tu conexión" for something else, same
+      // narrowing style as `staleSession.ts#isStaleSessionError`.
+      if (error instanceof ClientResponseError && error.status !== 0) {
+        // Prefer the server's field-level detail (e.g. "Cannot be blank.")
+        // over the generic top-level message (e.g. "Failed to create
+        // record.") when PocketBase provides one — same class of gap that
+        // hid the initial_rent_amount=0 rejection above until this was
+        // reproduced directly against a live instance.
+        const fieldErrors = error.response?.data as
+          | Record<string, { message?: string }>
+          | undefined;
+        const firstFieldMessage = fieldErrors
+          ? Object.values(fieldErrors)[0]?.message
+          : undefined;
+        setFormError(
+          `No se pudo guardar la renta: ${firstFieldMessage ?? error.message}`,
+        );
+      } else {
+        setFormError(
+          "No se pudo guardar la renta. Verifica tu conexión e intenta de nuevo.",
+        );
+      }
     } finally {
       setIsSubmitting(false);
     }
   }
 
   // Redesign — UX/UI pass: "Total a cobrar" (business-owner request, same
-  // principle as ReturnDialog's "Total a entregar") — Renta + Depósito +
-  // every "Otro concepto" price, live. No fixed/autofilled prices (rejected
-  // — prices genuinely vary) — this only sums whatever the user already
-  // typed.
+  // principle as ReturnDialog's "Total a entregar") — Renta + Depósito,
+  // live. No fixed/autofilled prices (rejected — prices genuinely vary) —
+  // this only sums whatever the user already typed.
   const totalACobrar =
-    Number(initialRentAmount || 0) +
-    Number(depositAmount || 0) +
-    extras.reduce((sum, extra) => sum + (extra.price || 0), 0);
+    Number(initialRentAmount || 0) + Number(depositAmount || 0);
 
   return (
     <div className="mx-auto flex h-dvh w-full max-w-xl flex-col bg-background text-foreground overflow-hidden">
       <AppHeader title="Nueva renta" showBack />
 
       <main className="flex flex-1 flex-col overflow-y-auto">
-        <div className="flex flex-1 flex-col gap-6 px-4 pt-2">
+        <div className="flex flex-1 flex-col gap-6 px-4 pt-2 pb-4">
           <section className="flex flex-col gap-2">
             <h2 className="text-sm font-semibold text-muted-foreground">
-              Cliente
+              Cliente<span className="text-destructive" aria-hidden="true"> *</span>
             </h2>
             <CustomerPicker
               selectedCustomer={selectedCustomer}
               onSelect={(customer) => {
                 setPendingNewCustomer(null);
                 setSelectedCustomer(customer);
+                setCustomerInvalid(false);
               }}
               pendingNewCustomer={pendingNewCustomer}
               onSelectDraft={(draft) => {
                 setSelectedCustomer(null);
                 setPendingNewCustomer(draft);
+                setCustomerInvalid(false);
               }}
               onViewCustomer={() => setCustomerDetailOpen(true)}
+              invalid={customerInvalid}
+              onSearchBlur={() => setCustomerInvalid(true)}
             />
+            {customerInvalid && (
+              <p className="text-destructive text-sm">
+                Selecciona o crea un cliente.
+              </p>
+            )}
           </section>
 
           <section className="flex flex-col gap-2">
             <h2 className="text-sm font-semibold text-muted-foreground">
-              Qué se renta
+              Qué se renta<span className="text-destructive" aria-hidden="true"> *</span>
             </h2>
             <ItemQuantityPicker
               value={itemQuantities}
-              onChange={setItemQuantities}
+              onChange={(next) => {
+                setItemQuantities(next);
+                if (itemQuantitiesToList(next).length > 0) {
+                  setItemsInvalid(false);
+                }
+              }}
+              invalid={itemsInvalid}
             />
+            {itemsInvalid && (
+              <p className="text-destructive text-sm">
+                Selecciona al menos un producto.
+              </p>
+            )}
           </section>
 
           <section className="flex flex-col gap-2">
             <Label htmlFor="rental-initial-amount">Renta</Label>
-            <Input
+            <CurrencyInput
               id="rental-initial-amount"
-              type="number"
-              min={0}
-              inputMode="decimal"
               value={initialRentAmount}
-              onChange={(event) => setInitialRentAmount(event.target.value)}
+              onChange={setInitialRentAmount}
             />
           </section>
 
           <section className="flex flex-col gap-2">
             <Label htmlFor="rental-deposit-amount">Depósito</Label>
-            <Input
+            <CurrencyInput
               id="rental-deposit-amount"
-              type="number"
-              min={0}
-              inputMode="decimal"
               value={depositAmount}
-              onChange={(event) => setDepositAmount(event.target.value)}
+              onChange={setDepositAmount}
             />
           </section>
 
-          <section className="flex flex-col gap-2">
-            <h2 className="text-sm font-semibold text-muted-foreground">Otros</h2>
-            <ExtrasList value={extras} onChange={setExtras} />
-          </section>
-
-          {formError && <p className="text-destructive text-sm">{formError}</p>}
         </div>
 
         {/* Business-owner request: the total belongs in the same fixed
@@ -304,8 +332,11 @@ export function RentalNewScreen() {
             (not just a floating button), so it gets an opaque background
             and a top border instead of the transparent/pointer-events-none
             treatment used where the bar has nothing behind it worth
-            clicking through to. */}
+            clicking through to. `formError` moved in here too — it needs to
+            stay visible next to the button that caused it, not scroll away
+            at the bottom of a long form. */}
         <div className="bg-background sticky bottom-0 z-10 mt-auto flex shrink-0 flex-col gap-3 border-t p-4">
+          {formError && <p className="text-destructive text-sm">{formError}</p>}
           <div className="flex items-center justify-between text-sm font-semibold">
             <span>Total a cobrar</span>
             <span>{formatCurrencyMXN(totalACobrar)}</span>
@@ -326,21 +357,10 @@ export function RentalNewScreen() {
         open={summaryOpen}
         onOpenChange={setSummaryOpen}
         receipt={receipt}
-        onViewReceipt={() => {
-          setSummaryOpen(false);
-          setReceiptOpen(true);
-        }}
         onContinue={() => {
           setSummaryOpen(false);
           navigate("/dashboard");
         }}
-      />
-
-      <ReceiptDialog
-        open={receiptOpen}
-        onOpenChange={setReceiptOpen}
-        receipt={receipt}
-        autoPrint={false}
       />
 
       <CustomerDetailSheet

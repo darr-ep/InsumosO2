@@ -34,6 +34,7 @@ export interface PaymentDialogProps {
   onOpenChange: (open: boolean) => void;
   rentalId: string;
   suggestedAmount: number;
+  initialRentAmount: number;
   hasPreviousRentPayment: boolean;
   onRegistered?: (payment: PaymentRecord) => void;
 }
@@ -43,6 +44,7 @@ export function PaymentDialog({
   onOpenChange,
   rentalId,
   suggestedAmount,
+  initialRentAmount,
   hasPreviousRentPayment,
   onRegistered,
 }: PaymentDialogProps) {
@@ -129,11 +131,17 @@ export function PaymentDialog({
           <DialogTitle>Registrar pago</DialogTitle>
         </DialogHeader>
 
+        {/* Pill-style mode toggle (post-launch polish): a deliberate, scoped
+            exception to this app's h-11/44px minimum touch target — that
+            floor is for PRIMARY actions (SDD §16.12/§17), not a compact
+            in-row chip like this one. The only two-button toggle of this
+            kind in the app. */}
         <div className="flex gap-2">
           <Button
             type="button"
             variant={mode === "rent" ? "default" : "outline"}
             onClick={() => setMode("rent")}
+            className="h-9 rounded-full px-4"
           >
             Pago
           </Button>
@@ -141,6 +149,7 @@ export function PaymentDialog({
             type="button"
             variant={mode === "adjustment" ? "default" : "outline"}
             onClick={() => setMode("adjustment")}
+            className="h-9 rounded-full px-4"
           >
             Ajuste
           </Button>
@@ -149,17 +158,25 @@ export function PaymentDialog({
         {mode === "rent" ? (
           <PaymentSuggestionField
             suggestedAmount={suggestedAmount}
+            initialRentAmount={initialRentAmount}
             value={amount}
             onChange={setAmount}
             hasPreviousPayment={hasPreviousRentPayment}
           />
         ) : (
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="payment-amount">Monto del ajuste</Label>
+            <Label htmlFor="payment-amount" required>Monto del ajuste</Label>
+            {/* Plain Input, NOT CurrencyInput: an adjustment amount can be
+                negative (a discount/credit) — domain/payments/payment.ts's
+                schema only rejects exactly 0 for this mode, positive and
+                negative both valid. CurrencyInput strips everything but
+                digits (no "-"), which would silently make negative
+                adjustments impossible to type. */}
             <Input
               id="payment-amount"
               type="number"
               inputMode="decimal"
+              placeholder="$ 0"
               value={amount}
               onChange={(event) => setAmount(event.target.value)}
             />
@@ -168,7 +185,7 @@ export function PaymentDialog({
 
         {mode === "adjustment" && (
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="payment-note">Nota</Label>
+            <Label htmlFor="payment-note" required>Nota</Label>
             <Input
               id="payment-note"
               placeholder="Explica el motivo del ajuste"

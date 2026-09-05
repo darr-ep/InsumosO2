@@ -43,6 +43,14 @@ export interface CustomerPickerProps {
   pendingNewCustomer?: CustomerFormSubmitValues | null;
   onSelectDraft: (draft: CustomerFormSubmitValues | null) => void;
   onViewCustomer?: (customerId: string) => void;
+  invalid?: boolean;
+  // Fires when the search Input loses focus while still unresolved (no
+  // customer selected, no "Cliente nuevo" draft in progress) — this branch
+  // only renders in that state, so any blur here means "left without
+  // picking anyone". The caller (RentalNewScreen) uses this to flag the
+  // section invalid immediately, not only at submit time — same red
+  // border/inline message `invalid` already drives, just triggered earlier.
+  onSearchBlur?: () => void;
 }
 
 export function CustomerPicker({
@@ -50,7 +58,9 @@ export function CustomerPicker({
   onSelect,
   pendingNewCustomer = null,
   onSelectDraft,
+  invalid = false,
   onViewCustomer,
+  onSearchBlur,
 }: CustomerPickerProps) {
   const [creatingNew, setCreatingNew] = useState(false);
   const [query, setQuery] = useState("");
@@ -200,10 +210,26 @@ export function CustomerPicker({
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div
+      className="flex flex-col gap-2"
+      // Fires `onSearchBlur` only when focus leaves this whole picker, not
+      // when it moves to a result card or "Crear cliente nuevo" inside it —
+      // tapping a result blurs the Input a moment before its own onClick
+      // resolves the customer, and firing on that transient blur flashed
+      // the invalid state on for one frame before the selection cleared it.
+      // `relatedTarget` is the element about to receive focus; still inside
+      // this container means the user is continuing the interaction, not
+      // abandoning it.
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+          onSearchBlur?.();
+        }
+      }}
+    >
       <Input
         placeholder="Nombre o teléfono"
         aria-label="Buscar cliente por nombre o teléfono"
+        aria-invalid={invalid}
         value={query}
         onChange={(event) => setQuery(event.target.value)}
       />
@@ -225,17 +251,24 @@ export function CustomerPicker({
         </button>
       )}
 
-      <ul className="flex flex-col gap-2">
-        {visibleResults.map((customer) => (
-          <li key={customer.id}>
-            <CustomerCard
-              name={customer.name}
-              phone={customer.phone}
-              onClick={() => onSelect(customer)}
-            />
-          </li>
-        ))}
-      </ul>
+      {/* Only rendered with actual results — an empty `<ul>` had no visual
+          content but still reserved a `gap-2` slot in the parent flex
+          column, pushing anything after this component (e.g.
+          RentalNewScreen's "Selecciona o crea un cliente" message) down by
+          that gap even when there was nothing to show. */}
+      {visibleResults.length > 0 && (
+        <ul className="flex flex-col gap-2">
+          {visibleResults.map((customer) => (
+            <li key={customer.id}>
+              <CustomerCard
+                name={customer.name}
+                phone={customer.phone}
+                onClick={() => onSelect(customer)}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

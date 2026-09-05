@@ -166,6 +166,7 @@ export function ProfileScreen() {
                 <Input
                   id="profile-name"
                   autoComplete="name"
+                  placeholder="Ej. Juan Pérez"
                   aria-invalid={!!profileForm.formState.errors.name}
                   {...profileForm.register("name")}
                 />
@@ -183,6 +184,7 @@ export function ProfileScreen() {
                   type="tel"
                   inputMode="numeric"
                   autoComplete="tel"
+                  placeholder="5512345678"
                   aria-invalid={!!profileForm.formState.errors.phone}
                   {...profileForm.register("phone")}
                 />

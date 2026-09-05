@@ -41,6 +41,8 @@ const baseProps = {
   startedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
   depositAmount: 1000,
   suggestedAmount: 2800,
+  initialRentAmount: 2800,
+  totalRentPaid: 5600,
   hasPreviousRentPayment: false,
 };
 
@@ -54,7 +56,7 @@ describe("ReturnDialog (§7.3, §16.8, CU6, task 3.2)", () => {
     consumeSessionMessage();
   });
 
-  it("shows cliente, productos, fecha de inicio, tiempo transcurrido and depósito, with the suggested amounts as placeholders (CU6 first scenario)", () => {
+  it("shows cliente, productos, fecha de inicio, tiempo transcurrido and depósito, with empty amount inputs (CU6 first scenario)", () => {
     render(<ReturnDialog {...baseProps} />);
 
     expect(screen.getByText("Juan Pérez")).toBeInTheDocument();
@@ -63,15 +65,20 @@ describe("ReturnDialog (§7.3, §16.8, CU6, task 3.2)", () => {
     // Redesign — UX/UI pass: both amounts start empty (placeholder shows
     // the suggestion) — never a prefilled value a rushed confirm could
     // silently accept.
-    expect(screen.getByLabelText(/monto cobrado/i)).toHaveValue(null);
+    // Post-launch polish: both placeholders are now a static "$ 0" — the
+    // suggested "Monto cobrado" is already shown as text above that input
+    // ("Renta acordada"/"Último pago"), and the suggested deposit is
+    // already shown in the read-only "Depósito" row above — repeating
+    // either in the placeholder was redundant.
+    expect(screen.getByLabelText(/monto cobrado/i)).toHaveValue("");
     expect(screen.getByLabelText(/monto cobrado/i)).toHaveAttribute(
       "placeholder",
-      "2800",
+      "$ 0",
     );
-    expect(screen.getByLabelText("Depósito a devolver")).toHaveValue(null);
+    expect(screen.getByLabelText("Depósito a devolver")).toHaveValue("");
     expect(screen.getByLabelText("Depósito a devolver")).toHaveAttribute(
       "placeholder",
-      "1000",
+      "$ 0",
     );
   });
 
@@ -140,22 +147,31 @@ describe("ReturnDialog (§7.3, §16.8, CU6, task 3.2)", () => {
     expect(toast.success).not.toHaveBeenCalled();
   });
 
-  it("rejects a negative amount without calling returnRental", async () => {
+  it("strips a typed minus sign instead of accepting a negative amount (CurrencyInput is digits-only)", async () => {
+    // Redesign — UX/UI pass (currency formatting): `amount_collected` can
+    // never be negative (domain/rentals/return.ts's schema: `min(0)`), so
+    // switching this field to `CurrencyInput` prevents the invalid state at
+    // the input level instead of catching it after submit — "-100" typed
+    // reports as "100" (the "-" is simply not a digit), the field can never
+    // hold a negative value to begin with.
+    const returnedAt = "2026-08-26T12:00:00.000Z";
+    returnRental.mockResolvedValueOnce({ id: "rental1", returned_at: returnedAt });
     const user = userEvent.setup();
     render(<ReturnDialog {...baseProps} />);
 
     const amountInput = screen.getByLabelText(/monto cobrado/i);
-    await user.clear(amountInput);
     await user.type(amountInput, "-100");
+
+    expect(amountInput).toHaveValue("$ 100");
 
     await user.click(
       screen.getByRole("button", { name: "Confirmar devolución" }),
     );
 
-    expect(
-      await screen.findByText("El monto cobrado no puede ser negativo."),
-    ).toBeInTheDocument();
-    expect(returnRental).not.toHaveBeenCalled();
+    await waitFor(() => expect(returnRental).toHaveBeenCalledTimes(1));
+    expect(returnRental).toHaveBeenCalledWith(
+      expect.objectContaining({ amountCollected: 100 }),
+    );
   });
 
   it("shows an error and keeps the dialog open when the return call fails (§21)", async () => {

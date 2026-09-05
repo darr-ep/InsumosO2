@@ -338,18 +338,24 @@ export function CredentialCameraCapture({
       {error && <p className="text-destructive text-sm">{error}</p>}
 
       <div className="flex gap-2">
+        {mode === "live" && onCancel && (
+          <Button
+            type="button"
+            variant="outline"
+            className="flex-1"
+            onClick={handleCancel}
+          >
+            Cancelar
+          </Button>
+        )}
         {mode === "live" && (
           <Button
             type="button"
+            className="flex-1"
             disabled={isCapturing}
             onClick={() => void handleCapture()}
           >
             {isCapturing ? "Capturando…" : "Tomar foto"}
-          </Button>
-        )}
-        {mode === "live" && onCancel && (
-          <Button type="button" variant="outline" onClick={handleCancel}>
-            Cancelar
           </Button>
         )}
       </div>

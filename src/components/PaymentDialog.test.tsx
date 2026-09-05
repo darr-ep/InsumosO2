@@ -49,6 +49,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         onOpenChange={onOpenChange}
         rentalId="r1"
         suggestedAmount={3000}
+        initialRentAmount={2800}
         hasPreviousRentPayment
         onRegistered={onRegistered}
       />,
@@ -57,9 +58,13 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
     // Redesign — UX/UI pass: the field starts empty so a rushed confirm can
     // never silently accept a stale suggested number — only the placeholder
     // shows it.
+    // Post-launch polish: the placeholder is now a static "$ 0" — the
+    // suggested amount is already shown as text above the input
+    // ("Renta acordada"/"Último pago"), repeating it in the placeholder
+    // too was redundant.
     const amountInput = screen.getByLabelText("Monto");
-    expect(amountInput).toHaveValue(null);
-    expect(amountInput).toHaveAttribute("placeholder", "3000");
+    expect(amountInput).toHaveValue("");
+    expect(amountInput).toHaveAttribute("placeholder", "$ 0");
 
     await user.type(amountInput, "3000");
     await user.click(screen.getByRole("button", { name: "Confirmar" }));
@@ -84,6 +89,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         onOpenChange={() => {}}
         rentalId="r1"
         suggestedAmount={3000}
+        initialRentAmount={2800}
         hasPreviousRentPayment
       />,
     );
@@ -104,6 +110,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         onOpenChange={() => {}}
         rentalId="r1"
         suggestedAmount={3000}
+        initialRentAmount={2800}
         hasPreviousRentPayment
       />,
     );
@@ -127,6 +134,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         onOpenChange={() => {}}
         rentalId="r1"
         suggestedAmount={3000}
+        initialRentAmount={2800}
         hasPreviousRentPayment
       />,
     );
@@ -149,6 +157,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         onOpenChange={() => {}}
         rentalId="r1"
         suggestedAmount={3000}
+        initialRentAmount={2800}
         hasPreviousRentPayment
       />,
     );
@@ -174,6 +183,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         onOpenChange={() => {}}
         rentalId="r1"
         suggestedAmount={3000}
+        initialRentAmount={2800}
         hasPreviousRentPayment
       />,
     );
@@ -205,6 +215,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         onOpenChange={() => {}}
         rentalId="r1"
         suggestedAmount={3000}
+        initialRentAmount={2800}
         hasPreviousRentPayment
       />,
     );
@@ -238,6 +249,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         onOpenChange={() => {}}
         rentalId="r1"
         suggestedAmount={3000}
+        initialRentAmount={2800}
         hasPreviousRentPayment
       />,
     );
@@ -268,6 +280,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         onOpenChange={() => {}}
         rentalId="r1"
         suggestedAmount={3000}
+        initialRentAmount={2800}
         hasPreviousRentPayment
       />,
     );
@@ -300,6 +313,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         onOpenChange={() => {}}
         rentalId="r1"
         suggestedAmount={3000}
+        initialRentAmount={2800}
         hasPreviousRentPayment
       />,
     );

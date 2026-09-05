@@ -111,7 +111,7 @@ describe("RentalNewScreen (§7.1, §16.7, CU4)", () => {
     expect(createRental).not.toHaveBeenCalled();
   });
 
-  it("shows a live 'Total a cobrar' summing Renta + Depósito + Otros conceptos, never a fixed/autofilled price (Redesign — UX/UI pass)", async () => {
+  it("shows a live 'Total a cobrar' summing Renta + Depósito, never a fixed/autofilled price (Redesign — UX/UI pass)", async () => {
     const user = userEvent.setup();
     renderScreen();
 
@@ -122,16 +122,9 @@ describe("RentalNewScreen (§7.1, §16.7, CU4)", () => {
     await user.type(screen.getByLabelText("Depósito"), "1000");
 
     expect(within(totalRow).getByText("$3,800.00")).toBeInTheDocument();
-
-    await user.click(
-      screen.getByRole("button", { name: "Agregar otro concepto" }),
-    );
-    await user.type(screen.getByLabelText("Precio"), "150");
-
-    expect(within(totalRow).getByText("$3,950.00")).toBeInTheDocument();
   });
 
-  it("creates the rental (CU4: cliente existente) and opens the receipt with the server-assigned folio", async () => {
+  it("creates the rental (CU4: cliente existente) with the server-assigned folio", async () => {
     searchCustomers.mockResolvedValue([juan]);
     createRental.mockResolvedValue({
       rental: {
@@ -169,24 +162,12 @@ describe("RentalNewScreen (§7.1, §16.7, CU4)", () => {
       items: [{ itemType: "concentrator", quantity: 1 }],
       initialRentAmount: 2800,
       depositAmount: 1000,
-      extras: [],
     });
 
     expect(
       await screen.findByRole("heading", { name: "Renta creada ✓" }),
     ).toBeInTheDocument();
     expect(screen.getByText("Folio R-000001")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Ver comprobante" }));
-
-    expect(
-      await screen.findByRole("heading", { name: "Comprobante R-000001" }),
-    ).toBeInTheDocument();
-    // Redesign Round 3 fix: "Ver comprobante" must close the short
-    // confirmation, not leave it open underneath the full receipt.
-    expect(
-      screen.queryByRole("heading", { name: "Renta creada ✓" }),
-    ).not.toBeInTheDocument();
   });
 
   it("navigates to /dashboard when Continuar is pressed on the short confirmation (Redesign Round 3)", async () => {

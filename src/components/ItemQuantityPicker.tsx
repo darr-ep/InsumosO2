@@ -1,5 +1,6 @@
 import { Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   RENTAL_ITEM_TYPES,
   rentalItemTypeLabel,
@@ -23,18 +24,20 @@ export const emptyItemQuantities: ItemQuantities = {
 export interface ItemQuantityPickerProps {
   value: ItemQuantities;
   onChange: (value: ItemQuantities) => void;
+  invalid?: boolean;
 }
 
 export function ItemQuantityPicker({
   value,
   onChange,
+  invalid = false,
 }: ItemQuantityPickerProps) {
   function setQuantity(itemType: RentalItemType, quantity: number) {
     onChange({ ...value, [itemType]: quantity });
   }
 
   return (
-    <ul className="flex flex-col gap-3">
+    <ul className="flex flex-col gap-2">
       {RENTAL_ITEM_TYPES.map((itemType) => {
         const label = rentalItemTypeLabel(itemType);
         const quantity = value[itemType];
@@ -42,7 +45,10 @@ export function ItemQuantityPicker({
         return (
           <li
             key={itemType}
-            className="flex items-center justify-between rounded-md border p-3"
+            className={cn(
+              "flex items-center justify-between rounded-md border p-2.5",
+              invalid && "border-destructive",
+            )}
           >
             <span className="font-medium">{label}</span>
             <div className="flex items-center gap-3">

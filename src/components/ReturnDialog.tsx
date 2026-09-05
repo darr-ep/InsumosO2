@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -19,7 +20,7 @@ import {
   type ReturnReceiptData,
 } from "@/domain/rentals/receipt";
 import { rentalItemTypeLabel } from "@/domain/rentals/rental";
-import { returnFormSchema, suggestedDepositReturn } from "@/domain/rentals/return";
+import { returnFormSchema } from "@/domain/rentals/return";
 import { formatCurrencyMXN } from "@/lib/currency";
 
 /**
@@ -39,6 +40,15 @@ import { formatCurrencyMXN } from "@/lib/currency";
  * regrouped. Footer uses the same `flex-col items-stretch` fix as
  * `RentalCreatedSummary`/`ReturnCreatedSummary` (keeps the confirm button
  * full-width on tablet instead of shrinking to `sm:justify-end`).
+ *
+ * Post-launch UX fix: the read-only context block now also shows "Renta
+ * inicial" and "Total pagado en rentas" — before this, someone processing a
+ * return only saw "Depósito" plus a bare "Sugerido: $X" line that lost all
+ * reference to the originally agreed rent once payments had drifted from it
+ * (e.g. informal discounts over time). "Monto cobrado"'s helper text mirrors
+ * `PaymentSuggestionField`'s exact two-line wording ("Renta acordada" /
+ * "Último pago") for consistency between the two places a rent amount gets
+ * confirmed.
  */
 
 export interface ReturnDialogProps {
@@ -54,6 +64,8 @@ export interface ReturnDialogProps {
   startedAt: Date;
   depositAmount: number;
   suggestedAmount: number;
+  initialRentAmount: number;
+  totalRentPaid: number;
   hasPreviousRentPayment: boolean;
   onReturned?: (receipt: ReturnReceiptData) => void;
 }
@@ -71,6 +83,8 @@ export function ReturnDialog({
   startedAt,
   depositAmount,
   suggestedAmount,
+  initialRentAmount,
+  totalRentPaid,
   hasPreviousRentPayment,
   onReturned,
 }: ReturnDialogProps) {
@@ -100,7 +114,6 @@ export function ReturnDialog({
     setWasOpen(false);
   }
 
-  const suggestedDeposit = suggestedDepositReturn(depositAmount);
   // §7.3's "total a entregar" (business-owner request, post-launch audit):
   // the actual deposit-return input only exists when there's a deposit to
   // give back (see the conditional render below) — when there isn't,
@@ -207,22 +220,38 @@ export function ReturnDialog({
             <dt className="text-muted-foreground">Depósito</dt>
             <dd>{formatCurrencyMXN(depositAmount)}</dd>
           </div>
+          <div className="flex justify-between">
+            <dt className="text-muted-foreground">Renta inicial</dt>
+            <dd>{formatCurrencyMXN(initialRentAmount)}</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt className="text-muted-foreground">Total pagado en rentas</dt>
+            <dd>{formatCurrencyMXN(totalRentPaid)}</dd>
+          </div>
         </dl>
 
         <div className="flex flex-col gap-4 border-t pt-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="return-amount-collected">Monto cobrado</Label>
-            <p className="text-muted-foreground text-sm">
-              {hasPreviousRentPayment ? "Sugerido" : "Renta"}:{" "}
-              {formatCurrencyMXN(suggestedAmount)}
-            </p>
-            <Input
+            {hasPreviousRentPayment ? (
+              <>
+                <p className="text-muted-foreground text-sm">
+                  Renta acordada: {formatCurrencyMXN(initialRentAmount)}
+                </p>
+                <p className="text-muted-foreground text-sm">
+                  Último pago: {formatCurrencyMXN(suggestedAmount)}
+                </p>
+              </>
+            ) : (
+              <p className="text-muted-foreground text-sm">
+                Renta: {formatCurrencyMXN(initialRentAmount)}
+              </p>
+            )}
+            <CurrencyInput
               id="return-amount-collected"
-              type="number"
-              inputMode="decimal"
-              placeholder={String(suggestedAmount)}
+              placeholder="$ 0"
               value={amountCollected}
-              onChange={(event) => setAmountCollected(event.target.value)}
+              onChange={setAmountCollected}
             />
           </div>
 
@@ -237,18 +266,19 @@ export function ReturnDialog({
                   equals `depositAmount` (see its own docblock) — a
                   "Sugerido: $X" line here would just repeat the read-only
                   "Depósito" row shown a few lines above, verbatim, every
-                  single time. Removed; the placeholder still carries the
-                  number into the input itself. */}
+                  single time. Removed. Post-launch UX pass: the placeholder
+                  no longer carries the suggested number either (now a
+                  static "$ 0", matching "Monto cobrado") — the read-only
+                  "Depósito" row above is the only remaining reference for
+                  this amount. */}
               <Label htmlFor="return-deposit-returned">
                 Depósito a devolver
               </Label>
-              <Input
+              <CurrencyInput
                 id="return-deposit-returned"
-                type="number"
-                inputMode="decimal"
-                placeholder={String(suggestedDeposit)}
+                placeholder="$ 0"
                 value={depositReturned}
-                onChange={(event) => setDepositReturned(event.target.value)}
+                onChange={setDepositReturned}
               />
             </div>
           )}

@@ -48,10 +48,11 @@ export function CustomerEditForm({
       noValidate
     >
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="customer-edit-name">Nombre</Label>
+        <Label htmlFor="customer-edit-name" required>Nombre</Label>
         <Input
           id="customer-edit-name"
           autoComplete="name"
+          placeholder="Ej. Juan Pérez"
           aria-invalid={!!errors.name}
           {...register("name")}
         />
@@ -61,12 +62,13 @@ export function CustomerEditForm({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="customer-edit-phone">Teléfono</Label>
+        <Label htmlFor="customer-edit-phone" required>Teléfono</Label>
         <Input
           id="customer-edit-phone"
           type="tel"
           inputMode="numeric"
           autoComplete="tel"
+          placeholder="5512345678"
           aria-invalid={!!errors.phone}
           {...register("phone")}
         />
