@@ -22,7 +22,6 @@ const receipt: RentalReceiptData = {
   items: [{ itemType: "concentrator", quantity: 1 }],
   initialRentAmount: 2800,
   depositAmount: 1000,
-  extras: [],
   total: 3800,
 };
 

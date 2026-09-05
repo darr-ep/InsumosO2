@@ -17,8 +17,7 @@ const receipt: RentalReceiptData = {
   items: [{ itemType: "concentrator", quantity: 1 }],
   initialRentAmount: 2800,
   depositAmount: 1000,
-  extras: [{ description: "2 cubrebocas KF94", price: 50 }],
-  total: 3850,
+  total: 3800,
 };
 
 const returnReceipt: ReturnReceiptData = {
@@ -43,8 +42,7 @@ describe("formatReceiptShareText (§22)", () => {
     expect(text).toContain("Folio: R-000001");
     expect(text).toContain("Juan Pérez");
     expect(text).toContain("1 x Concentrador");
-    expect(text).toContain("2 cubrebocas KF94");
-    expect(text).toMatch(/Total: \$3,850\.00/);
+    expect(text).toMatch(/Total: \$3,800\.00/);
   });
 
   it("includes rented days, amount collected and deposit returned for a devolución receipt (task 3.2)", () => {
