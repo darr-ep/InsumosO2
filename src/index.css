@@ -4,31 +4,53 @@
 
 :root {
   --radius: 0.875rem;
-  --background: oklch(1 0 0);
+  /* design-fidelity (#2224 A1): page background pulled off pure white so
+     cards read as elevated surfaces again (design's #F3F4F6) — verified via
+     the OKLCH→linear-sRGB→relative-luminance script, see
+     src/lib/colorContrast.ts + src/index.css.contrast.test.ts. */
+  --background: oklch(0.967 0.002 265);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  /* Azul sobrio (design brief: "un color primario azul sobrio"). L=0.55/C=0.20
-     keeps white text (--primary-foreground, oklch(0.985 0 0)) at ~4.66:1
-     contrast — still passes WCAG AA (4.5:1) for normal text but with much
-     less margin than the original L=0.52/C=0.16 (~5.33:1) — verified via an
-     OKLCH→linear-sRGB→relative-luminance script, not eyeballed. Don't push
-     this any lighter/more saturated without re-checking; it's close to the
-     AA floor now. */
-  --primary: oklch(0.55 0.20 254);
+  /* Azul sobrio (design brief: "un color primario azul sobrio"). design-fidelity
+     (#2224 A1) tunes this to #2563EB-equivalent: white text stays ~5.17:1
+     (AA, actually a larger margin than the previous ~4.66:1) — verified via
+     an OKLCH→linear-sRGB→relative-luminance script, not eyeballed (see
+     src/lib/colorContrast.ts + src/index.css.contrast.test.ts). Don't push
+     this any lighter/more saturated without re-checking against
+     --primary-soft below, which is the tighter of its two AA pairs. */
+  --primary: oklch(0.546 0.216 263);
   --primary-foreground: oklch(0.985 0 0);
+  /* design-fidelity (#2224 A1, new token): soft tint for primary-on-light
+     surfaces (badges, count pills). Design's own hex is #EAF1FF, but its
+     rounded oklch(0.951 0.021 265) undershoots on re-derivation and only
+     clears 4.48:1 against --primary — BELOW the 4.5:1 AA floor the design
+     itself requires. This value is the precise OKLab round-trip of #EAF1FF
+     (same visible color, ~4.57:1 against --primary) — see
+     src/index.css.contrast.test.ts for the regression check. */
+  --primary-soft: oklch(0.957 0.02 264);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  /* design-fidelity (#2224 A1/A2): darkened from 0.556 so this clears 4.5:1
+     against the new, darker --background above (design's own #6B7280 was
+     verified to fail AA at 4.39:1 here — do not copy it verbatim). */
+  --muted-foreground: oklch(0.54 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
-  /* Verde sobrio para estados positivos. White foreground contrast ~5.0:1 (AA). */
+  /* Verde sobrio para estados positivos. White foreground contrast ~5.0:1 (AA).
+     design-fidelity (#2224 A2): kept unchanged rather than the design's
+     #16A34A — that value only clears 2.95:1 against --success-soft below,
+     unreadable at the 11px pill size this app uses it at. */
   --success: oklch(0.52 0.14 149);
   --success-foreground: oklch(0.985 0 0);
+  /* design-fidelity (#2224 A1, new token): soft tint for success badges
+     (design's #E7F6EC). Paired with --success text at ~4.62:1 (AA) — see
+     src/index.css.contrast.test.ts. */
+  --success-soft: oklch(0.958 0.024 155);
   /* Ámbar sobrio para advertencias. Amber is inherently high-luminance, so
      it pairs with dark text (not white) — dark-text contrast ~8.5:1 (AAA). */
   --warning: oklch(0.77 0.15 75);
@@ -41,8 +63,10 @@
      --input share one value again (they'd drifted apart) since both still
      drive the same visual language (Input's own border, plus border-input
      boxes like LoginScreen's provider picker). */
-  --border: oklch(0.85 0 0);
-  --input: oklch(0.85 0 0);
+  /* design-fidelity (#2224 A1): design's --border/#E6E8EC. Kept paired with
+     --input per the "share one value" rationale in the comment above. */
+  --border: oklch(0.931 0.003 265);
+  --input: oklch(0.931 0.003 265);
   --ring: oklch(0.708 0 0);
 }
 
@@ -83,6 +107,7 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-soft: var(--primary-soft);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -92,6 +117,7 @@
   --color-destructive: var(--destructive);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
+  --color-success-soft: var(--success-soft);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-border: var(--border);

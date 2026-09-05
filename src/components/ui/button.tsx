@@ -9,15 +9,14 @@ const buttonVariants = cva(
   // click ~300ms after the real one, double-firing onClick (seen on the
   // QuantityStepper +/- buttons under fast repeated tapping) — this disables
   // that browser-generated synthetic click plus double-tap-to-zoom.
-  "touch-manipulation inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 aria-invalid:border-destructive",
+  "touch-manipulation inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 aria-invalid:border-destructive",
   {
     variants: {
       variant: {
         default: "bg-primary text-primary-foreground hover:bg-primary/90",
         destructive:
           "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20",
-        outline:
-          "border bg-background hover:bg-accent hover:text-accent-foreground",
+        outline: "border bg-card hover:bg-accent hover:text-accent-foreground",
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
@@ -26,9 +25,11 @@ const buttonVariants = cva(
       size: {
         // Minimum tap target 44x44px per SDD §16.12/§17 (touch accessibility for a
         // non-technical, mostly-older user base) — no variant goes below h-11/size-11.
+        // Pill radius (design-fidelity #2224 A4) now comes from the base `rounded-full`
+        // above, so the per-size `rounded-md` overrides that used to live here are gone.
         default: "h-11 px-4 py-2 has-[>svg]:px-3",
-        sm: "h-11 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5 text-sm",
-        lg: "h-12 rounded-md px-6 has-[>svg]:px-4 text-base",
+        sm: "h-11 gap-1.5 px-3 has-[>svg]:px-2.5 text-sm",
+        lg: "h-12 px-6 has-[>svg]:px-4 text-base",
         icon: "size-11",
       },
     },

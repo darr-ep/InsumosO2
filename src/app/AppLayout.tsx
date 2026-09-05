@@ -267,7 +267,7 @@ export function AppLayout() {
       </div>
       <nav
         aria-label="Navegación principal"
-        className="flex shrink-0 border-t bg-background py-1.5"
+        className="flex shrink-0 border-t bg-card py-1.5"
       >
         {TABS.map(({ to, label, icon: Icon }) => (
           <NavLink

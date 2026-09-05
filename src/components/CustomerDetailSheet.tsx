@@ -332,7 +332,7 @@ export function CustomerDetailSheet({
                       <Button
                         type="button"
                         variant="secondary"
-                        className="bg-background/80"
+                        className="bg-card/80"
                         onClick={() => setRevealed(true)}
                       >
                         <Lock aria-hidden="true" />

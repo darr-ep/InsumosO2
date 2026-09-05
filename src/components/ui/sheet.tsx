@@ -57,7 +57,7 @@ function SheetContent({
       <Drawer.Content
         data-slot="sheet-content"
         className={cn(
-          "bg-background fixed inset-x-0 bottom-0 z-50 max-h-[90vh] flex flex-col rounded-t-2xl border border-b-0 shadow-2xl overflow-hidden focus:outline-none",
+          "bg-card fixed inset-x-0 bottom-0 z-50 max-h-[90vh] flex flex-col rounded-t-2xl border border-b-0 shadow-2xl overflow-hidden focus:outline-none",
           className,
         )}
         {...props}
@@ -90,7 +90,7 @@ function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="sheet-header"
       className={cn(
-        "sticky -top-3 -mx-4 -mt-3 z-20 flex flex-col gap-1.5 bg-background px-4 pt-3 pb-3 border-b pr-12",
+        "sticky -top-3 -mx-4 -mt-3 z-20 flex flex-col gap-1.5 bg-card px-4 pt-3 pb-3 border-b pr-12",
         className,
       )}
       {...props}
@@ -103,7 +103,7 @@ function SheetFooter({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="sheet-footer"
       className={cn(
-        "sticky -bottom-4 -mx-4 -mb-4 z-20 mt-auto flex flex-col gap-2 bg-background px-4 pt-3 pb-4 border-t",
+        "sticky -bottom-4 -mx-4 -mb-4 z-20 mt-auto flex flex-col gap-2 bg-card px-4 pt-3 pb-4 border-t",
         className,
       )}
       {...props}

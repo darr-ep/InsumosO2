@@ -296,7 +296,7 @@ export function ReturnDialog({
           {formError && <p className="text-destructive text-sm">{formError}</p>}
         </div>
 
-        <div className="sticky -bottom-4 -mx-4 -mb-4 mt-auto z-20 flex flex-col gap-3 bg-background px-4 pb-4 pt-3 border-t">
+        <div className="sticky -bottom-4 -mx-4 -mb-4 mt-auto z-20 flex flex-col gap-3 bg-card px-4 pb-4 pt-3 border-t">
           <div className="flex items-center justify-between text-sm font-semibold">
             <span>Total a entregar</span>
             <span>{formatCurrencyMXN(totalToHandBack)}</span>

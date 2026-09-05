@@ -335,7 +335,7 @@ export function RentalNewScreen() {
             clicking through to. `formError` moved in here too — it needs to
             stay visible next to the button that caused it, not scroll away
             at the bottom of a long form. */}
-        <div className="bg-background sticky bottom-0 z-10 mt-auto flex shrink-0 flex-col gap-3 border-t p-4">
+        <div className="bg-card sticky bottom-0 z-10 mt-auto flex shrink-0 flex-col gap-3 border-t p-4">
           {formError && <p className="text-destructive text-sm">{formError}</p>}
           <div className="flex items-center justify-between text-sm font-semibold">
             <span>Total a cobrar</span>

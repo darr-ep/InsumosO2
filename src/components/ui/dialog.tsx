@@ -48,7 +48,7 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "bg-background fixed top-1/2 left-1/2 z-50 flex flex-col w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-lg border shadow-xl",
+          "bg-card fixed top-1/2 left-1/2 z-50 flex flex-col w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-lg border shadow-xl",
           "max-h-[85vh] overflow-hidden p-0",
           className,
         )}
@@ -76,7 +76,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="dialog-header"
       className={cn(
-        "sticky -top-4 -mx-4 -mt-4 z-20 flex flex-col gap-1.5 bg-background px-4 pt-4 pb-3 border-b pr-12 text-center sm:text-left",
+        "sticky -top-4 -mx-4 -mt-4 z-20 flex flex-col gap-1.5 bg-card px-4 pt-4 pb-3 border-b pr-12 text-center sm:text-left",
         className,
       )}
       {...props}
