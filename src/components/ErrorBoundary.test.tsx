@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ErrorBoundary } from "@/components/ErrorBoundary";
+import {
+  createMemoryRouter,
+  RouterProvider,
+  type RouteObject,
+} from "react-router";
+import { ErrorBoundary, RouteErrorBoundary } from "@/components/ErrorBoundary";
 
 // Throws on the first render only, so "Reintentar" (which just resets
 // internal state and re-renders the same children) can be proven to
@@ -99,5 +104,72 @@ describe("ErrorBoundary", () => {
     await user.click(screen.getByRole("button", { name: "Recargar página" }));
 
     expect(reloadSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * D3.2 (design-fidelity Slice D3): `RouteErrorBoundary` is the root route's
+ * `errorElement` (wired in App.tsx's `appRoutes`, not exercised here) — a
+ * data-router route that throws during render must still land on the app's
+ * own Spanish "Algo salió mal" fallback via `useRouteError`/`useNavigate`,
+ * never React Router's own built-in default error page. `createMemoryRouter`
+ * is enough to prove this without touching the browser history APIs.
+ */
+function ThrowingScreen(): never {
+  throw new Error("route boom");
+}
+
+function renderWithRouteError(children: RouteObject["children"]) {
+  const routes: RouteObject[] = [
+    {
+      errorElement: <RouteErrorBoundary />,
+      children,
+    },
+  ];
+  const router = createMemoryRouter(routes, { initialEntries: ["/"] });
+  return render(<RouterProvider router={router} />);
+}
+
+describe("RouteErrorBoundary", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("renders the app's own 'Algo salió mal' fallback, not React Router's default error page, when a routed screen throws", () => {
+    renderWithRouteError([{ path: "/", element: <ThrowingScreen /> }]);
+
+    expect(
+      screen.getByRole("heading", { name: "Algo salió mal" }),
+    ).toBeInTheDocument();
+    // React Router's own unstyled default ("Unexpected Application Error!")
+    // must never surface — proves our errorElement actually won.
+    expect(
+      screen.queryByText(/Unexpected Application Error/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("'Reintentar' re-runs the current route via navigate(0) instead of resetting local state", async () => {
+    const user = userEvent.setup();
+    renderWithRouteError([{ path: "/", element: <ThrowingScreen /> }]);
+
+    expect(
+      screen.getByRole("heading", { name: "Algo salió mal" }),
+    ).toBeInTheDocument();
+
+    // The thrown route never recovers on its own (it always throws), so
+    // clicking "Reintentar" re-navigates to the same route and hits the
+    // same throw again — proving it's wired to navigate(0), not a local
+    // hasError reset (which would behave identically here and not actually
+    // distinguish the two implementations on its own, but a missing/miswired
+    // handler would throw synchronously or leave the button inert instead).
+    await user.click(screen.getByRole("button", { name: "Reintentar" }));
+
+    expect(
+      screen.getByRole("heading", { name: "Algo salió mal" }),
+    ).toBeInTheDocument();
   });
 });

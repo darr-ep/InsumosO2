@@ -1,7 +1,13 @@
-import { useEffect } from "react";
-import { Navigate, Outlet, Route, BrowserRouter, Routes } from "react-router";
+import { useEffect, useState } from "react";
+import {
+  createBrowserRouter,
+  Navigate,
+  Outlet,
+  RouterProvider,
+  type RouteObject,
+} from "react-router";
 import { Toaster } from "@/components/ui/sonner";
-import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { RouteErrorBoundary } from "@/components/ErrorBoundary";
 import { AppLayout } from "@/app/AppLayout";
 import { DataCacheProvider } from "@/app/DataCacheContext";
 import { useIsAuthenticated } from "@/app/useIsAuthenticated";
@@ -84,31 +90,77 @@ function LoginRoute() {
  * per the business owner's explicit brief for this batch.
  */
 /**
+ * design-fidelity Slice D3: route tree migrated from `<BrowserRouter>` +
+ * `<Routes>`/`<Route>` (JSX-declared, no `useBlocker` support) to
+ * `createBrowserRouter`/`RouterProvider` (a data router). The ONLY reason
+ * for this migration is that Phase D1 (Nueva renta exit-guard, a later
+ * slice) needs `useBlocker`, which only data routers expose — no route
+ * path changes, no guard semantics changes, no screen behavior changes.
+ *
+ * Exported (not just used internally) so `App.test.tsx` and any other
+ * consumer can exercise the exact same tree directly if needed. Matches
+ * the pre-D3 tree 1:1: same pathless `RequireAuth`/`AppLayout` layout
+ * routes, same 4 leaf routes, same root `/` and `*` redirects to
+ * `/dashboard`. The one addition is `errorElement: <RouteErrorBoundary />`
+ * on the pathless root — a data router needs an explicit `errorElement` to
+ * show the app's own "Algo salió mal" fallback instead of React Router's
+ * built-in default error page (see `ErrorBoundary.tsx`'s docblock).
+ */
+// eslint-disable-next-line react-refresh/only-export-components -- design-fidelity Slice D3: appRoutes is exported alongside App on purpose (App.test.tsx and any future consumer needs the exact same route tree, not a duplicate); not worth a separate file for one array.
+export const appRoutes: RouteObject[] = [
+  {
+    errorElement: <RouteErrorBoundary />,
+    children: [
+      { path: "/login", element: <LoginRoute /> },
+      {
+        element: <RequireAuth />,
+        children: [
+          {
+            element: <AppLayout />,
+            children: [
+              { path: "/dashboard", element: <DashboardScreen /> },
+              { path: "/clientes", element: <ClientesScreen /> },
+            ],
+          },
+          { path: "/nueva-renta", element: <RentalNewScreen /> },
+          { path: "/perfil", element: <ProfileScreen /> },
+        ],
+      },
+      { path: "/", element: <Navigate to="/dashboard" replace /> },
+      { path: "*", element: <Navigate to="/dashboard" replace /> },
+    ],
+  },
+];
+
+/**
  * SDD.md §16.13/§17 (gap-fill finding 4): a single `<Toaster />` mounted
- * once here, outside `<Routes>` so it survives route changes — §17's
- * "Toast/Sonner para confirmaciones breves (pago registrado, comprobante
- * compartido)". Individual screens/dialogs call `toast.success(...)` from
- * `sonner` directly; this is the only place the container itself mounts.
+ * once here so it survives route changes — §17's "Toast/Sonner para
+ * confirmaciones breves (pago registrado, comprobante compartido)".
+ * Individual screens/dialogs call `toast.success(...)` from `sonner`
+ * directly; this is the only place the container itself mounts.
+ *
+ * design-fidelity Slice D3: moved from inside `<BrowserRouter>` (but
+ * outside `<Routes>`) to a sibling of `<RouterProvider>` — same "mounted
+ * once, survives route changes" property, just expressed as a JSX sibling
+ * instead of a JSX ancestor now that there's no `<BrowserRouter>` wrapper
+ * to nest it inside.
+ *
+ * The router itself is built in `useState`'s lazy initializer, NOT at
+ * module scope — a module-scope `createBrowserRouter(appRoutes)` call
+ * would snapshot `window.location` at import time, before any test's
+ * `window.history.pushState(...)` setup runs, breaking every test that
+ * relies on rendering `<App/>` at a specific initial route (`App.test.tsx`
+ * pushes state before `render(<App/>)` in ~7 cases). `useState(() => ...)`
+ * defers construction to first render, by which point the pushState call
+ * has already happened.
  */
 export function App() {
+  const [router] = useState(() => createBrowserRouter(appRoutes));
+
   return (
-    <BrowserRouter>
+    <>
       <Toaster />
-      <ErrorBoundary>
-        <Routes>
-          <Route path="/login" element={<LoginRoute />} />
-          <Route element={<RequireAuth />}>
-            <Route element={<AppLayout />}>
-              <Route path="/dashboard" element={<DashboardScreen />} />
-              <Route path="/clientes" element={<ClientesScreen />} />
-            </Route>
-            <Route path="/nueva-renta" element={<RentalNewScreen />} />
-            <Route path="/perfil" element={<ProfileScreen />} />
-          </Route>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
-      </ErrorBoundary>
-    </BrowserRouter>
+      <RouterProvider router={router} />
+    </>
   );
 }

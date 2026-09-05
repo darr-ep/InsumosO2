@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router";
+import { createMemoryRouter, RouterProvider } from "react-router";
 import { ClientResponseError } from "pocketbase";
 import { RentalNewScreen } from "@/screens/rental-new/RentalNewScreen";
 import { DataCacheProvider } from "@/app/DataCacheContext";
@@ -65,13 +65,28 @@ vi.mock("react-router", async () => {
 
 const juan = { id: "c1", name: "Juan Pérez", phone: "5512345678" };
 
+/**
+ * design-fidelity Slice D3 (router migration prep, D3.4): swapped the plain
+ * `<MemoryRouter>` for a `createMemoryRouter` data router — `RentalNewScreen`
+ * doesn't call `useBlocker` yet (that's Phase D1), but D1's exit-guard test
+ * coverage needs a REAL back-navigation entry to block, which a bare
+ * `<MemoryRouter>` (no history stack beyond the initial entry) can't
+ * exercise. The two-entry history (`/dashboard` → `/nueva-renta`, starting
+ * on the second) means "navigate back" is a meaningful, testable action
+ * here already, ready for D1 to build on without another router swap.
+ */
 function renderScreen() {
+  const router = createMemoryRouter(
+    [
+      { path: "/dashboard", element: <div /> },
+      { path: "/nueva-renta", element: <RentalNewScreen /> },
+    ],
+    { initialEntries: ["/dashboard", "/nueva-renta"], initialIndex: 1 },
+  );
   return render(
-    <MemoryRouter>
-      <DataCacheProvider>
-        <RentalNewScreen />
-      </DataCacheProvider>
-    </MemoryRouter>,
+    <DataCacheProvider>
+      <RouterProvider router={router} />
+    </DataCacheProvider>,
   );
 }
 
