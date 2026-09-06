@@ -13,12 +13,15 @@ import { UserAvatar } from "@/components/UserAvatar";
  *   caller-supplied `trailing` is still allowed alongside the badge (it's
  *   an explicit override, e.g. an action button), only the badge/chevron
  *   pair is exclusive.
- * - `tel:` stretched-link pattern (design §C2): the card root is a
- *   `relative` div, never a `<button>`. An absolutely-positioned
- *   `<button className="absolute inset-0">` carries `onClick`; the phone
- *   is a real `<a href="tel:...">` rendered in its natural place with
- *   `relative z-10` so it sits above that overlay and is NOT a descendant
- *   of it — tapping it can never also trigger the card's `onClick`.
+ * - Owner reversal (post-implementation audit, supersedes design §C2's
+ *   `tel:` stretched-link pattern): the `tel:` affordance caused frequent
+ *   misclicks in real usage and has been removed entirely. The phone
+ *   renders as plain text like every other card field — no link, no `tel:`
+ *   href, no overlay restructuring. The card root goes back to being a
+ *   single `<button>` (when `onClick` is given) or a plain `<div>`
+ *   (otherwise), since there's no longer a nested interactive element to
+ *   keep separate from the root. The `tel:` affordance still exists, but
+ *   ONLY inside `CustomerDetailSheet`'s dedicated phone row.
  */
 export interface CustomerCardProps {
   name: string;
@@ -42,24 +45,16 @@ export function CustomerCard({
   const showBadge = activeCount !== undefined && activeCount > 0;
   const showChevron = Boolean(onClick) && !trailing && !showBadge;
 
-  return (
-    <div
-      className={cn(
-        "group relative flex w-full items-center gap-3 rounded-lg border bg-card p-3",
-        className,
-      )}
-    >
+  const content = (
+    <>
       <UserAvatar name={name || "—"} avatarUrl={null} tone="soft" size={40} />
       <div className="min-w-0 flex-1">
         <p className="font-medium text-foreground truncate">{name || "—"}</p>
         {phone && (
-          <a
-            href={`tel:${phone}`}
-            className="text-muted-foreground text-sm relative z-10 flex items-center gap-1 underline-offset-2 hover:underline"
-          >
+          <p className="text-muted-foreground text-sm flex items-center gap-1">
             <Phone aria-hidden="true" className="size-3 shrink-0" />
             <span>{phone}</span>
-          </a>
+          </p>
         )}
       </div>
       <div className="flex items-center gap-2 shrink-0 pl-2">
@@ -76,14 +71,33 @@ export function CustomerCard({
           />
         )}
       </div>
-      {onClick && (
-        <button
-          type="button"
-          onClick={onClick}
-          aria-label={ariaLabel ?? name}
-          className="absolute inset-0 rounded-lg transition-all hover:bg-accent/50 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        />
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={ariaLabel ?? name}
+        className={cn(
+          "group flex w-full items-center gap-3 rounded-lg border bg-card p-3 text-left transition-all hover:bg-accent/50 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          className,
+        )}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div
+      className={cn(
+        "flex w-full items-center gap-3 rounded-lg border bg-card p-3",
+        className,
       )}
+    >
+      {content}
     </div>
   );
 }

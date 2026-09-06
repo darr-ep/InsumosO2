@@ -51,14 +51,15 @@ import type { RentalStatus } from "@/data/rentals.repo";
  * prop, the same way `folio` was previously promoted — `children` now only
  * carries the date/metadata line(s) that sit to the LEFT of the amount.
  *
- * `tel:` affordance (design §C2, stretched-link pattern): the card root is
- * a `relative` div, not a `<button>`. An absolutely-positioned
- * `<button className="absolute inset-0">` carries `onClick` and is the
- * card's real click target; the phone is a real `<a href="tel:...">`
- * rendered in its natural place with `relative z-10` so it sits above that
- * overlay and is NOT a descendant of it — clicking it can never also
- * trigger the card's `onClick`, and the markup stays valid (no interactive
- * content nested inside a `<button>`).
+ * Owner reversal (post-implementation audit, supersedes design §C2's `tel:`
+ * stretched-link pattern): the `tel:` affordance on cards caused frequent
+ * misclicks in real usage ("misclicks bastantes seguidos... horrible cuando
+ * no buscas eso") and has been removed entirely. The phone renders as plain
+ * text like every other card field — no link, no `tel:` href, no overlay
+ * restructuring. The card root is a single `<button>` wrapping the whole
+ * card again (the pre-§C2 shape), since there's no longer a nested
+ * interactive element to keep out of its way. The `tel:` affordance still
+ * exists, but ONLY inside `CustomerDetailSheet`'s dedicated phone row.
  */
 export interface RentalCardProps {
   customerName: string;
@@ -84,7 +85,7 @@ export function RentalCard({
   children,
 }: RentalCardProps) {
   return (
-    <div className="relative">
+    <button type="button" className="w-full text-left" onClick={onClick}>
       <Card className={cardClassName}>
         <CardHeader>
           <div className="flex items-center justify-between gap-2">
@@ -99,13 +100,10 @@ export function RentalCard({
               {folio}
             </span>
             {phone && (
-              <a
-                href={`tel:${phone}`}
-                className="relative z-10 flex items-center gap-1 underline-offset-2 hover:underline"
-              >
+              <span className="flex items-center gap-1">
                 <Phone aria-hidden="true" className="size-3" />
                 {phone}
-              </a>
+              </span>
             )}
           </div>
           <div className="flex items-center justify-between gap-2">
@@ -120,12 +118,6 @@ export function RentalCard({
           </div>
         </CardContent>
       </Card>
-      <button
-        type="button"
-        aria-label={`Ver renta de ${customerName}, folio ${folio}`}
-        className="absolute inset-0"
-        onClick={onClick}
-      />
-    </div>
+    </button>
   );
 }

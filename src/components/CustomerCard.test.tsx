@@ -7,11 +7,15 @@ import { CustomerCard } from "@/components/CustomerCard";
  * design-fidelity Slice C (§4.2, design obs #2224 §C2/C3): new coverage for
  * this component — no test file existed before this batch.
  *
- * Covers three findings from the explore/design docs:
+ * Covers findings from the explore/design docs:
  * 1. Circular avatar (soft-primary bg, primary-colored initial).
  * 2. Badge/chevron mutual exclusion bug (both used to render together).
- * 3. `tel:` stretched-link pattern — the phone must not be a descendant of
- *    the card's own click-through control.
+ *
+ * Owner reversal (post-implementation audit, supersedes design §C2/§C3's
+ * `tel:` stretched-link pattern): the phone must render as plain text, like
+ * every other card field — no link, no `tel:` href. It caused frequent
+ * misclicks in real usage; the `tel:` affordance now lives ONLY in
+ * `CustomerDetailSheet`'s dedicated phone row.
  */
 describe("CustomerCard (design-fidelity §4.2)", () => {
   it("renders the customer's name and an avatar with their initial", () => {
@@ -21,19 +25,25 @@ describe("CustomerCard (design-fidelity §4.2)", () => {
     expect(screen.getByText("J")).toBeInTheDocument();
   });
 
-  it("renders the phone as a tel: link that does not trigger the card's onClick", async () => {
+  it("renders the phone as plain text, not a tel: link (owner reversal — misclick-prone)", () => {
+    render(
+      <CustomerCard name="Juan Pérez" phone="5512345678" onClick={vi.fn()} />,
+    );
+
+    expect(screen.getByText("5512345678")).toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("clicking the phone text still triggers the card's onClick (plain text, not an isolated control)", async () => {
     const onClick = vi.fn();
     const user = userEvent.setup();
     render(
       <CustomerCard name="Juan Pérez" phone="5512345678" onClick={onClick} />,
     );
 
-    const telLink = screen.getByRole("link", { name: /5512345678/ });
-    expect(telLink).toHaveAttribute("href", "tel:5512345678");
+    await user.click(screen.getByText("5512345678"));
 
-    await user.click(telLink);
-
-    expect(onClick).not.toHaveBeenCalled();
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 
   it("calls onClick when the card itself is pressed", async () => {
@@ -80,13 +90,11 @@ describe("CustomerCard (design-fidelity §4.2)", () => {
     expect(screen.getByText("3 activas")).toBeInTheDocument();
   });
 
-  it("renders as a plain non-interactive row when no onClick is given, and the phone link still works", () => {
+  it("renders as a plain non-interactive row when no onClick is given, phone still shown as plain text", () => {
     render(<CustomerCard name="Juan Pérez" phone="5512345678" />);
 
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /5512345678/ })).toHaveAttribute(
-      "href",
-      "tel:5512345678",
-    );
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    expect(screen.getByText("5512345678")).toBeInTheDocument();
   });
 });

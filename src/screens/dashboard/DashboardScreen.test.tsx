@@ -437,11 +437,7 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
 
     renderScreen();
 
-    await user.click(
-      await screen.findByRole("button", {
-        name: "Ver renta de Juan Pérez, folio R-000001",
-      }),
-    );
+    await user.click(await screen.findByText("Juan Pérez"));
 
     expect(
       await screen.findByRole("heading", { name: "Renta R-000001" }),
@@ -656,11 +652,7 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
       await screen.findByText("No hay rentas activas todavía.");
 
       setQuery("184");
-      await user.click(
-        await screen.findByRole("button", {
-          name: "Ver renta de Juan Pérez, folio R-000184",
-        }),
-      );
+      await user.click(await screen.findByText("Juan Pérez"));
 
       expect(
         await screen.findByRole("heading", { name: "Renta R-000184" }),

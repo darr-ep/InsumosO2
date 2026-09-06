@@ -140,11 +140,30 @@ describe("RentalCard (§17)", () => {
     expect(screen.getByText("5512345678")).toBeInTheDocument();
   });
 
-  // design-fidelity §4.1/§6 (design obs #2224 §C2, stretched-link pattern):
-  // the phone is a real `tel:` link and must NOT be a descendant of the
-  // card's own click-through control, so tapping it never also opens the
-  // rental detail.
-  it("renders the phone as a tel: link that does not trigger the card's onClick", async () => {
+  // Owner reversal (post-implementation audit, supersedes design §C2's
+  // `tel:` stretched-link pattern): the phone must render as plain text on
+  // cards, exactly like every other card field — no link, no `tel:` href.
+  // The `tel:` affordance caused frequent misclicks in real usage and was
+  // removed entirely from cards; it now lives ONLY in CustomerDetailSheet's
+  // dedicated phone row.
+  it("renders the phone as plain text, not a tel: link (owner reversal — misclick-prone)", () => {
+    render(
+      <RentalCard
+        customerName="Juan Pérez"
+        status="ACTIVE"
+        folio="R-000001"
+        onClick={vi.fn()}
+        phone="5512345678"
+      >
+        <p>Desde: 20/08/2026</p>
+      </RentalCard>,
+    );
+
+    expect(screen.getByText("5512345678")).toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("clicking the phone text still triggers the card's onClick (plain text, not an isolated control)", async () => {
     const onClick = vi.fn();
     const user = userEvent.setup();
     render(
@@ -159,12 +178,9 @@ describe("RentalCard (§17)", () => {
       </RentalCard>,
     );
 
-    const telLink = screen.getByRole("link", { name: /5512345678/ });
-    expect(telLink).toHaveAttribute("href", "tel:5512345678");
+    await user.click(screen.getByText("5512345678"));
 
-    await user.click(telLink);
-
-    expect(onClick).not.toHaveBeenCalled();
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 
   it("renders no phone line at all when phone isn't given (e.g. search-result cards without expanded customer data)", () => {
