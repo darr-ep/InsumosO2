@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { useBlocker, useNavigate } from "react-router";
 import { ClientResponseError } from "pocketbase";
 import { Button } from "@/components/ui/button";
@@ -67,7 +67,7 @@ import { cn } from "@/lib/utils";
  * design-fidelity D1.5-D1.7 (obs #2224's D3.3 "one dialog, one code path,
  * both triggers"): the exit guard. `AppHeader`'s back arrow already calls
  * `navigate(-1)` internally (`AppHeader.tsx` — NOT modified by this slice),
- * which is itself a React Router navigation, so `useBlocker(hasCapturedData)`
+ * which is itself a React Router navigation, so `useBlocker(...)`
  * intercepts the arrow tap AND hardware/gesture back (also a `navigate(-1)`-
  * shaped POP, per D3's router migration) through the identical mechanism.
  * No `onBack` prop, no second piece of state, no second dialog instance —
@@ -76,6 +76,36 @@ import { cn } from "@/lib/utils";
  * (`goBack`, above) is a different control with a different meaning — it
  * only ever calls `setStep`, never `navigate`, so it can never trip this
  * guard.
+ *
+ * Post-implementation bugfix (real-device finding, 2026-09-05): confirming a
+ * rental successfully — which calls `resetForm()` — could STILL pop the exit
+ * guard the instant the user tapped "Continuar" on `RentalCreatedSummary`.
+ * Root cause verified by reading `react-router`'s actual `useBlocker` source
+ * (`node_modules/react-router/dist/development/lib/hooks.js`): it does NOT
+ * re-register its `shouldBlock` predicate with the router synchronously
+ * during render — it does so inside a plain `useEffect`, i.e. a PASSIVE
+ * effect that runs asynchronously after commit/paint. `resetForm()`'s state
+ * update and `RentalCreatedSummary`'s "Continuar" button becoming visible
+ * both happen in the SAME commit, but the router's registered predicate
+ * function only catches up to that commit once this passive effect actually
+ * flushes — a real (if usually brief) window during which `navigate(...)`
+ * would still be evaluated against the STALE, pre-reset predicate (still
+ * closing over `hasCapturedData === true`) and incorrectly block. The
+ * project's own test suite could never observe this: `@testing-library/
+ * react`'s `act()` — entered by every `userEvent`/`waitFor`/`findBy*` call —
+ * always drains pending passive effects as part of exiting, so by the time
+ * test code can click "Continuar" the stale-predicate window has already
+ * been closed by the test harness itself, not by the app. Fixed by never
+ * relying on the effect to "catch up" at all: `hasCapturedDataRef` is kept
+ * in sync via `useLayoutEffect` (synchronous, before paint — i.e. before the
+ * user could possibly interact with the newly-committed UI), and the
+ * function handed to `useBlocker` is a permanently STABLE reference that
+ * only ever reads `hasCapturedDataRef.current` at call time. Because the
+ * function identity never changes, react-router's registration effect only
+ * ever needs to run once (on mount) — there is no "stale registration"
+ * state to race, by construction, same principle as the D1a correction's
+ * `disabled={isSubmitting}` fix on "Atrás" (obs #2224/apply-progress
+ * Batch 7b).
  */
 
 type WizardStep = 1 | 2 | 3;
@@ -326,7 +356,26 @@ export function RentalNewScreen() {
     itemQuantitiesToList(itemQuantities).length > 0 ||
     initialRentAmount !== "" ||
     depositAmount !== "";
-  const blocker = useBlocker(hasCapturedData);
+
+  // Post-implementation bugfix (see the block comment above this component):
+  // kept in sync via `useLayoutEffect`, NOT read directly by `useBlocker`,
+  // so the function passed below never needs to change identity — see next
+  // comment.
+  const hasCapturedDataRef = useRef(hasCapturedData);
+  useLayoutEffect(() => {
+    hasCapturedDataRef.current = hasCapturedData;
+  });
+  // A permanently stable function reference (empty dep array): react-router
+  // only re-registers a blocker's predicate with the router when THIS
+  // reference changes, via a passive effect. Reading a boolean directly here
+  // (the old code) forced a new reference — and therefore a fresh,
+  // asynchronous re-registration — on every `hasCapturedData` flip,
+  // reopening the stale-predicate race on every single render. Reading a ref
+  // instead means the SAME registered function is used forever; it always
+  // reflects the latest value at call time, so there is nothing left to
+  // "catch up" on.
+  const shouldBlock = useCallback(() => hasCapturedDataRef.current, []);
+  const blocker = useBlocker(shouldBlock);
 
   // design-fidelity D1.2 invariant: each of these calls `setStep` and
   // NOTHING else — no other setter, no `resetForm()`, no side effect runs

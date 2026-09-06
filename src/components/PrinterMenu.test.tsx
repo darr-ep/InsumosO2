@@ -64,20 +64,33 @@ describe("PrinterMenu (design-fidelity bugfix batch, Fix 4 — real switch widge
     );
     await user.click(screen.getByRole("menuitem", { name: /auto-imprimir/i }));
 
-    // Radix closes the menu on selection — reopen to inspect the new state.
-    await user.click(
-      screen.getByRole("button", { name: "Impresora desconectada" }),
-    );
+    // Bugfix (real-device finding, 2026-09-05): the menu now correctly
+    // STAYS OPEN after toggling — see the dedicated test below — so no
+    // "reopen" click is needed here anymore.
     expect(
       screen.getByRole("switch", { name: /auto-imprimir/i }),
     ).toHaveAttribute("aria-checked", "false");
 
     await user.click(screen.getByRole("menuitem", { name: /auto-imprimir/i }));
-    await user.click(
-      screen.getByRole("button", { name: "Impresora desconectada" }),
-    );
     expect(
       screen.getByRole("switch", { name: /auto-imprimir/i }),
     ).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("keeps the dropdown menu open after tapping Auto-imprimir — it's a persistent setting the user may want to watch change state, not a one-shot action that should dismiss the menu (real-device bugfix batch)", async () => {
+    const user = userEvent.setup();
+    render(<PrinterMenu />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Impresora desconectada" }),
+    );
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("menuitem", { name: /auto-imprimir/i }));
+
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    expect(
+      screen.getByRole("switch", { name: /auto-imprimir/i }),
+    ).toHaveAttribute("aria-checked", "false");
   });
 });

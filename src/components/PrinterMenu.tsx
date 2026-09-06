@@ -53,7 +53,13 @@ export function PrinterMenu() {
     }
   }
 
-  function handleToggleAutoPrint() {
+  function handleToggleAutoPrint(event: Event) {
+    // Bugfix (real-device finding, 2026-09-05): `DropdownMenuItem`'s
+    // `onSelect` closes the menu by default (Radix). "Auto-imprimir" is a
+    // persistent setting the user may want to watch flip state, not a
+    // one-shot action — `preventDefault()` is the standard Radix pattern
+    // for keeping a dropdown open across an item interaction.
+    event.preventDefault();
     const next = !autoPrint;
     setAutoPrintEnabled(next);
     setAutoPrint(next);

@@ -439,6 +439,84 @@ describe("RentalNewScreen (§7.1, §16.7, CU4, design-fidelity D1 wizard)", () =
     ).not.toBeInTheDocument();
   });
 
+  it("does not show the exit-guard dialog when Continuar is tapped while react-router's blocker registration is still catching up to the post-success reset (real-device bugfix batch, see RentalNewScreen.tsx block comment)", async () => {
+    searchCustomers.mockResolvedValue([juan]);
+    let resolveCreateRental: (value: {
+      rental: { id: string; folio: string; created: string };
+      items: { id: string }[];
+      depositPayment: { id: string };
+    }) => void = () => {};
+    createRental.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveCreateRental = resolve;
+        }),
+    );
+
+    const user = userEvent.setup();
+    const { router } = renderScreen();
+
+    await selectExistingCustomer(user);
+    await goToStep2(user);
+    await fillItemsAndAmounts(user, { rent: "2800", deposit: "1000" });
+    await goToStep3(user);
+
+    await user.click(confirmButton());
+
+    // Root-cause reproduction (see RentalNewScreen.tsx's block comment for
+    // the full analysis): `useBlocker` re-registers its predicate with the
+    // router via a plain `useEffect` — a PASSIVE effect that runs
+    // asynchronously after commit/paint, not synchronously during render.
+    // Racing that exact window via raw timer/microtask counts is
+    // non-deterministic in jsdom (React's Scheduler and `act()`'s own
+    // flush-on-exit behavior both fight any attempt to control it from
+    // outside). Instead, this makes the real, always-possible race
+    // DETERMINISTIC by intercepting `router.getBlocker` — the one function
+    // that effect calls — right after the mutation is in flight, and
+    // holding back any call it makes from this point on, exactly modeling
+    // "the passive effect hasn't flushed yet" for as long as this test
+    // needs it to hold.
+    //
+    // This is a fair test of BOTH the bug and the fix: under the OLD code,
+    // `resetForm()` flips `hasCapturedData` to `false`, which changes
+    // `useBlocker`'s predicate identity and forces exactly one more
+    // `getBlocker` call — held back here, so the router keeps using the
+    // STALE, pre-reset (`true`) predicate, exactly reproducing the bug.
+    // Under the FIXED code, the predicate handed to `useBlocker` is a
+    // permanently stable reference (registered once, before this
+    // interception is even installed) that reads a ref updated
+    // synchronously via `useLayoutEffect` — `resetForm()` triggers NO new
+    // `getBlocker` call at all, so there is nothing left for this
+    // interception to hold back, and the already-registered predicate
+    // reads the fresh, correct value at the moment `navigate(...)` actually
+    // evaluates it.
+    // Intentionally never forwarded to the real implementation for the
+    // remainder of this test — see comment above. The return value is
+    // never read by `useBlocker` (registration is fire-and-forget), so a
+    // stub with no real behavior is sufficient and doesn't need to imitate
+    // `getBlocker`'s actual `Blocker`-shaped return value.
+    router.getBlocker = vi.fn() as typeof router.getBlocker;
+
+    resolveCreateRental({
+      rental: {
+        id: "r1",
+        folio: "R-000001",
+        created: "2026-08-26 10:00:00.000Z",
+      },
+      items: [{ id: "i1" }],
+      depositPayment: { id: "p1" },
+    });
+
+    await user.click(await screen.findByRole("button", { name: "Continuar" }));
+
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe("/dashboard"),
+    );
+    expect(
+      screen.queryByText("¿Salir sin guardar la renta?"),
+    ).not.toBeInTheDocument();
+  });
+
   it("opens Ficha de cliente from the customer picker once a customer is selected (§16.6, task 3.5)", async () => {
     searchCustomers.mockResolvedValue([juan]);
     getCustomer.mockResolvedValue(juan);
