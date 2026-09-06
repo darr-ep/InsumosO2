@@ -1,3 +1,4 @@
+import { Check, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -36,6 +37,25 @@ import { useReceiptActions } from "@/printing/useReceiptActions";
  * explicitly asked for the horizontal pair to match the design. DOM order
  * is unchanged (Imprimir → Compartir → Volver al inicio), so the primary
  * action is still visually/structurally LAST.
+ *
+ * design-fidelity post-audit structural fix (pencil frame "Éxito ·
+ * Devolución registrada", owner-confirmed): brought to parity with
+ * `RentalCreatedSummary`'s own post-audit fix (Fix 2) — the title is
+ * neutral-dark "Devolución registrada" with a SEPARATE circular
+ * `bg-success-soft` check badge above it (not inline "✓" text), the
+ * summary rows moved from a bare `dl` into a `bg-muted` gray card, the
+ * print-failure message is an amber `bg-amber-100`/`text-amber-700` banner
+ * with a `TriangleAlert` icon (copy corrected to remove "correctamente" —
+ * same reasoning as `RentalCreatedSummary`: never imply anything printed
+ * successfully in a message about it failing to print), "Compartir
+ * comprobante" is shortened to "Compartir", and Compartir is now
+ * `variant="secondary"` (was `outline`) so both buttons render identically,
+ * matching the design's uniform gray pair. The `printStatus === "printed"`
+ * line intentionally stays a plain `text-success` line (not a banner) —
+ * `RentalCreatedSummary`'s own printed-state treatment wasn't changed by
+ * its Fix 2 either, so this keeps the two summaries in the same asymmetric
+ * shape the owner already approved, even though this flow's own pencil
+ * frame shows a green success banner there too.
  */
 
 const currencyFormatter = new Intl.NumberFormat("es-MX", {

@@ -52,6 +52,20 @@ function makeClientResponseError(status: number) {
   return new ClientResponseError({ status, response: {} });
 }
 
+// design-fidelity post-audit bugfix batch #3 (pencil ground truth: "Login ·
+// Usuarios"/"Login · Contraseña" screenshots) — the avatar-picker step
+// requires an explicit "Continuar" tap after picking an avatar, it does not
+// auto-advance on avatar tap. This helper reproduces that 2-tap sequence so
+// existing scenarios that only cared about "after picking a user" don't all
+// need to repeat it inline.
+async function pickUser(
+  user: ReturnType<typeof userEvent.setup>,
+  name: string,
+) {
+  await user.click(await screen.findByRole("button", { name }));
+  await user.click(screen.getByRole("button", { name: "Continuar" }));
+}
+
 describe("LoginScreen — real login (§14, §16.6, CU1, gap-fill)", () => {
   beforeEach(() => {
     getLoginDirectory.mockReset();
@@ -108,7 +122,7 @@ describe("LoginScreen — real login (§14, §16.6, CU1, gap-fill)", () => {
 
     renderScreen();
 
-    await user.click(await screen.findByRole("button", { name: "Juan Pérez" }));
+    await pickUser(user, "Juan Pérez");
 
     expect(
       await screen.findByRole("heading", { name: /Hola, Juan Pérez/ }),
@@ -122,7 +136,7 @@ describe("LoginScreen — real login (§14, §16.6, CU1, gap-fill)", () => {
 
     renderScreen();
 
-    await user.click(await screen.findByRole("button", { name: "Juan Pérez" }));
+    await pickUser(user, "Juan Pérez");
 
     const passwordInput = await screen.findByLabelText("Contraseña");
     await user.type(passwordInput, "s3cret");
@@ -140,7 +154,7 @@ describe("LoginScreen — real login (§14, §16.6, CU1, gap-fill)", () => {
 
     renderScreen();
 
-    await user.click(await screen.findByRole("button", { name: "Juan Pérez" }));
+    await pickUser(user, "Juan Pérez");
     await user.type(await screen.findByLabelText("Contraseña"), "s3cret");
     await user.click(screen.getByRole("button", { name: "Entrar" }));
 
@@ -156,7 +170,7 @@ describe("LoginScreen — real login (§14, §16.6, CU1, gap-fill)", () => {
 
     renderScreen();
 
-    await user.click(await screen.findByRole("button", { name: "Juan Pérez" }));
+    await pickUser(user, "Juan Pérez");
     await user.type(await screen.findByLabelText("Contraseña"), "wrong");
     await user.click(screen.getByRole("button", { name: "Entrar" }));
 
@@ -179,7 +193,7 @@ describe("LoginScreen — real login (§14, §16.6, CU1, gap-fill)", () => {
 
     renderScreen();
 
-    await user.click(await screen.findByRole("button", { name: "Juan Pérez" }));
+    await pickUser(user, "Juan Pérez");
     await user.type(await screen.findByLabelText("Contraseña"), "wrong");
     await user.click(screen.getByRole("button", { name: "Entrar" }));
 
@@ -199,7 +213,7 @@ describe("LoginScreen — real login (§14, §16.6, CU1, gap-fill)", () => {
 
     renderScreen();
 
-    await user.click(await screen.findByRole("button", { name: "Juan Pérez" }));
+    await pickUser(user, "Juan Pérez");
     await user.type(await screen.findByLabelText("Contraseña"), "s3cret");
     await user.click(screen.getByRole("button", { name: "Entrar" }));
 
@@ -216,10 +230,10 @@ describe("LoginScreen — real login (§14, §16.6, CU1, gap-fill)", () => {
 
     renderScreen();
 
-    await user.click(await screen.findByRole("button", { name: "Juan Pérez" }));
+    await pickUser(user, "Juan Pérez");
     await screen.findByLabelText("Contraseña");
 
-    await user.click(screen.getByRole("button", { name: "Elegir otro usuario" }));
+    await user.click(screen.getByRole("button", { name: "Cambiar" }));
 
     expect(
       await screen.findByRole("button", { name: "María López" }),
@@ -232,7 +246,7 @@ describe("LoginScreen — real login (§14, §16.6, CU1, gap-fill)", () => {
 
     renderScreen();
 
-    await user.click(await screen.findByRole("button", { name: "Juan Pérez" }));
+    await pickUser(user, "Juan Pérez");
     const passwordInput = await screen.findByLabelText("Contraseña");
     expect(passwordInput).toHaveAttribute("type", "password");
 
@@ -259,5 +273,81 @@ describe("LoginScreen — real login (§14, §16.6, CU1, gap-fill)", () => {
 
     await screen.findByRole("button", { name: "Juan Pérez" });
     expect(screen.queryByText(STALE_SESSION_MESSAGE)).not.toBeInTheDocument();
+  });
+
+  // design-fidelity post-audit bugfix batch #3 (pencil ground truth: "Login ·
+  // Usuarios" screenshot). Fix 2: the avatar-picker step needs the "¿Quién
+  // eres?" heading + its description line, which the previous implementation
+  // never rendered at all.
+  it("shows the '¿Quién eres?' question and its description on the avatar-picker step", async () => {
+    getLoginDirectory.mockResolvedValue([juan, maria]);
+
+    renderScreen();
+
+    await screen.findByRole("button", { name: "Juan Pérez" });
+
+    expect(
+      screen.getByRole("heading", { name: "¿Quién eres?" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Selecciona tu usuario para continuar"),
+    ).toBeInTheDocument();
+  });
+
+  // Fix 3: avatar tiles must render as white cards (`bg-card`), not the
+  // previous plain bordered/transparent buttons.
+  it("renders each avatar tile as a white card", async () => {
+    getLoginDirectory.mockResolvedValue([juan]);
+
+    renderScreen();
+
+    const tile = await screen.findByRole("button", { name: "Juan Pérez" });
+    expect(tile).toHaveClass("bg-card");
+  });
+
+  // Fix 1: the avatar-picker step needs an explicit "Continuar" button —
+  // tapping an avatar only stages a selection (visual highlight), it must
+  // NOT auto-advance to the password step by itself. "Continuar" starts
+  // disabled until a user is picked.
+  it("requires an explicit 'Continuar' tap to advance past the avatar picker", async () => {
+    getLoginDirectory.mockResolvedValue([juan]);
+    const user = userEvent.setup();
+
+    renderScreen();
+
+    const avatarButton = await screen.findByRole("button", {
+      name: "Juan Pérez",
+    });
+    const continueButton = screen.getByRole("button", { name: "Continuar" });
+    expect(continueButton).toBeDisabled();
+
+    await user.click(avatarButton);
+
+    // Picking an avatar only stages it — still on the picker step.
+    expect(screen.queryByLabelText("Contraseña")).not.toBeInTheDocument();
+    expect(continueButton).toBeEnabled();
+
+    await user.click(continueButton);
+
+    expect(await screen.findByLabelText("Contraseña")).toBeInTheDocument();
+  });
+
+  // Fix 4: the password step needs a "< Cambiar" link plus a description
+  // line under "Hola, {nombre}" (pencil ground truth: "Login · Contraseña"
+  // screenshot: "Ingresa tu contraseña para entrar").
+  it("shows a 'Cambiar' link and a password description on the password step", async () => {
+    getLoginDirectory.mockResolvedValue([juan]);
+    const user = userEvent.setup();
+
+    renderScreen();
+
+    await pickUser(user, "Juan Pérez");
+
+    expect(
+      screen.getByRole("button", { name: "Cambiar" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Ingresa tu contraseña para entrar"),
+    ).toBeInTheDocument();
   });
 });

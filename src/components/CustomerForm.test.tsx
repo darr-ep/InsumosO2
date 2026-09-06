@@ -161,7 +161,7 @@ describe("CustomerForm (§7.1, §20)", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("lets staff retake the photo after a capture via 'Cambiar foto', clearing the previous selection", async () => {
+  it("lets staff retake the photo directly via 'Cambiar foto', clearing the previous selection with no confirmation step", async () => {
     const user = userEvent.setup();
     render(<CustomerForm onSubmit={vi.fn()} />);
 
@@ -171,9 +171,11 @@ describe("CustomerForm (§7.1, §20)", () => {
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Cambiar foto" }));
-    // design-fidelity #5: retake now requires confirmation before discarding.
-    await user.click(screen.getByRole("button", { name: "Sí, tomar otra" }));
 
+    // design-fidelity: retake is immediate, no confirmation dialog involved.
+    expect(
+      screen.queryByRole("heading", { name: "¿Tomar otra foto?" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByAltText("Foto de credencial"),
     ).not.toBeInTheDocument();
@@ -213,14 +215,12 @@ describe("CustomerForm (§7.1, §20)", () => {
     await screen.findByAltText("Foto de credencial");
 
     await user.click(screen.getByRole("button", { name: "Cambiar foto" }));
-    // design-fidelity #5: retake now requires confirmation before discarding.
-    await user.click(screen.getByRole("button", { name: "Sí, tomar otra" }));
 
-    // Retake: jumps straight into the live camera.
+    // Retake: jumps straight into the live camera, no confirmation step.
     expect(await screen.findByText("Auto-inició la cámara")).toBeInTheDocument();
   });
 
-  it("shows a confirmation dialog before discarding the captured photo on 'Cambiar foto' (design-fidelity #5, obs #2221/#2223/#2224)", async () => {
+  it("clears the captured photo and returns directly to the camera on 'Cambiar foto', with no confirmation dialog (owner reversal of design-fidelity #5)", async () => {
     const user = userEvent.setup();
     render(<CustomerForm onSubmit={vi.fn()} />);
 
@@ -228,46 +228,10 @@ describe("CustomerForm (§7.1, §20)", () => {
     await screen.findByAltText("Foto de credencial");
 
     await user.click(screen.getByRole("button", { name: "Cambiar foto" }));
-
-    expect(
-      screen.getByRole("heading", { name: "¿Tomar otra foto?" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Se borrará la foto que acabas de tomar y tendrás que volver a fotografiar la credencial.",
-      ),
-    ).toBeInTheDocument();
-    // The photo must not be discarded yet — only the popup opened.
-    expect(screen.getByAltText("Foto de credencial")).toBeInTheDocument();
-  });
-
-  it("keeps the captured photo when the retake confirmation is cancelled", async () => {
-    const user = userEvent.setup();
-    render(<CustomerForm onSubmit={vi.fn()} />);
-
-    await user.click(screen.getByRole("button", { name: "Simular captura" }));
-    await screen.findByAltText("Foto de credencial");
-    await user.click(screen.getByRole("button", { name: "Cambiar foto" }));
-
-    await user.click(screen.getByRole("button", { name: "Cancelar" }));
 
     expect(
       screen.queryByRole("heading", { name: "¿Tomar otra foto?" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByAltText("Foto de credencial")).toBeInTheDocument();
-    expect(revokeObjectURL).not.toHaveBeenCalled();
-  });
-
-  it("discards the captured photo and returns to the camera once the retake is confirmed", async () => {
-    const user = userEvent.setup();
-    render(<CustomerForm onSubmit={vi.fn()} />);
-
-    await user.click(screen.getByRole("button", { name: "Simular captura" }));
-    await screen.findByAltText("Foto de credencial");
-    await user.click(screen.getByRole("button", { name: "Cambiar foto" }));
-
-    await user.click(screen.getByRole("button", { name: "Sí, tomar otra" }));
-
     expect(
       screen.queryByAltText("Foto de credencial"),
     ).not.toBeInTheDocument();

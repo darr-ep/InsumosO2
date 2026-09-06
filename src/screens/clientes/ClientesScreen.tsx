@@ -184,6 +184,17 @@ export const ClientesScreen = memo(function ClientesScreen({
               title="Aún no hay clientes registrados."
             />
           )}
+
+          {customers !== null && customers.length > 0 && (
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-foreground">
+                Clientes
+              </h2>
+              <span className="bg-primary-soft text-primary rounded-full px-2 py-0.5 text-xs font-medium">
+                {customers.length}
+              </span>
+            </div>
+          )}
         </>
       )}
 

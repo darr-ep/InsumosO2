@@ -98,6 +98,21 @@ import { formatCurrencyMXN } from "@/lib/currency";
  * `onSettingsUpdated` callback just updates this screen's own
  * `businessSettings` state so the displayed availability recomputes
  * immediately, no re-fetch of rentals/items and no full page reload.
+ *
+ * Post-audit bugfix batch (design-fidelity, obs #2228 batch 11), two fixes:
+ * 1. The "Rentas activas" count pill used to sit directly next to the
+ *    label (`gap-2`, both left-aligned) — pencil frame `XLTdc` pins it to
+ *    the far right edge of the header row instead. Changed the row's
+ *    layout from `gap-2` to `justify-between` so the pill sits on the
+ *    opposite side, clearly separated from the label.
+ * 2. Search-result cards render the same `RentalCard` as the main list but
+ *    were missing the "Inicio {fecha}" children the main list's card
+ *    passes — a real prop-passing bug, not a design gap: `searchRentals`
+ *    (§7.4) queries the same `rentals` collection as `listActiveRentals`
+ *    and returns the same PocketBase base fields, so `rental.created` is
+ *    always present on a search result too. Only the per-item product-type
+ *    icon (`itemTypeIcon`) is a genuine, documented scope cut for search
+ *    results (`searchRentals` doesn't join item data) — the date is not.
  */
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -305,7 +320,13 @@ export const DashboardScreen = memo(function DashboardScreen({
                       onClick={() => openRentalDetail(rental.id)}
                       phone={rental.expand?.customer_id?.phone}
                       amount={formatCurrencyMXN(rental.initial_rent_amount)}
-                    />
+                    >
+                      <p className="flex items-center gap-1.5">
+                        <CalendarDays aria-hidden="true" className="size-3.5" />
+                        Inicio{" "}
+                        {new Date(rental.created).toLocaleDateString("es-MX")}
+                      </p>
+                    </RentalCard>
                   </li>
                 ))}
               </ul>
@@ -354,7 +375,7 @@ export const DashboardScreen = memo(function DashboardScreen({
                 )}
 
                 {rentals.length > 0 && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between">
                     <h2 className="text-sm font-semibold text-foreground">
                       Rentas activas
                     </h2>

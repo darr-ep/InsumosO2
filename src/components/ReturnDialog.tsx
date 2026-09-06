@@ -1,16 +1,17 @@
 import { useState } from "react";
 import { toast } from "sonner";
+import { Receipt, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CurrencyInput } from "@/components/ui/currency-input";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Sheet,
+  SheetContent,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { CustomerCard } from "@/components/CustomerCard";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { returnRental } from "@/data/rentals.repo";
 import { handleIfStaleSession } from "@/data/staleSession";
@@ -56,8 +57,29 @@ import { formatCurrencyMXN } from "@/lib/currency";
  * mutation itself — devolver is one-way and server-enforced (blocks all
  * future payments on the rental), so it gates unconditionally, regardless
  * of pending balance. `ConfirmDialog` renders as a JSX SIBLING of this
- * `Dialog` (design B3 nesting pattern) so cancelling keeps this dialog
+ * outer container (design B3 nesting pattern) so cancelling keeps it
  * mounted with the typed amounts intact.
+ *
+ * design-fidelity post-audit structural fix (pencil frame "Devolver renta ·
+ * Con monto", owner-confirmed after live screenshots): the outer container
+ * is a `Sheet` (bottom sheet), NOT a `Dialog` — every other real design
+ * frame for this flow shows it sliding up from the bottom, matching
+ * `RentalDetailSheet`/`CustomerDetailSheet`'s own contextual-view pattern.
+ * Only this outer container changed type; the nested "Confirmar devolución"
+ * `ConfirmDialog` stays a modal (unchanged, per B3/B4 #1 — it's a real
+ * "are you sure" gate, not a contextual view). Folio moves into the sheet
+ * header as a trailing badge (frame convention: title left, folio pill
+ * right). Customer identity is now a `CustomerCard` (name/avatar/phone),
+ * replacing the old plain "Cliente" `dl` row. The read-only context rows
+ * live inside a white "Resumen" card (`bg-card border`, NOT the gray
+ * `bg-muted` card `RentalCreatedSummary` uses — the frame's card is
+ * white). "Nota (opcional)" is a `<textarea>` (the frame's box is
+ * multi-line-tall), and "Total a entregar"'s amount is `text-primary`
+ * (same blue-for-money convention as `RentalCard`'s `amount` prop). No
+ * divider between the sheet title and its content, and no `X` close
+ * button — bottom sheets in this app are exclusive, dismissed only via
+ * their own action buttons (swipe-to-dismiss/backdrop tap still work via
+ * `Sheet`'s own Vaul-backed defaults, same as every other sheet).
  */
 
 export interface ReturnDialogProps {
@@ -198,61 +220,69 @@ export function ReturnDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Devolver renta {folio}</DialogTitle>
-          </DialogHeader>
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent showCloseButton={false}>
+          <SheetHeader className="flex-row items-center justify-between gap-2 border-b-0 pr-4">
+            <SheetTitle>Devolver renta</SheetTitle>
+            <span className="bg-primary-soft text-primary shrink-0 rounded-full px-2.5 py-1 text-xs font-medium">
+              {folio}
+            </span>
+          </SheetHeader>
 
-          <dl className="flex flex-col gap-2 text-sm">
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Cliente</dt>
-              <dd>{customerName}</dd>
-            </div>
-            <div className="flex justify-between gap-2">
-              <dt className="text-muted-foreground">Producto(s)</dt>
-              <dd className="text-right">
-                {items
-                  .map(
-                    (item) => `${item.quantity} x ${rentalItemTypeLabel(item.itemType)}`,
-                  )
-                  .join(", ")}
-              </dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Fecha de inicio</dt>
-              <dd>{startedAt.toLocaleDateString("es-MX")}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Tiempo transcurrido</dt>
-              <dd>{elapsedDays} días</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Depósito</dt>
-              <dd>{formatCurrencyMXN(depositAmount)}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Renta inicial</dt>
-              <dd>{formatCurrencyMXN(initialRentAmount)}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Total pagado en rentas</dt>
-              <dd>{formatCurrencyMXN(totalRentPaid)}</dd>
-            </div>
-          </dl>
+          <CustomerCard name={customerName} phone={customerPhone} />
 
-          <div className="flex flex-col gap-4 border-t pt-4">
+          <section className="flex flex-col gap-2">
+            <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+              <Receipt aria-hidden="true" className="text-primary size-4" />
+              Resumen
+            </h2>
+            <dl className="bg-card flex flex-col gap-2 rounded-lg border p-3 text-sm">
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted-foreground">Producto(s)</dt>
+                <dd className="text-right">
+                  {items
+                    .map(
+                      (item) => `${item.quantity} x ${rentalItemTypeLabel(item.itemType)}`,
+                    )
+                    .join(", ")}
+                </dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Fecha de inicio</dt>
+                <dd>{startedAt.toLocaleDateString("es-MX")}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Tiempo transcurrido</dt>
+                <dd>{elapsedDays} días</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Depósito</dt>
+                <dd>{formatCurrencyMXN(depositAmount)}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Renta inicial</dt>
+                <dd>{formatCurrencyMXN(initialRentAmount)}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Total pagado en rentas</dt>
+                <dd>{formatCurrencyMXN(totalRentPaid)}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section className="flex flex-col gap-4 border-t pt-4">
+            <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+              <Wallet aria-hidden="true" className="text-primary size-4" />
+              Devolución
+            </h2>
+
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="return-amount-collected">Monto cobrado</Label>
               {hasPreviousRentPayment ? (
-                <>
-                  <p className="text-muted-foreground text-sm">
-                    Renta acordada: {formatCurrencyMXN(initialRentAmount)}
-                  </p>
-                  <p className="text-muted-foreground text-sm">
-                    Último pago: {formatCurrencyMXN(suggestedAmount)}
-                  </p>
-                </>
+                <p className="text-muted-foreground text-sm">
+                  Renta acordada: {formatCurrencyMXN(initialRentAmount)} ·
+                  Último pago: {formatCurrencyMXN(suggestedAmount)}
+                </p>
               ) : (
                 <p className="text-muted-foreground text-sm">
                   Renta: {formatCurrencyMXN(initialRentAmount)}
@@ -296,39 +326,45 @@ export function ReturnDialog({
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="return-note">Nota (opcional)</Label>
-              <Input
+              {/* design-fidelity structural fix (pencil frame "Devolver
+                  renta"): a multi-line `<textarea>`, not a single-line
+                  `Input` — the frame's box is visibly taller than the
+                  amount fields above it. */}
+              <textarea
                 id="return-note"
                 placeholder="Observaciones sobre la devolución"
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
+                rows={3}
+                className="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 w-full min-w-0 rounded-md border bg-transparent px-3 py-2 text-base outline-none transition-[color,box-shadow] focus-visible:ring-[3px]"
               />
             </div>
 
             {formError && (
               <p className="text-destructive text-sm">{formError}</p>
             )}
-          </div>
+          </section>
 
-          <div className="sticky -bottom-4 -mx-4 -mb-4 mt-auto z-20 flex flex-col gap-3 bg-card px-4 pb-4 pt-3 border-t">
+          <SheetFooter>
             <div className="flex items-center justify-between text-sm font-semibold">
               <span>Total a entregar</span>
-              <span>{formatCurrencyMXN(totalToHandBack)}</span>
+              <span className="text-primary">
+                {formatCurrencyMXN(totalToHandBack)}
+              </span>
             </div>
 
-            <DialogFooter className="flex-col items-stretch">
-              <Button
-                type="button"
-                size="lg"
-                disabled={isSubmitting}
-                onClick={() => setConfirmOpen(true)}
-                className="w-full"
-              >
-                {isSubmitting ? "Guardando…" : "Confirmar devolución"}
-              </Button>
-            </DialogFooter>
-          </div>
-        </DialogContent>
-      </Dialog>
+            <Button
+              type="button"
+              size="lg"
+              disabled={isSubmitting}
+              onClick={() => setConfirmOpen(true)}
+              className="w-full"
+            >
+              {isSubmitting ? "Guardando…" : "Confirmar devolución"}
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
 
       <ConfirmDialog
         open={confirmOpen}

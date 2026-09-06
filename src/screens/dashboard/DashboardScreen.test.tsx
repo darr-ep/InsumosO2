@@ -400,6 +400,32 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
     ).not.toBeInTheDocument();
   });
 
+  // Post-audit bugfix (design-fidelity, obs #2228 batch 11): pencil frame
+  // `XLTdc` ("Insumos O2 - Inicio") shows the "Rentas activas" count pill
+  // pinned to the FAR right edge of the section header row, clearly
+  // separated from the label — not squeezed directly next to the text.
+  it("positions the 'Rentas activas' count pill on the opposite side of the header row, not squeezed next to the label", async () => {
+    listActiveRentals.mockResolvedValue([
+      {
+        id: "r1",
+        folio: "R-000001",
+        status: "ACTIVE",
+        created: "2026-08-20 10:00:00.000Z",
+        initial_rent_amount: 2800,
+        expand: { customer_id: juan },
+      },
+    ]);
+
+    renderScreen();
+
+    const heading = await screen.findByRole("heading", {
+      name: "Rentas activas",
+    });
+    const headerRow = heading.parentElement;
+
+    expect(headerRow).toHaveClass("justify-between");
+  });
+
   it("shows an error message when loading fails", async () => {
     listActiveRentals.mockRejectedValue(new Error("network down"));
 
@@ -598,6 +624,38 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
       setQuery("184");
 
       expect(await screen.findByText("Devuelta")).toBeInTheDocument();
+    });
+
+    // Post-audit bugfix (design-fidelity, obs #2228 batch 11): search-result
+    // cards render the SAME `RentalCard` component as the main list, but
+    // without the "Inicio {fecha}" children the main list's card passes —
+    // a real divergent-props bug (`searchRentals` DOES return `created`,
+    // same as `listActiveRentals`; the JSX for the search branch just never
+    // rendered it). This must show the exact same start-date line the main
+    // list shows for an identical rental.
+    it("shows the same start-date line ('Inicio {fecha}') on a search result as the main list shows for an identical rental (root cause: search branch never passed the date as RentalCard children)", async () => {
+      const created = "2026-08-01T10:00:00.000Z";
+      const expectedDate = new Date(created).toLocaleDateString("es-MX");
+
+      searchRentals.mockResolvedValue([
+        {
+          id: "r1",
+          folio: "R-000184",
+          status: "ACTIVE",
+          created,
+          initial_rent_amount: 2800,
+          expand: { customer_id: juan },
+        },
+      ]);
+
+      const { setQuery } = renderScreen();
+      await screen.findByText("No hay rentas activas todavía.");
+
+      setQuery("184");
+
+      expect(
+        await screen.findByText(`Inicio ${expectedDate}`),
+      ).toBeInTheDocument();
     });
 
     it("shows 'sin resultados' when nothing matches (CU3's last scenario)", async () => {

@@ -8,7 +8,7 @@
      cards read as elevated surfaces again (design's #F3F4F6) — verified via
      the OKLCH→linear-sRGB→relative-luminance script, see
      src/lib/colorContrast.ts + src/index.css.contrast.test.ts. */
-  --background: oklch(0.967 0.002 265);
+  --background: #f3f4f6;
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);

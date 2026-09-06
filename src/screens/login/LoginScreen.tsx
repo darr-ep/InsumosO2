@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { ClientResponseError } from "pocketbase";
-import { AlertTriangle, ChevronLeft, Eye, EyeOff } from "lucide-react";
+import { AlertTriangle, Check, ChevronLeft, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,6 +34,16 @@ export function LoginScreen() {
     null,
   );
   const [directoryError, setDirectoryError] = useState(false);
+  // design-fidelity post-audit bugfix batch #3 (pencil ground truth: "Login ·
+  // Usuarios" screenshot) — the avatar picker has its own selection state,
+  // separate from `selectedUser`: tapping an avatar only stages/highlights
+  // it (checkmark badge), advancing to the password step requires an
+  // explicit "Continuar" tap. `stagedUser` deliberately survives a
+  // "Cambiar" back-navigation so the picker re-opens with the same avatar
+  // still highlighted.
+  const [stagedUser, setStagedUser] = useState<LoginDirectoryEntry | null>(
+    null,
+  );
   const [selectedUser, setSelectedUser] = useState<LoginDirectoryEntry | null>(
     null,
   );
@@ -76,8 +86,15 @@ export function LoginScreen() {
     };
   }, []);
 
-  function handleSelectUser(entry: LoginDirectoryEntry) {
-    setSelectedUser(entry);
+  function handlePickUser(entry: LoginDirectoryEntry) {
+    setStagedUser(entry);
+  }
+
+  function handleConfirmUser() {
+    if (!stagedUser) {
+      return;
+    }
+    setSelectedUser(stagedUser);
     setPassword("");
     setShowPassword(false);
     setLoginError(null);
@@ -135,24 +152,61 @@ export function LoginScreen() {
       )}
 
       {!directoryError && directory !== null && !selectedUser && (
-        <div className="grid w-full max-w-sm grid-cols-3 gap-3">
-          {directory.map((entry) => (
-            <button
-              key={entry.id}
-              type="button"
-              onClick={() => handleSelectUser(entry)}
-              className="border-input hover:bg-accent flex flex-col items-center gap-2 rounded-xl border p-3"
-            >
-              <UserAvatar
-                name={entry.name}
-                avatarUrl={loginDirectoryAvatarUrl(entry)}
-                shape="square"
-                size={96}
-              />
-              <span className="text-sm font-medium">{entry.name}</span>
-            </button>
-          ))}
-        </div>
+        <>
+          <div className="flex flex-col items-center gap-1">
+            <h2 className="text-xl font-bold text-foreground">
+              ¿Quién eres?
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Selecciona tu usuario para continuar
+            </p>
+          </div>
+
+          <div className="grid w-full max-w-sm grid-cols-3 gap-3">
+            {directory.map((entry) => {
+              const isStaged = stagedUser?.id === entry.id;
+              return (
+                <button
+                  key={entry.id}
+                  type="button"
+                  aria-pressed={isStaged}
+                  onClick={() => handlePickUser(entry)}
+                  className={`bg-card flex flex-col items-center gap-2 rounded-2xl border-2 p-3 shadow-sm ${
+                    isStaged ? "border-primary" : "border-transparent"
+                  }`}
+                >
+                  <div className="relative">
+                    <UserAvatar
+                      name={entry.name}
+                      avatarUrl={loginDirectoryAvatarUrl(entry)}
+                      shape="square"
+                      size={64}
+                    />
+                    {isStaged && (
+                      <span
+                        aria-hidden="true"
+                        className="bg-primary text-primary-foreground absolute -top-1 -right-1 flex size-5 items-center justify-center rounded-full"
+                      >
+                        <Check className="size-3" />
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-sm font-medium">{entry.name}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <Button
+            type="button"
+            size="lg"
+            className="w-full max-w-sm"
+            disabled={!stagedUser}
+            onClick={handleConfirmUser}
+          >
+            Continuar
+          </Button>
+        </>
       )}
 
       {selectedUser && (
@@ -163,20 +217,23 @@ export function LoginScreen() {
             void handleSubmit();
           }}
         >
-          <div className="flex items-center gap-1">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label="Elegir otro usuario"
-              onClick={handleBackToPicker}
-              disabled={isSubmitting}
-            >
-              <ChevronLeft aria-hidden="true" />
-            </Button>
+          <button
+            type="button"
+            onClick={handleBackToPicker}
+            disabled={isSubmitting}
+            className="text-muted-foreground flex items-center gap-1 self-start text-sm font-medium disabled:opacity-50"
+          >
+            <ChevronLeft aria-hidden="true" className="size-4" />
+            Cambiar
+          </button>
+
+          <div className="flex flex-col items-center gap-1 text-center">
             <h2 className="text-lg font-semibold text-foreground">
               Hola, {selectedUser.name}
             </h2>
+            <p className="text-sm text-muted-foreground">
+              Ingresa tu contraseña para entrar
+            </p>
           </div>
 
           <div className="flex flex-col gap-2">

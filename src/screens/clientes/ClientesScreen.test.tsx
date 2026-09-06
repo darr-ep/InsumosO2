@@ -141,6 +141,22 @@ describe("ClientesScreen (Redesign Round 2, Batch 2 — Clientes screen)", () =>
     expect(screen.getByText("1 activa")).toBeInTheDocument();
   });
 
+  // design-fidelity owner audit fix (pen.dev fidelity): mirrors
+  // DashboardScreen's "Rentas activas" section header + count-pill pattern
+  // — this screen was missing the equivalent "Clientes" header above its
+  // own idle customer list.
+  it("shows a 'Clientes' section header with a count pill above the idle customer list", async () => {
+    listCustomers.mockResolvedValue([juan, ana]);
+
+    renderScreen();
+
+    expect(await screen.findByText("Juan Pérez")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Clientes" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
+  });
+
   it("shows an empty state when there are no customers yet", async () => {
     listCustomers.mockResolvedValue([]);
 

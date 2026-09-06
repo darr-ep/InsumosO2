@@ -58,6 +58,27 @@ describe("DashboardStats (compact 3-tile stats row)", () => {
     expect(screen.getByText("Tanques disponibles")).toBeInTheDocument();
   });
 
+  // Post-audit bugfix (design-fidelity, obs #2228 batch 11): pencil frame
+  // `XLTdc` ("Insumos O2 - Inicio") shows the 3 stat tiles as white cards
+  // against the gray page background (design obs #2224 §C4: "Stat cards
+  // 110×112, rounded-[14px] p-[14px] gap-[7px] bg-card") — the tiles here
+  // only had `border`, no `bg-card`, so they blended into the page.
+  it("gives all three tiles a white (bg-card) surface, per the design frame", () => {
+    renderStats();
+
+    const activeTile = screen.getByRole("group", { name: "Rentas activas: 3" });
+    const concentradoresTile = screen.getByRole("group", {
+      name: "Concentradores disponibles: 5",
+    });
+    const tanquesTile = screen.getByRole("group", {
+      name: "Tanques disponibles: 2",
+    });
+
+    expect(activeTile).toHaveClass("bg-card");
+    expect(concentradoresTile).toHaveClass("bg-card");
+    expect(tanquesTile).toHaveClass("bg-card");
+  });
+
   it("shows a zero availability value in destructive red (out of stock)", () => {
     renderStats({ concentradoresDisponibles: 0, tanquesDisponibles: 4 });
 

@@ -70,6 +70,12 @@ import { totalStockSchema } from "@/domain/settings/businessSettings";
  * should I be" — conflating them would make a low-stock tile's icon flash
  * red/amber too, which the design never asks for and would read as a
  * second, redundant alarm.
+ *
+ * Post-audit bugfix (design-fidelity, obs #2228 batch 11): the design
+ * (§C4, verbatim: "Stat cards 110×112, rounded-[14px] p-[14px] gap-[7px]
+ * bg-card") calls for a white surface on all 3 tiles — this file only had
+ * `border`, no `bg-card`, so the tiles blended into the gray page
+ * background instead of reading as cards. Added `bg-card` to all 3.
  */
 
 export interface DashboardStatsProps {
@@ -168,7 +174,7 @@ export function DashboardStats({
         <div
           role="group"
           aria-label={`Rentas activas: ${activeRentalsCount}`}
-          className="flex flex-col items-center justify-center gap-1 rounded-md border p-3"
+          className="bg-card flex flex-col items-center justify-center gap-1 rounded-md border p-3"
         >
           <ClipboardList
             aria-hidden="true"
@@ -190,7 +196,7 @@ export function DashboardStats({
         <div
           role="group"
           aria-label={`Concentradores disponibles: ${concentradoresDisponibles}`}
-          className="rounded-md border"
+          className="bg-card rounded-md border"
         >
           <button
             type="button"
@@ -223,7 +229,7 @@ export function DashboardStats({
         <div
           role="group"
           aria-label={`Tanques disponibles: ${tanquesDisponibles}`}
-          className="rounded-md border"
+          className="bg-card rounded-md border"
         >
           <button
             type="button"

@@ -447,6 +447,115 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("uses a gray sheet background, no divider under the title, and no corner close button (design-fidelity pencil-fidelity batch)", async () => {
+    getRental.mockResolvedValue(activeRental);
+    listItemsForRental.mockResolvedValue([]);
+    listPaymentsForRental.mockResolvedValue([]);
+
+    renderSheet();
+
+    await screen.findByText("Renta R-000001");
+
+    const sheetContent = document.querySelector('[data-slot="sheet-content"]');
+    expect(sheetContent).toHaveClass("bg-muted");
+
+    const sheetHeader = document.querySelector('[data-slot="sheet-header"]');
+    expect(sheetHeader).not.toHaveClass("border-b");
+
+    expect(
+      screen.queryByRole("button", { name: "Cerrar" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("styles 'Resumen' and 'Historial de pagos' as distinct section headers with their own icon, and shows a count pill next to Historial de pagos (design-fidelity pencil-fidelity batch)", async () => {
+    getRental.mockResolvedValue(activeRental);
+    listItemsForRental.mockResolvedValue([]);
+    listPaymentsForRental.mockResolvedValue([
+      {
+        id: "p1",
+        amount: 1000,
+        payment_type: "deposit",
+        created: "2026-08-01T10:00:00.000Z",
+        note: "",
+        expand: { created_by: { name: "Juan" } },
+      },
+      {
+        id: "p2",
+        amount: 2800,
+        payment_type: "rent",
+        created: "2026-08-29T14:41:00.000Z",
+        note: "",
+        expand: { created_by: { name: "Juan" } },
+      },
+    ]);
+
+    renderSheet();
+
+    const resumenHeading = await screen.findByText("Resumen");
+    expect(resumenHeading.querySelector("svg")).not.toBeNull();
+
+    const historialHeading = screen.getByText("Historial de pagos");
+    expect(historialHeading.querySelector("svg")).not.toBeNull();
+
+    const historySection = historialHeading.closest("section")!;
+    const pill = within(historySection).getByText("2");
+    expect(pill).toHaveClass("bg-primary-soft", "text-primary", "rounded-full");
+  });
+
+  it("wraps each payment-history entry in its own bordered white card (design-fidelity pencil-fidelity batch)", async () => {
+    getRental.mockResolvedValue(activeRental);
+    listItemsForRental.mockResolvedValue([]);
+    listPaymentsForRental.mockResolvedValue([
+      {
+        id: "p2",
+        amount: 2800,
+        payment_type: "rent",
+        created: "2026-08-29T14:41:00.000Z",
+        note: "",
+        expand: { created_by: { name: "Juan" } },
+      },
+      {
+        id: "p1",
+        amount: 1000,
+        payment_type: "deposit",
+        created: "2026-08-01T10:00:00.000Z",
+        note: "",
+        expand: { created_by: { name: "Juan" } },
+      },
+    ]);
+
+    renderSheet();
+
+    const historySection = (
+      await screen.findByText("Historial de pagos")
+    ).closest("section")!;
+    const rows = within(historySection).getAllByRole("listitem");
+
+    rows.forEach((row) => {
+      expect(row).toHaveClass("bg-card", "border", "rounded-lg");
+    });
+  });
+
+  it("orders the sheet's action buttons with the secondary action ('Devolver') on the left and the primary/confirm action ('Registrar pago') on the right (design-fidelity pencil-fidelity batch)", async () => {
+    getRental.mockResolvedValue(activeRental);
+    listItemsForRental.mockResolvedValue([]);
+    listPaymentsForRental.mockResolvedValue([]);
+
+    renderSheet();
+
+    const registrarButton = await screen.findByRole("button", {
+      name: "Registrar pago",
+    });
+    const devolverButton = screen.getByRole("button", { name: "Devolver" });
+
+    const footer = registrarButton.closest('[data-slot="sheet-footer"]')!;
+    expect(footer).toHaveClass("flex-row");
+
+    const buttons = within(footer as HTMLElement).getAllByRole("button");
+    expect(buttons[0]).toBe(devolverButton);
+    expect(buttons[1]).toBe(registrarButton);
+  });
+
   it("shows an error and does not silently keep stale data when refreshing after a return fails (Redesign Round 3 resiliencia fix)", async () => {
     getRental
       .mockResolvedValueOnce(activeRental)
