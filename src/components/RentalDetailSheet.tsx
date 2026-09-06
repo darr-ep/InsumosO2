@@ -37,6 +37,7 @@ import {
   type ReturnReceiptData,
 } from "@/domain/rentals/receipt";
 import { formatCurrencyMXN } from "@/lib/currency";
+import { cn } from "@/lib/utils";
 
 // Redesign — UX/UI pass: one distinct icon per `payment_type`, so the
 // history timeline is scannable at a glance instead of relying on the text
@@ -67,6 +68,17 @@ const PAYMENT_TYPE_ICONS: Record<PaymentType, typeof PiggyBank> = {
  * inmediato — muestra `ReturnCreatedSummary` (confirmación breve) primero,
  * con sus propias acciones de imprimir/compartir inline (post-launch
  * polish — ya no hay un "Ver comprobante" separado, ver ese componente).
+ *
+ * design-fidelity post-audit bugfix batch (Fix 5, pencil frame `Modal
+ * Renta`, rows `g6Fxm`/`BqSjN`/`c9xLbb`): payment-history rows restyled to
+ * a horizontal layout — colored circular icon badge (deposit: `--primary-
+ * soft` fill; mensualidad/ajuste: `--success-soft` fill; icon stays
+ * `text-primary` in both, per the exact live-design color extraction) →
+ * Concepto+Fecha stacked → Monto → trailing reprint icon. Dropped the old
+ * `border-l-2` left-border rule and plain gray icon. `Registró: {name}` is
+ * an app-only feature with NO pencil-design equivalent, kept per explicit
+ * owner decision (design obs #2224, "Explicitly OUT of scope") — it moves
+ * to a smaller secondary line under Concepto/Fecha, unchanged in content.
  */
 
 export interface RentalDetailSheetProps {
@@ -269,20 +281,23 @@ export function RentalDetailSheet({
                         inicial) first, most recent last. */}
                     {[...payments].reverse().map((payment) => {
                       const Icon = PAYMENT_TYPE_ICONS[payment.payment_type];
+                      const isDeposit = payment.payment_type === "deposit";
                       return (
                         <li
                           key={payment.id}
-                          className="flex items-start gap-2 border-l-2 pl-3"
+                          className="flex items-center gap-3"
                         >
-                          <Icon
+                          <span
                             aria-hidden="true"
-                            className="text-muted-foreground mt-0.5 size-4 shrink-0"
-                          />
-                          <div className="flex-1">
+                            className={cn(
+                              "flex size-10 shrink-0 items-center justify-center rounded-full",
+                              isDeposit ? "bg-primary-soft" : "bg-success-soft",
+                            )}
+                          >
+                            <Icon className="text-primary size-5" />
+                          </span>
+                          <div className="min-w-0 flex-1">
                             <p className="font-medium">
-                              {formatCurrencyMXN(payment.amount)}
-                            </p>
-                            <p className="text-muted-foreground text-sm">
                               {paymentTypeLabel(payment.payment_type)}
                             </p>
                             <p className="text-muted-foreground text-xs">
@@ -298,6 +313,9 @@ export function RentalDetailSheet({
                               </p>
                             )}
                           </div>
+                          <p className="shrink-0 font-medium">
+                            {formatCurrencyMXN(payment.amount)}
+                          </p>
                           <button
                             type="button"
                             aria-label={`Reimprimir comprobante de ${paymentTypeLabel(payment.payment_type).toLowerCase()}`}

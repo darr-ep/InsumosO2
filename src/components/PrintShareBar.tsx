@@ -36,6 +36,11 @@ import { DialogFooter } from "@/components/ui/dialog";
  * Compartir → Cerrar), which is what actually preserves tab/AT order and
  * keeps Cerrar the visually/structurally LAST action — the horizontal pair
  * is just a nested row ABOVE Cerrar's own full-width row, not a reordering.
+ *
+ * design-fidelity post-audit bugfix batch (Fix 3): Imprimir and Compartir
+ * both use `variant="secondary"` — the design has no outline variant on
+ * either button; Compartir was previously `outline`, a visual mismatch
+ * against Imprimir's `secondary`.
  */
 export interface PrintShareBarProps {
   printAvailable: boolean;
@@ -72,7 +77,7 @@ export function PrintShareBar({
           {shareAvailable && (
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               onClick={onShare}
               className="flex-1"
             >

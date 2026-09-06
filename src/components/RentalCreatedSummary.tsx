@@ -1,3 +1,4 @@
+import { Check, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -49,6 +50,17 @@ import { useReceiptActions } from "@/printing/useReceiptActions";
  * design. DOM order is unchanged (Imprimir → Compartir → Continuar), so
  * "Continuar" is still the visually/structurally LAST action; only the
  * print/share pair's own row became horizontal.
+ *
+ * design-fidelity post-audit bugfix batch (Fix 2, pencil frame `fcBBX`
+ * `DialogoRentaCreada`): the title is neutral-dark text with a SEPARATE
+ * circular green check badge (not green inline-checkmark title text); the
+ * summary rows sit inside a gray `#F3F4F6` card, not a bare `dl`; the
+ * print-failure message is an amber `#FEF3C7`/`#B45309` banner with a
+ * `triangle-alert` icon, not plain red text; "Compartir" (not "Compartir
+ * comprobante", which only ever matched `PrintShareBar`'s own already-
+ * correct copy by coincidence); and Imprimir/Compartir are both
+ * `variant="secondary"` so they render identically, matching the design's
+ * uniform gray pair.
  */
 
 const currencyFormatter = new Intl.NumberFormat("es-MX", {
@@ -88,13 +100,16 @@ export function RentalCreatedSummary({
         {receipt && (
           <>
             <DialogHeader>
-              <DialogTitle className="text-success">
-                Renta creada ✓
-              </DialogTitle>
+              <div className="flex flex-col items-center gap-2 text-center">
+                <div className="bg-success-soft flex size-12 items-center justify-center rounded-full">
+                  <Check aria-hidden="true" className="text-success size-6" />
+                </div>
+                <DialogTitle>Renta creada</DialogTitle>
+              </div>
               <DialogDescription>Folio {receipt.folio}</DialogDescription>
             </DialogHeader>
 
-            <dl className="flex flex-col gap-2 text-sm">
+            <dl className="bg-muted flex flex-col gap-2 rounded-lg p-3 text-sm">
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Cliente</dt>
                 <dd>{receipt.customerName}</dd>
@@ -125,10 +140,15 @@ export function RentalCreatedSummary({
             </dl>
 
             {printStatus === "failed" && (
-              <p className="text-destructive text-sm">
-                La renta se guardó correctamente, pero no se pudo imprimir el
-                comprobante.
-              </p>
+              <div className="flex items-start gap-2 rounded-lg bg-amber-100 p-3 text-sm text-amber-700">
+                <TriangleAlert
+                  aria-hidden="true"
+                  className="mt-0.5 size-4 shrink-0"
+                />
+                <p>
+                  La renta se guardó, pero no se pudo imprimir el comprobante.
+                </p>
+              </div>
             )}
             {printStatus === "printed" && (
               <p className="text-success text-sm">Comprobante impreso.</p>
@@ -154,11 +174,11 @@ export function RentalCreatedSummary({
                   {shareAvailable && (
                     <Button
                       type="button"
-                      variant="outline"
+                      variant="secondary"
                       onClick={() => void handleShare()}
                       className="flex-1"
                     >
-                      Compartir comprobante
+                      Compartir
                     </Button>
                   )}
                 </div>

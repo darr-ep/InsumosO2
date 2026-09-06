@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Printer, RefreshCw, Unplug, FileText, Zap, ZapOff } from "lucide-react";
+import { Printer, RefreshCw, Unplug, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +13,7 @@ import {
 import { webBluetoothPrinter } from "@/printing/WebBluetoothPrinter";
 import { isAutoPrintEnabled, setAutoPrintEnabled } from "@/printing/printSettings";
 import type { RentalReceiptData } from "@/domain/rentals/receipt";
+import { cn } from "@/lib/utils";
 
 export function PrinterMenu() {
   const [isAvailable, setIsAvailable] = useState(false);
@@ -157,13 +158,36 @@ export function PrinterMenu() {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
 
-        <DropdownMenuItem onSelect={handleToggleAutoPrint}>
-          {autoPrint ? (
-            <Zap aria-hidden="true" className="mr-2 size-4" />
-          ) : (
-            <ZapOff aria-hidden="true" className="mr-2 size-4" />
-          )}
-          Auto-imprimir: {autoPrint ? "Activado" : "Desactivado"}
+        <DropdownMenuItem
+          onSelect={handleToggleAutoPrint}
+          className="flex items-center justify-between gap-2"
+        >
+          <span>Auto-imprimir</span>
+          {/*
+            design-fidelity post-audit bugfix batch (Fix 4, pencil frame
+            `MenúImpresora`): hand-rolled switch — no
+            `@radix-ui/react-switch` dependency (explicitly rejected, design
+            obs #2224 §C6). The whole menu item stays the click target (same
+            behavior as before this fix); this is purely a visual upgrade
+            over the old icon+trailing-text representation.
+          */}
+          <span
+            role="switch"
+            aria-checked={autoPrint}
+            aria-label="Auto-imprimir"
+            className={cn(
+              "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors",
+              autoPrint ? "bg-primary" : "bg-muted",
+            )}
+          >
+            <span
+              aria-hidden="true"
+              className={cn(
+                "inline-block size-5 translate-x-0.5 rounded-full bg-white shadow transition-transform",
+                autoPrint && "translate-x-5",
+              )}
+            />
+          </span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
 

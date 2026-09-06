@@ -180,6 +180,73 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
     expect(labels).toEqual(["Depósito inicial", "Mensualidad"]);
   });
 
+  it("renders payment-history rows with colored circular icon badges (blue-soft for deposit, green-soft for mensualidad/ajuste) and no left-border rule (design-fidelity bugfix batch, Fix 5)", async () => {
+    getRental.mockResolvedValue(activeRental);
+    listItemsForRental.mockResolvedValue([]);
+    listPaymentsForRental.mockResolvedValue([
+      {
+        id: "p2",
+        amount: 2800,
+        payment_type: "rent",
+        created: "2026-08-29T14:41:00.000Z",
+        note: "",
+        expand: { created_by: { name: "Juan" } },
+      },
+      {
+        id: "p1",
+        amount: 1000,
+        payment_type: "deposit",
+        created: "2026-08-01T10:00:00.000Z",
+        note: "",
+        expand: { created_by: { name: "Juan" } },
+      },
+    ]);
+
+    renderSheet();
+
+    const historySection = (
+      await screen.findByText("Historial de pagos")
+    ).closest("section")!;
+    const rows = within(historySection).getAllByRole("listitem");
+
+    // Old vertical-stack treatment used a `border-l-2` left-border rule —
+    // the restyled horizontal row layout drops it entirely.
+    rows.forEach((row) => expect(row).not.toHaveClass("border-l-2"));
+
+    const depositRow = within(historySection)
+      .getByText("Depósito inicial")
+      .closest("li")!;
+    const rentRow = within(historySection)
+      .getByText("Mensualidad")
+      .closest("li")!;
+
+    expect(depositRow.querySelector(".bg-primary-soft")).not.toBeNull();
+    expect(rentRow.querySelector(".bg-success-soft")).not.toBeNull();
+  });
+
+  it("keeps 'Registró: {name}' visible under Concepto/Fecha after the Fix 5 restyle (owner-approved app-only feature, NOT removed)", async () => {
+    getRental.mockResolvedValue(activeRental);
+    listItemsForRental.mockResolvedValue([]);
+    listPaymentsForRental.mockResolvedValue([
+      {
+        id: "p1",
+        amount: 1000,
+        payment_type: "deposit",
+        created: "2026-08-01T10:00:00.000Z",
+        note: "",
+        expand: { created_by: { name: "Ana" } },
+      },
+    ]);
+
+    renderSheet();
+
+    const historySection = (
+      await screen.findByText("Historial de pagos")
+    ).closest("section")!;
+
+    expect(within(historySection).getByText("Registró: Ana")).toBeInTheDocument();
+  });
+
   it("lets reprinting the Depósito inicial receipt from its own row in the history (per-action reprint)", async () => {
     getRental.mockResolvedValue(activeRental);
     listItemsForRental.mockResolvedValue([

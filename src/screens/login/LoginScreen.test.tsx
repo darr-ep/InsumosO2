@@ -165,11 +165,14 @@ describe("LoginScreen — real login (§14, §16.6, CU1, gap-fill)", () => {
     ).toBeInTheDocument();
   });
 
-  // Post-audit bugfix (design-fidelity, obs #2228 batch): design spec (§14
-  // /Layer C6) calls for the login error to render inside a rose banner
-  // (`bg-rose-50 border border-rose-200 text-red-700 rounded-lg p-3`), not
-  // bare destructive text with no container.
-  it("renders the login error inside the designed rose banner container", async () => {
+  // design-fidelity post-audit bugfix batch, Fix 6 (pencil frame
+  // `m9HQRr`/`d7xZO Error`): design spec calls for the login error banner to
+  // use `#FEE2E2` (Tailwind `red-100`) background, `#DC2626` (Tailwind
+  // `red-600`) icon+text, NO border, and a `triangle-alert` icon — a
+  // correction over the previous rose-family colors (`bg-rose-50`/
+  // `border-rose-200`/`text-red-700`) and missing icon. Copy is unchanged
+  // (security-motivated generic message).
+  it("renders the login error inside the designed red-100 banner container, with a triangle-alert icon and no border", async () => {
     getLoginDirectory.mockResolvedValue([juan]);
     loginWithPassword.mockRejectedValue(makeClientResponseError(400));
     const user = userEvent.setup();
@@ -181,9 +184,12 @@ describe("LoginScreen — real login (§14, §16.6, CU1, gap-fill)", () => {
     await user.click(screen.getByRole("button", { name: "Entrar" }));
 
     const errorText = await screen.findByText("Credenciales incorrectas.");
-    const banner = errorText.closest(".bg-rose-50");
+    const banner = errorText.closest(".bg-red-100")!;
     expect(banner).not.toBeNull();
-    expect(banner).toHaveClass("border", "border-rose-200", "rounded-lg", "p-3");
+    expect(banner).toHaveClass("rounded-lg", "p-3");
+    expect(banner.className).not.toMatch(/\bborder\b/);
+    expect(banner.querySelector("svg")).not.toBeNull();
+    expect(errorText).toHaveClass("text-red-600");
   });
 
   it("shows a clear rate-limit message on a 429 instead of a raw error", async () => {

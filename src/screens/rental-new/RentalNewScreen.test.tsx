@@ -394,7 +394,7 @@ describe("RentalNewScreen (§7.1, §16.7, CU4, design-fidelity D1 wizard)", () =
     });
 
     expect(
-      await screen.findByRole("heading", { name: "Renta creada ✓" }),
+      await screen.findByRole("heading", { name: "Renta creada" }),
     ).toBeInTheDocument();
     expect(screen.getByText("Folio R-000001")).toBeInTheDocument();
   });
@@ -609,7 +609,7 @@ describe("RentalNewScreen (§7.1, §16.7, CU4, design-fidelity D1 wizard)", () =
     });
 
     expect(
-      await screen.findByRole("heading", { name: "Renta creada ✓" }),
+      await screen.findByRole("heading", { name: "Renta creada" }),
     ).toBeInTheDocument();
   });
 
@@ -660,7 +660,7 @@ describe("RentalNewScreen (§7.1, §16.7, CU4, design-fidelity D1 wizard)", () =
     });
 
     expect(
-      await screen.findByRole("heading", { name: "Renta creada ✓" }),
+      await screen.findByRole("heading", { name: "Renta creada" }),
     ).toBeInTheDocument();
   });
 

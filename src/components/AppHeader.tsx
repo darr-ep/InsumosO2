@@ -6,6 +6,13 @@ import { PrinterMenu } from "@/components/PrinterMenu";
 import { cn } from "@/lib/utils";
 
 /**
+ * design-fidelity bugfix batch, Fix 1: the pencil design only puts the
+ * printer trigger on the non-`showBack` (Dashboard/Clientes) header — every
+ * `showBack` screen (Nueva renta wizard, Perfil, etc.) never had it in the
+ * design. It was previously rendered unconditionally in both branches.
+ */
+
+/**
  * Redesign Round 2, Batch 1: Header Pattern (business-owner brief,
  * verbatim): "El título 'Dashboard' debe desaparecer del contenido y pasar
  * al navbar. En Dashboard: O2 Insumos/título a la izquierda y perfil a la
@@ -59,7 +66,6 @@ export function AppHeader({
             {title}
           </h1>
         </div>
-        <PrinterMenu />
       </header>
     );
   }

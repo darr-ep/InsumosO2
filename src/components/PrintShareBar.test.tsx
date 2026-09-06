@@ -119,6 +119,36 @@ describe("PrintShareBar (§17)", () => {
   // Imprimir/Compartir move side by side, but DOM order stays
   // Imprimir → Compartir → Cerrar so the primary action (Cerrar) is still
   // last, per §16.4 tab/AT order — even though the layout is now horizontal.
+  // design-fidelity post-audit bugfix batch, Fix 3: both buttons must look
+  // IDENTICAL (design has no outline variant on either) — previously
+  // Imprimir was `secondary` and Compartir was `outline`, a visual mismatch.
+  it("renders Imprimir and Compartir with the same variant (both secondary, no outline)", () => {
+    render(
+      <PrintShareBar
+        printAvailable
+        printStatus="idle"
+        onPrint={vi.fn()}
+        shareAvailable
+        onShare={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const printClasses = screen
+      .getByRole("button", { name: "Imprimir" })
+      .className.split(" ");
+    const shareClasses = screen
+      .getByRole("button", { name: "Compartir" })
+      .className.split(" ");
+
+    expect(printClasses).toContain("bg-secondary");
+    expect(shareClasses).toContain("bg-secondary");
+    expect(printClasses).not.toContain("border");
+    expect(shareClasses).not.toContain("border");
+    expect(printClasses).not.toContain("bg-card");
+    expect(shareClasses).not.toContain("bg-card");
+  });
+
   it("keeps Imprimir before Compartir before Cerrar in DOM order, even laid out side by side (design-fidelity §C5)", () => {
     render(
       <PrintShareBar

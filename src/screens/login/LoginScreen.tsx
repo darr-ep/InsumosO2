@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { ClientResponseError } from "pocketbase";
-import { ChevronLeft, Eye, EyeOff } from "lucide-react";
+import { AlertTriangle, ChevronLeft, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -208,8 +208,12 @@ export function LoginScreen() {
           </div>
 
           {loginError && (
-            <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-red-700">
-              {loginError}
+            <div className="flex items-start gap-2 rounded-lg bg-red-100 p-3 text-sm">
+              <AlertTriangle
+                aria-hidden="true"
+                className="mt-0.5 size-4 shrink-0 text-red-600"
+              />
+              <p className="text-red-600">{loginError}</p>
             </div>
           )}
 
