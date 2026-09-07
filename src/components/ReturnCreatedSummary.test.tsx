@@ -79,8 +79,8 @@ describe("ReturnCreatedSummary print/share footer (design-fidelity Slice C, RELI
       .filter((text) => text !== "Cerrar");
     expect(buttons).toEqual([
       "Imprimir",
-      "Compartir comprobante",
-      "Volver al inicio",
+      "Compartir",
+      "Aceptar",
     ]);
   });
 
@@ -97,16 +97,16 @@ describe("ReturnCreatedSummary print/share footer (design-fidelity Slice C, RELI
       />,
     );
 
-    await screen.findByRole("heading", { name: "Devolución registrada ✓" });
+    await screen.findByRole("heading", { name: "Devolución registrada" });
 
     expect(
       screen.queryByRole("button", { name: "Imprimir" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Compartir comprobante" }),
+      screen.queryByRole("button", { name: "Compartir" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Volver al inicio" }),
+      screen.getByRole("button", { name: "Aceptar" }),
     ).toBeInTheDocument();
   });
 });

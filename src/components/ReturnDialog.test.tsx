@@ -73,12 +73,12 @@ describe("ReturnDialog (§7.3, §16.8, CU6, task 3.2)", () => {
     expect(screen.getByLabelText(/monto cobrado/i)).toHaveValue("");
     expect(screen.getByLabelText(/monto cobrado/i)).toHaveAttribute(
       "placeholder",
-      "$ 0",
+      "$2,800.00",
     );
     expect(screen.getByLabelText("Depósito a devolver")).toHaveValue("");
     expect(screen.getByLabelText("Depósito a devolver")).toHaveAttribute(
       "placeholder",
-      "$ 0",
+      "$1,000.00",
     );
   });
 
@@ -161,7 +161,11 @@ describe("ReturnDialog (§7.3, §16.8, CU6, task 3.2)", () => {
     expect(baseProps.onOpenChange).toHaveBeenCalledWith(false);
   });
 
-  it("fires a success toast when the return is registered (§16.13/§17, gap-fill finding 4)", async () => {
+  // design-fidelity post-audit bugfix batch: this toast was superseded by
+  // `ReturnCreatedSummary`'s own "Devolución registrada" dialog, which
+  // `onReturned` opens right after this one closes — showing both said the
+  // same thing twice.
+  it("does NOT fire a success toast when the return is registered (superseded by ReturnCreatedSummary's own confirmation)", async () => {
     returnRental.mockResolvedValueOnce({
       id: "rental1",
       returned_at: "2026-08-26T12:00:00.000Z",
@@ -175,7 +179,7 @@ describe("ReturnDialog (§7.3, §16.8, CU6, task 3.2)", () => {
     await user.click(screen.getByRole("button", { name: "Sí, devolver" }));
 
     await waitFor(() => expect(returnRental).toHaveBeenCalledTimes(1));
-    expect(toast.success).toHaveBeenCalledWith("Devolución registrada.");
+    expect(toast.success).not.toHaveBeenCalled();
   });
 
   it("does NOT fire a success toast when the return fails to save (§16.13/§17, gap-fill finding 4)", async () => {
@@ -335,7 +339,7 @@ describe("ReturnDialog (§7.3, §16.8, CU6, task 3.2)", () => {
     });
   });
 
-  it("disables the confirmation dialog's buttons while submitting (isConfirming), reverting to the idle trigger after success (§16.13, design-fidelity #1)", async () => {
+  it("closes the confirmation popup immediately and shows the 'Procesando devolución...' loading popup while submitting, reverting to the idle trigger after success (§16.13, design-fidelity #1, pencil ground truth 'Carga · Procesando devolución')", async () => {
     let resolveReturnRental: (value: {
       id: string;
       returned_at: string;
@@ -354,23 +358,32 @@ describe("ReturnDialog (§7.3, §16.8, CU6, task 3.2)", () => {
     );
     await user.click(screen.getByRole("button", { name: "Sí, devolver" }));
 
-    // design B2: `isConfirming` disables BOTH ConfirmDialog buttons during
-    // the async mutation — the underlying "Confirmar devolución" trigger is
-    // `aria-hidden` behind the still-open ConfirmDialog while this is
-    // pending (Radix nested-dialog inert behavior), so it's not queryable.
-    expect(screen.getByRole("button", { name: "Sí, devolver" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Cancelar" })).toBeDisabled();
+    // The button-based ConfirmDialog closes immediately on confirm — the
+    // real per-action loading state is the separate, button-less
+    // LoadingDialog, not ConfirmDialog's own loading state. The underlying
+    // "Confirmar devolución" trigger is `aria-hidden` behind the
+    // now-open LoadingDialog (Radix modal-dialog inert behavior), so it's
+    // not queryable while this is pending — same as the old ConfirmDialog
+    // behavior this replaces.
+    expect(
+      screen.queryByRole("heading", { name: "¿Devolver esta renta?" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Procesando devolución..." }),
+    ).toBeInTheDocument();
 
     resolveReturnRental({
       id: "rental1",
       returned_at: "2026-08-26T12:00:00.000Z",
     });
 
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Confirmar devolución" }),
+      ).toBeEnabled(),
+    );
     expect(
-      await screen.findByRole("button", { name: "Confirmar devolución" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("heading", { name: "¿Devolver esta renta?" }),
+      screen.queryByRole("heading", { name: "Procesando devolución..." }),
     ).not.toBeInTheDocument();
   });
 });

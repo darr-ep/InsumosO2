@@ -64,6 +64,20 @@ export function relativeLuminance([r, g, b]: [number, number, number]): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+export function hexToLinearRgb(hex: string): [number, number, number] {
+  const cleanHex = hex.replace("#", "").trim();
+  const r8 = parseInt(cleanHex.slice(0, 2), 16);
+  const g8 = parseInt(cleanHex.slice(2, 4), 16);
+  const b8 = parseInt(cleanHex.slice(4, 6), 16);
+
+  function sRgbToLinear(c: number): number {
+    const s = c / 255;
+    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  }
+
+  return [sRgbToLinear(r8), sRgbToLinear(g8), sRgbToLinear(b8)];
+}
+
 /** WCAG contrast ratio between two relative luminances (order-independent). */
 export function contrastRatio(luminanceA: number, luminanceB: number): number {
   const lighter = Math.max(luminanceA, luminanceB);
@@ -71,9 +85,11 @@ export function contrastRatio(luminanceA: number, luminanceB: number): number {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
-/** WCAG contrast ratio between two `oklch(...)` CSS color strings. */
+/** WCAG contrast ratio between two CSS color strings (oklch or #hex). */
 export function oklchContrastRatio(a: string, b: string): number {
-  const luminanceA = relativeLuminance(oklchToLinearRgb(parseOklch(a)));
-  const luminanceB = relativeLuminance(oklchToLinearRgb(parseOklch(b)));
+  const linearA = a.startsWith("#") ? hexToLinearRgb(a) : oklchToLinearRgb(parseOklch(a));
+  const linearB = b.startsWith("#") ? hexToLinearRgb(b) : oklchToLinearRgb(parseOklch(b));
+  const luminanceA = relativeLuminance(linearA);
+  const luminanceB = relativeLuminance(linearB);
   return contrastRatio(luminanceA, luminanceB);
 }

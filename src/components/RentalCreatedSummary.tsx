@@ -89,6 +89,14 @@ export function RentalCreatedSummary({
   return (
     <Dialog
       open={open}
+      // This dialog opens in the SAME commit that RentalNewScreen's
+      // LoadingDialog closes (both `isSubmitting`→false and `summaryOpen`
+      // →true are set in the same synchronous post-`await` continuation) —
+      // see ReturnCreatedSummary's identical `manageHistory={false}` for the
+      // full root cause. Opting this terminal, always-explicitly-dismissed
+      // confirmation out of the history bookkeeping removes it from that
+      // race entirely.
+      manageHistory={false}
       onOpenChange={(next) => {
         if (!next) {
           reset();
@@ -112,11 +120,11 @@ export function RentalCreatedSummary({
             <dl className="bg-muted flex flex-col gap-2 rounded-lg p-3 text-sm">
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Cliente</dt>
-                <dd>{receipt.customerName}</dd>
+                <dd className="font-semibold text-foreground">{receipt.customerName}</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Producto(s)</dt>
-                <dd className="text-right">
+                <dd className="font-semibold text-foreground text-right">
                   {receipt.items
                     .map(
                       (item) =>
@@ -127,13 +135,15 @@ export function RentalCreatedSummary({
               </div>
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Renta</dt>
-                <dd>{currencyFormatter.format(receipt.initialRentAmount)}</dd>
+                <dd className="font-semibold text-foreground">{currencyFormatter.format(receipt.initialRentAmount)}</dd>
               </div>
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Depósito</dt>
-                <dd>{currencyFormatter.format(receipt.depositAmount)}</dd>
-              </div>
-              <div className="flex justify-between font-semibold">
+              {receipt.depositAmount > 0 && (
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Depósito</dt>
+                  <dd className="font-semibold text-foreground">{currencyFormatter.format(receipt.depositAmount)}</dd>
+                </div>
+              )}
+              <div className="flex justify-between font-semibold border-t pt-2 mt-1">
                 <dt>Total</dt>
                 <dd>{currencyFormatter.format(receipt.total)}</dd>
               </div>

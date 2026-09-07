@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router";
-import { LayoutDashboard, Plus, Users } from "lucide-react";
+import { Home, Plus, Users } from "lucide-react";
 import useEmblaCarousel from "embla-carousel-react";
 import { cn } from "@/lib/utils";
 import { useDataCache } from "@/app/DataCacheContext";
@@ -31,7 +31,7 @@ import { ClientesScreen } from "@/screens/clientes/ClientesScreen";
  * it.
  */
 const TABS = [
-  { to: "/dashboard", label: "Inicio", icon: LayoutDashboard },
+  { to: "/dashboard", label: "Inicio", icon: Home },
   { to: "/clientes", label: "Clientes", icon: Users },
 ] as const;
 
@@ -237,7 +237,7 @@ export function AppLayout() {
             ? "Clientes"
             : import.meta.env.VITE_BUSINESS_NAME || "Inicio"
         }
-        titleClassName={isClientesActive ? "font-normal" : "text-primary"}
+        titleClassName={isClientesActive ? "font-bold text-foreground" : "text-primary"}
       />
       <div className="px-4 pb-2">
         <SearchBar

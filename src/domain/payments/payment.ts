@@ -23,7 +23,7 @@ export type PaymentDialogType = (typeof PAYMENT_DIALOG_TYPES)[number];
 // one-time deposit captured at rental creation, never the return.
 const PAYMENT_TYPE_LABELS: Record<"rent" | "deposit" | "adjustment", string> =
   {
-    rent: "Mensualidad",
+    rent: "Pago",
     deposit: "Depósito inicial",
     adjustment: "Ajuste",
   };

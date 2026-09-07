@@ -225,7 +225,7 @@ describe("buildStructuredTicket (high polish formatted receipt)", () => {
 
     expect(text).toContain("COMPROBANTE DE PAGO");
     expect(text).toContain("Folio: R-000001");
-    expect(text).toContain("Mensualidad:");
+    expect(text).toContain("Pago:");
     expect(text).toContain("TOTAL:");
     expect(text).toContain("$2,300.00");
     expect(text).toContain("¡Gracias por su pago!");

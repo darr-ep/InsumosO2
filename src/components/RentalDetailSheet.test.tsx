@@ -97,7 +97,7 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
 
     expect(await screen.findByText("Renta R-000001")).toBeInTheDocument();
     expect(screen.getByText("Juan Pérez")).toBeInTheDocument();
-    expect(screen.getByText("5512345678")).toBeInTheDocument();
+    expect(screen.getByText("551 234 5678")).toBeInTheDocument();
     expect(screen.getByText("Concentrador")).toBeInTheDocument();
     expect(screen.getByText("x2")).toBeInTheDocument();
     expect(screen.getByText("$2,800.00")).toBeInTheDocument(); // renta
@@ -134,7 +134,7 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
       await screen.findByText("Historial de pagos")
     ).closest("section")!;
 
-    expect(within(historySection).getByText("Mensualidad")).toBeInTheDocument();
+    expect(within(historySection).getByText("Pago")).toBeInTheDocument();
     expect(
       within(historySection).getByText("Depósito inicial"),
     ).toBeInTheDocument();
@@ -174,10 +174,10 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
       await screen.findByText("Historial de pagos")
     ).closest("section")!;
     const labels = within(historySection)
-      .getAllByText(/Depósito inicial|Mensualidad/)
+      .getAllByText(/Depósito inicial|Pago/)
       .map((el) => el.textContent);
 
-    expect(labels).toEqual(["Depósito inicial", "Mensualidad"]);
+    expect(labels).toEqual(["Depósito inicial", "Pago"]);
   });
 
   it("renders payment-history rows with colored circular icon badges (blue-soft for deposit, green-soft for mensualidad/ajuste) and no left-border rule (design-fidelity bugfix batch, Fix 5)", async () => {
@@ -217,11 +217,11 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
       .getByText("Depósito inicial")
       .closest("li")!;
     const rentRow = within(historySection)
-      .getByText("Mensualidad")
+      .getByText("Pago")
       .closest("li")!;
 
-    expect(depositRow.querySelector(".bg-primary-soft")).not.toBeNull();
-    expect(rentRow.querySelector(".bg-success-soft")).not.toBeNull();
+    expect(depositRow.querySelector(".bg-blue-50")).not.toBeNull();
+    expect(rentRow.querySelector(".bg-emerald-50")).not.toBeNull();
   });
 
   it("keeps 'Registró: {name}' visible under Concepto/Fecha after the Fix 5 restyle (owner-approved app-only feature, NOT removed)", async () => {
@@ -277,7 +277,7 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
     ).toBeInTheDocument();
   });
 
-  it("lets reprinting a Mensualidad (rent) payment's own receipt from its history row (post-launch: every row is reprintable, not just Depósito inicial)", async () => {
+  it("lets reprinting a Pago (rent) payment's own receipt from its history row (post-launch: every row is reprintable, not just Depósito inicial)", async () => {
     getRental.mockResolvedValue(activeRental);
     listItemsForRental.mockResolvedValue([
       { id: "i1", item_type: "concentrator", quantity: 1 },
@@ -306,7 +306,7 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
 
     await user.click(
       await screen.findByRole("button", {
-        name: "Reimprimir comprobante de mensualidad",
+        name: "Reimprimir comprobante de pago",
       }),
     );
 
@@ -362,6 +362,41 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
     expect(onViewCustomer).toHaveBeenCalledWith("c1");
   });
 
+  // Post-audit bugfix (real-device finding): registering a payment leaves
+  // the rental active, unlike a return — "Aceptar" on the success summary
+  // must only dismiss that popup, never close the rental's own detail
+  // sheet out from under the visitor.
+  it("keeps the rental detail sheet open after registering a payment and dismissing its success summary", async () => {
+    getRental.mockResolvedValue(activeRental);
+    listItemsForRental.mockResolvedValue([]);
+    listPaymentsForRental.mockResolvedValue([]);
+    createPayment.mockResolvedValue({
+      id: "p1",
+      created: "2026-08-29T10:00:00.000Z",
+    });
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+
+    renderSheet({ onOpenChange });
+
+    await user.click(
+      await screen.findByRole("button", { name: "Registrar pago" }),
+    );
+    await user.type(screen.getByLabelText("Monto"), "3000");
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
+    await user.click(screen.getByRole("button", { name: "Sí, registrar" }));
+
+    await screen.findByRole("heading", { name: "Pago registrado" });
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+
+    await user.click(screen.getByRole("button", { name: "Aceptar" }));
+
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    expect(
+      screen.queryByRole("heading", { name: "Pago registrado" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("confirming a return shows a short confirmation first, not the full comprobante (Redesign Round 3, punto 5)", async () => {
     getRental.mockResolvedValue(activeRental);
     listItemsForRental.mockResolvedValue([]);
@@ -384,7 +419,7 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
 
     expect(
       await screen.findByRole("heading", {
-        name: "Devolución registrada ✓",
+        name: "Devolución registrada",
       }),
     ).toBeInTheDocument();
     expect(
@@ -403,8 +438,9 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
       returned_at: "2026-08-26T12:00:00.000Z",
     });
     const user = userEvent.setup();
+    const onOpenChange = vi.fn();
 
-    renderSheet();
+    renderSheet({ onOpenChange });
 
     await user.click(
       await screen.findByRole("button", { name: "Devolver" }),
@@ -413,13 +449,13 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
       screen.getByRole("button", { name: "Confirmar devolución" }),
     );
     await user.click(screen.getByRole("button", { name: "Sí, devolver" }));
-    await screen.findByRole("heading", { name: "Devolución registrada ✓" });
+    await screen.findByRole("heading", { name: "Devolución registrada" });
 
     await user.click(
-      screen.getByRole("button", { name: "Volver al inicio" }),
+      screen.getByRole("button", { name: "Aceptar" }),
     );
 
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/dashboard"));
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
   });
 
   it("shows an error when the rental fails to load", async () => {
@@ -532,7 +568,7 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
     const rows = within(historySection).getAllByRole("listitem");
 
     rows.forEach((row) => {
-      expect(row).toHaveClass("bg-card", "border", "rounded-lg");
+      expect(row).toHaveClass("bg-card", "border", "rounded-xl");
     });
   });
 
@@ -577,7 +613,7 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
       screen.getByRole("button", { name: "Confirmar devolución" }),
     );
     await user.click(screen.getByRole("button", { name: "Sí, devolver" }));
-    await screen.findByRole("heading", { name: "Devolución registrada ✓" });
+    await screen.findByRole("heading", { name: "Devolución registrada" });
 
     expect(
       await screen.findByText(

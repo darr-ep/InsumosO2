@@ -41,7 +41,7 @@ export function SearchBar({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className={cn(
-          "border-0 bg-muted/70 shadow-none rounded-full pl-10 focus-visible:ring-1 focus-visible:ring-ring/30",
+          "border border-input bg-card shadow-xs rounded-full pl-10 focus-visible:ring-1 focus-visible:ring-ring/30",
           value ? "pr-10" : "pr-4",
         )}
       />

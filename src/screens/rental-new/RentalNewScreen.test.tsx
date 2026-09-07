@@ -292,9 +292,7 @@ describe("RentalNewScreen (§7.1, §16.7, CU4, design-fidelity D1 wizard)", () =
       // 3's always-mounted, currently-`hidden` review panel also renders
       // "Juan Pérez" — `getByRole` excludes hidden content, `getByText`
       // does not.
-      expect(
-        screen.getByRole("button", { name: "Ver ficha" }),
-      ).toBeInTheDocument();
+      expect(continueButton()).not.toBeDisabled();
 
       await goToStep2(user); // 1 → 2 again
 
@@ -325,7 +323,7 @@ describe("RentalNewScreen (§7.1, §16.7, CU4, design-fidelity D1 wizard)", () =
       // Still on the create-customer form (not back to the search field),
       // with the typed values intact.
       expect(screen.getByLabelText("Nombre")).toHaveValue("Juan Pérez");
-      expect(screen.getByLabelText("Teléfono")).toHaveValue("5512345678");
+      expect(screen.getByLabelText("Teléfono")).toHaveValue("551 234 5678");
     });
   });
 
@@ -334,7 +332,7 @@ describe("RentalNewScreen (§7.1, §16.7, CU4, design-fidelity D1 wizard)", () =
     const user = userEvent.setup();
     renderScreen();
 
-    expect(screen.getByText("Paso 1 de 3 · Cliente")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Cliente" })).toBeInTheDocument();
 
     await user.type(
       screen.getByLabelText("Buscar cliente por nombre o teléfono"),
@@ -345,7 +343,10 @@ describe("RentalNewScreen (§7.1, §16.7, CU4, design-fidelity D1 wizard)", () =
     );
 
     expect(
-      await screen.findByText("Paso 1 de 3 · Cliente · Nuevo"),
+      await screen.findByRole("heading", { name: "Nuevo cliente" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Cliente · Nuevo/),
     ).toBeInTheDocument();
   });
 
@@ -517,22 +518,6 @@ describe("RentalNewScreen (§7.1, §16.7, CU4, design-fidelity D1 wizard)", () =
     ).not.toBeInTheDocument();
   });
 
-  it("opens Ficha de cliente from the customer picker once a customer is selected (§16.6, task 3.5)", async () => {
-    searchCustomers.mockResolvedValue([juan]);
-    getCustomer.mockResolvedValue(juan);
-    listRentalsForCustomer.mockResolvedValue([]);
-    const user = userEvent.setup();
-    renderScreen();
-
-    await selectExistingCustomer(user);
-
-    await user.click(screen.getByRole("button", { name: "Ver ficha" }));
-
-    expect(
-      await screen.findByRole("heading", { name: "Juan Pérez" }),
-    ).toBeInTheDocument();
-  });
-
   it("keeps the form filled and shows an error when the save fails (§21)", async () => {
     searchCustomers.mockResolvedValue([juan]);
     createRental.mockRejectedValue(new Error("network down"));
@@ -560,9 +545,7 @@ describe("RentalNewScreen (§7.1, §16.7, CU4, design-fidelity D1 wizard)", () =
     // panel also renders "Juan Pérez".
     await user.click(backButton()); // 3 → 2
     await user.click(backButton()); // 2 → 1
-    expect(
-      screen.getByRole("button", { name: "Ver ficha" }),
-    ).toBeInTheDocument();
+    expect(continueButton()).not.toBeDisabled();
   });
 
   it("gap-fill (deposit payment race): shows an honest message with the real folio — never the generic 'no se pudo guardar' — when createRental rejects with RentalPartiallyCreatedError (the rental itself DID save)", async () => {
@@ -650,7 +633,7 @@ describe("RentalNewScreen (§7.1, §16.7, CU4, design-fidelity D1 wizard)", () =
     expect(consumeSessionMessage()).toBe(STALE_SESSION_MESSAGE);
   });
 
-  it("shows a Guardando… loading label on the confirm button while submitting, reverting after success (§16.13)", async () => {
+  it("shows a 'Creando renta...' loading popup while submitting, closing into the created-rental summary after success (§16.13)", async () => {
     searchCustomers.mockResolvedValue([juan]);
     let resolveCreateRental: (value: {
       rental: { id: string; folio: string; created: string };
@@ -674,7 +657,20 @@ describe("RentalNewScreen (§7.1, §16.7, CU4, design-fidelity D1 wizard)", () =
 
     await user.click(confirmButton());
 
-    expect(screen.getByRole("button", { name: "Guardando…" })).toBeDisabled();
+    // The loading popup is a fully-blocking modal — Radix marks the rest of
+    // the tree `aria-hidden` while it's open, so "Confirmar renta" is no
+    // longer reachable via the accessible-tree query `getByRole` uses
+    // (`{ hidden: true }` bypasses that filter just to confirm it's still
+    // disabled underneath).
+    expect(
+      screen.queryByRole("button", { name: "Confirmar renta" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Confirmar renta", hidden: true }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("heading", { name: "Creando renta..." }),
+    ).toBeInTheDocument();
 
     resolveCreateRental({
       rental: {
@@ -689,9 +685,12 @@ describe("RentalNewScreen (§7.1, §16.7, CU4, design-fidelity D1 wizard)", () =
     expect(
       await screen.findByRole("heading", { name: "Renta creada" }),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Creando renta..." }),
+    ).not.toBeInTheDocument();
   });
 
-  it("disables 'Atrás' while a submission is in flight, so clicking it cannot navigate away and race handleConfirm's async continuation (design-fidelity D1a correction, RESILIENCE-001/RELIABILITY-001)", async () => {
+  it("makes 'Atrás' unreachable (inert behind the loading popup) while a submission is in flight, so it cannot navigate away and race handleConfirm's async continuation (design-fidelity D1a correction, RESILIENCE-001/RELIABILITY-001)", async () => {
     searchCustomers.mockResolvedValue([juan]);
     let resolveCreateRental: (value: {
       rental: { id: string; folio: string; created: string };
@@ -715,17 +714,20 @@ describe("RentalNewScreen (§7.1, §16.7, CU4, design-fidelity D1 wizard)", () =
 
     await user.click(confirmButton());
 
-    const atrasButton = backButton();
-    expect(atrasButton).toBeDisabled();
-
-    // A click on a genuinely disabled button never fires its click handler
-    // (real DOM/jsdom behavior, not just a `disabled` attribute check) — if
-    // `goBack` fired here, step would flip to 2 and the "Guardando…"/
-    // "Confirmar renta" button (step-3-only) would disappear.
-    await user.click(atrasButton);
+    // The "Carga · Creando renta" popup is a fully-blocking modal (no
+    // Escape, no outside-click) — its own `LoadingDialog.test.tsx` covers
+    // that in isolation. Here, Radix marks the rest of the tree
+    // `aria-hidden` while it's open, so a real user (and `getByRole`,
+    // which respects that) cannot even reach "Atrás" anymore — a stronger
+    // guarantee than the plain `disabled` attribute this test used to
+    // check. `{ hidden: true }` bypasses that filter just to confirm the
+    // button is still there, still disabled, underneath.
     expect(
-      screen.getByRole("button", { name: "Guardando…" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "Atrás" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Atrás", hidden: true }),
+    ).toBeDisabled();
 
     resolveCreateRental({
       rental: {
@@ -920,9 +922,7 @@ describe("RentalNewScreen (§7.1, §16.7, CU4, design-fidelity D1 wizard)", () =
       );
       expect(router.state.location.pathname).toBe("/nueva-renta");
       // Data untouched — the selected customer is still visible.
-      expect(
-        screen.getByRole("button", { name: "Ver ficha" }),
-      ).toBeInTheDocument();
+      expect(screen.getAllByText("Juan Pérez").length).toBeGreaterThan(0);
     });
 
     it("completes the navigation away from /nueva-renta when 'Sí, salir' is clicked", async () => {

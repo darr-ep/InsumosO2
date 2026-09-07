@@ -30,6 +30,22 @@ describe("CustomerEditForm (Redesign — UX/UI pass, Ficha de cliente edit)", ()
     });
   });
 
+  // design-fidelity post-audit bugfix batch (pencil ground truth): name and
+  // phone inputs must render on a white background, matching every other
+  // input in the redesign — neither had one before this batch.
+  it("renders the name and phone inputs with a white background", () => {
+    render(
+      <CustomerEditForm
+        initialValues={{ name: "Juan Pérez", phone: "5512345678" }}
+        onSubmit={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+
+    expect(screen.getByLabelText("Nombre")).toHaveClass("bg-white");
+    expect(screen.getByLabelText("Teléfono")).toHaveClass("bg-white");
+  });
+
   it("rejects an empty name and never calls onSubmit (customerFormSchema)", async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
@@ -107,7 +123,7 @@ describe("CustomerEditForm (Redesign — UX/UI pass, Ficha de cliente edit)", ()
       />,
     );
 
-    await user.type(screen.getByLabelText("Teléfono"), "9");
+    await user.type(screen.getByLabelText("Nombre"), " Modificado");
     await user.click(screen.getByRole("button", { name: "Cancelar" }));
     await user.click(screen.getByRole("button", { name: "Seguir editando" }));
 
@@ -115,7 +131,7 @@ describe("CustomerEditForm (Redesign — UX/UI pass, Ficha de cliente edit)", ()
       screen.queryByRole("heading", { name: "¿Descartar los cambios?" }),
     ).not.toBeInTheDocument();
     expect(onCancel).not.toHaveBeenCalled();
-    expect(screen.getByLabelText("Teléfono")).toHaveValue("55123456789");
+    expect(screen.getByLabelText("Nombre")).toHaveValue("Juan Pérez Modificado");
   });
 
   it("discards the changes and calls onCancel when 'Sí, descartar' is confirmed", async () => {

@@ -110,13 +110,13 @@ describe("AppLayout", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("shows only the (non-bold) Clientes title on /clientes (no Inicio title present)", async () => {
+  it("shows only the Clientes title on /clientes (no Inicio title present)", async () => {
     renderLayout("/clientes");
 
     const clientesHeading = await screen.findByRole("heading", {
       name: "Clientes",
     });
-    expect(clientesHeading.className).toContain("font-normal");
+    expect(clientesHeading.className).toContain("font-bold");
     expect(
       screen.queryByRole("heading", { name: "Inicio" }),
     ).not.toBeInTheDocument();

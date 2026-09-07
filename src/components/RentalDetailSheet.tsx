@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router";
-import { Landmark, PiggyBank, Printer, Wrench } from "lucide-react";
+import { History, Landmark, PiggyBank, Printer, Receipt, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CustomerCard } from "@/components/CustomerCard";
 import {
@@ -14,7 +13,9 @@ import { PaymentDialog } from "@/components/PaymentDialog";
 import { ReturnDialog } from "@/components/ReturnDialog";
 import { ReceiptDialog } from "@/components/ReceiptDialog";
 import { ReturnCreatedSummary } from "@/components/ReturnCreatedSummary";
+import { PaymentCreatedSummary } from "@/components/PaymentCreatedSummary";
 import { RentalStatusBadge } from "@/components/RentalStatusBadge";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   getRental,
   listItemsForRental,
@@ -37,6 +38,7 @@ import {
   type ReturnReceiptData,
 } from "@/domain/rentals/receipt";
 import { formatCurrencyMXN } from "@/lib/currency";
+import { formatDateDisplay, formatDateTimeDisplay } from "@/lib/formatDate";
 import { cn } from "@/lib/utils";
 
 // Redesign — UX/UI pass: one distinct icon per `payment_type`, so the
@@ -47,39 +49,6 @@ const PAYMENT_TYPE_ICONS: Record<PaymentType, typeof PiggyBank> = {
   rent: Landmark,
   adjustment: Wrench,
 };
-
-/**
- * SDD.md §16.10 (Detalle de renta — prioridad de información) + §16.5/§16.6
- * (vista contextual, `Sheet`, no ruta propia) + §18. Task 3.3.
- *
- * Always reloads the rental fresh by id (task 3.1's `getRental`) rather
- * than trusting whatever stale card/row opened it — a rental returned in
- * this same session must show its new status without a full page reload.
- *
- * Redesign Round 3, punto 2: reorganizado en 4 bloques (Encabezado /
- * Resumen / Próximo-último pago / Historial de pagos) en vez de un `<dl>`
- * plano. El historial de pagos ahora renderiza CADA pago individual —
- * monto, tipo, fecha/hora, quién lo registró y su nota — no solo un total.
- * La "sugerencia de mensualidad" reusa `suggestedPaymentAmount` (la misma
- * fórmula que ya usa `PaymentDialog`/`PaymentSuggestionField`) y se marca
- * explícitamente como sugerencia, nunca como un monto obligatorio.
- *
- * Redesign Round 3, punto 5: devolver ya no abre el comprobante completo de
- * inmediato — muestra `ReturnCreatedSummary` (confirmación breve) primero,
- * con sus propias acciones de imprimir/compartir inline (post-launch
- * polish — ya no hay un "Ver comprobante" separado, ver ese componente).
- *
- * design-fidelity post-audit bugfix batch (Fix 5, pencil frame `Modal
- * Renta`, rows `g6Fxm`/`BqSjN`/`c9xLbb`): payment-history rows restyled to
- * a horizontal layout — colored circular icon badge (deposit: `--primary-
- * soft` fill; mensualidad/ajuste: `--success-soft` fill; icon stays
- * `text-primary` in both, per the exact live-design color extraction) →
- * Concepto+Fecha stacked → Monto → trailing reprint icon. Dropped the old
- * `border-l-2` left-border rule and plain gray icon. `Registró: {name}` is
- * an app-only feature with NO pencil-design equivalent, kept per explicit
- * owner decision (design obs #2224, "Explicitly OUT of scope") — it moves
- * to a smaller secondary line under Concepto/Fecha, unchanged in content.
- */
 
 export interface RentalDetailSheetProps {
   open: boolean;
@@ -96,8 +65,6 @@ export function RentalDetailSheet({
   onViewCustomer,
   onRentalChanged,
 }: RentalDetailSheetProps) {
-  const navigate = useNavigate();
-
   const [rental, setRental] = useState<RentalWithCustomer | null>(null);
   const [items, setItems] = useState<RentalItemRecord[]>([]);
   const [payments, setPayments] = useState<PaymentWithUser[]>([]);
@@ -110,28 +77,16 @@ export function RentalDetailSheet({
     null,
   );
 
-  // Redesign — UX/UI pass: per-row reprint on the "Depósito inicial" history
-  // entry — reuses the exact receipt this rental was created with
-  // (`buildRentalReceipt`), reconstructed from data already in this sheet's
-  // own state (no new fetch).
+  const [paymentSummaryOpen, setPaymentSummaryOpen] = useState(false);
+  const [paymentCreatedReceipt, setPaymentCreatedReceipt] =
+    useState<PaymentReceiptData | null>(null);
+
   const [creationReceiptOpen, setCreationReceiptOpen] = useState(false);
 
-  // Post-launch polish: every OTHER payment-history row ("Mensualidad"/
-  // "Ajuste") is reprintable too now, not just "Depósito inicial" — via the
-  // new `"payment"` receipt kind (`domain/rentals/receipt.ts`). One shared
-  // dialog + one selected-payment slot, since only one row's reprint can be
-  // open at a time.
   const [paymentReceiptOpen, setPaymentReceiptOpen] = useState(false);
   const [selectedPaymentReceipt, setSelectedPaymentReceipt] =
     useState<PaymentReceiptData | null>(null);
 
-  // Pure fetch, no setState inside — kept separate from the effect/reload
-  // callers below on purpose. `react-hooks/set-state-in-effect` flags any
-  // component-scope function that (even indirectly, via a later .then())
-  // ends up calling setState when it's invoked directly from an effect
-  // body; keeping this fetch state-free and letting each caller assign the
-  // results itself avoids that false positive while still deduplicating
-  // the three parallel requests.
   function fetchRentalDetail(id: string) {
     return Promise.all([
       getRental(id),
@@ -142,9 +97,15 @@ export function RentalDetailSheet({
 
   useEffect(() => {
     if (!open || !rentalId) {
+      setRental(null);
+      setItems([]);
+      setPayments([]);
       return;
     }
 
+    setRental(null);
+    setItems([]);
+    setPayments([]);
     let cancelled = false;
 
     fetchRentalDetail(rentalId)
@@ -198,19 +159,82 @@ export function RentalDetailSheet({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent>
+        <SheetContent className="bg-muted">
           {error && <p className="text-destructive text-sm">{error}</p>}
 
           {!rental && !error && (
-            <p className="text-muted-foreground text-sm">Cargando…</p>
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between py-1">
+                <Skeleton className="h-6 w-36" />
+                <Skeleton className="h-6 w-16 rounded-full" />
+              </div>
+              <div className="flex items-center gap-3 rounded-2xl border bg-card p-3 shadow-sm">
+                <Skeleton className="size-10 rounded-full shrink-0" />
+                <div className="flex-1 flex flex-col gap-1.5">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="size-4" />
+                  <Skeleton className="h-4 w-20" />
+                </div>
+                <div className="flex flex-col gap-3 rounded-lg border bg-card p-3 shadow-sm">
+                  <div className="flex justify-between">
+                    <Skeleton className="h-3.5 w-24" />
+                    <Skeleton className="h-3.5 w-8" />
+                  </div>
+                  <div className="flex justify-between">
+                    <Skeleton className="h-3.5 w-28" />
+                    <Skeleton className="h-3.5 w-20" />
+                  </div>
+                  <div className="flex justify-between">
+                    <Skeleton className="h-3.5 w-16" />
+                    <Skeleton className="h-3.5 w-16" />
+                  </div>
+                  <div className="flex justify-between">
+                    <Skeleton className="h-3.5 w-20" />
+                    <Skeleton className="h-3.5 w-16" />
+                  </div>
+                  <div className="flex justify-between border-t pt-2 mt-1">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-4 w-20" />
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="size-4" />
+                    <Skeleton className="h-4 w-32" />
+                  </div>
+                  <Skeleton className="h-4 w-6 rounded-full" />
+                </div>
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center gap-3 rounded-xl border bg-card p-3 shadow-sm">
+                    <Skeleton className="size-10 rounded-full shrink-0" />
+                    <div className="flex-1 flex flex-col gap-1.5">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-3 w-32" />
+                    </div>
+                    <Skeleton className="h-4 w-16" />
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <Skeleton className="h-11 flex-1 rounded-xl" />
+                <Skeleton className="h-11 flex-1 rounded-xl" />
+              </div>
+            </div>
           )}
 
           {rental && (
             <>
               {/* A. Encabezado */}
-              <SheetHeader className="flex flex-row items-center justify-between gap-2">
+              <SheetHeader className="flex flex-row items-center justify-between gap-2 border-b-0">
                 <SheetTitle>Renta {rental.folio}</SheetTitle>
-                <RentalStatusBadge status={rental.status} />
+                <RentalStatusBadge status={rental.status} bordered />
               </SheetHeader>
 
               {onViewCustomer && rental.customer_id ? (
@@ -228,11 +252,12 @@ export function RentalDetailSheet({
               )}
 
               {/* B. Resumen */}
-              <section className="flex flex-col gap-2 border-t pt-4">
-                <h2 className="text-sm font-semibold text-muted-foreground">
+              <section className="flex flex-col gap-2">
+                <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+                  <Receipt aria-hidden="true" className="text-primary size-4" />
                   Resumen
                 </h2>
-                <dl className="flex flex-col gap-2 text-sm">
+                <dl className="bg-card flex flex-col gap-2 rounded-lg border p-3 text-sm">
                   {items.map((item) => (
                     <div className="flex justify-between" key={item.id}>
                       <dt className="text-muted-foreground">
@@ -244,7 +269,7 @@ export function RentalDetailSheet({
                   <div className="flex justify-between">
                     <dt className="text-muted-foreground">Fecha de inicio</dt>
                     <dd>
-                      {new Date(rental.created).toLocaleDateString("es-MX")}
+                      {formatDateDisplay(rental.created)}
                     </dd>
                   </div>
                   <div className="flex justify-between">
@@ -255,7 +280,7 @@ export function RentalDetailSheet({
                     <dt className="text-muted-foreground">Depósito</dt>
                     <dd>{formatCurrencyMXN(rental.deposit_amount)}</dd>
                   </div>
-                  <div className="flex justify-between font-semibold">
+                  <div className="flex justify-between font-semibold border-t pt-2 mt-1">
                     <dt>Total pagado</dt>
                     <dd>{formatCurrencyMXN(total)}</dd>
                   </div>
@@ -263,45 +288,61 @@ export function RentalDetailSheet({
               </section>
 
               {/* C. Historial de pagos */}
-              <section className="flex flex-col gap-2 border-t pt-4">
-                <h2 className="text-sm font-semibold text-muted-foreground">
-                  Historial de pagos
-                </h2>
+              <section className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+                    <History aria-hidden="true" className="text-primary size-4" />
+                    Historial de pagos
+                  </h2>
+                  {payments.length > 0 && (
+                    <span className="bg-primary-soft text-primary rounded-full px-2 py-0.5 text-xs font-medium">
+                      {payments.length}
+                    </span>
+                  )}
+                </div>
                 {payments.length === 0 ? (
-                  <p className="text-muted-foreground text-sm">
-                    Sin pagos registrados.
-                  </p>
+                  <div className="bg-card flex flex-col items-center justify-center gap-1.5 rounded-2xl border p-6 text-center shadow-xs">
+                    <PiggyBank className="size-8 text-muted-foreground/40" />
+                    <p className="font-semibold text-foreground text-sm">Sin pagos registrados</p>
+                    <p className="text-muted-foreground text-xs">Los pagos y ajustes registrados aparecerán aquí.</p>
+                  </div>
                 ) : (
                   <ul className="flex flex-col gap-3">
-                    {/* `payments` comes from `listPaymentsForRental` sorted
-                        newest-first (see that function's own docblock —
-                        `lastRentPayment` above depends on that order and is
-                        NOT touched here). Reversed only for this display:
-                        the business owner wants the oldest event (Depósito
-                        inicial) first, most recent last. */}
                     {[...payments].reverse().map((payment) => {
                       const Icon = PAYMENT_TYPE_ICONS[payment.payment_type];
                       const isDeposit = payment.payment_type === "deposit";
+                      const isAdjustment = payment.payment_type === "adjustment";
+                      const badgeClass = isDeposit
+                        ? "bg-blue-50 text-blue-600"
+                        : isAdjustment
+                          ? "bg-amber-50 text-amber-600"
+                          : "bg-emerald-50 text-emerald-600";
+                      const iconColorClass = isDeposit
+                        ? "text-blue-600"
+                        : isAdjustment
+                          ? "text-amber-600"
+                          : "text-emerald-600";
+
                       return (
                         <li
                           key={payment.id}
-                          className="flex items-center gap-3"
+                          className="bg-card flex items-center gap-3 rounded-xl border p-3 shadow-xs"
                         >
                           <span
                             aria-hidden="true"
                             className={cn(
                               "flex size-10 shrink-0 items-center justify-center rounded-full",
-                              isDeposit ? "bg-primary-soft" : "bg-success-soft",
+                              badgeClass,
                             )}
                           >
-                            <Icon className="text-primary size-5" />
+                            <Icon className={cn("size-5", iconColorClass)} />
                           </span>
                           <div className="min-w-0 flex-1">
                             <p className="font-medium">
                               {paymentTypeLabel(payment.payment_type)}
                             </p>
                             <p className="text-muted-foreground text-xs">
-                              {formatPaymentDateTime(payment.created)}
+                              {formatDateTimeDisplay(payment.created)}
                             </p>
                             <p className="text-muted-foreground text-xs">
                               Registró:{" "}
@@ -313,7 +354,7 @@ export function RentalDetailSheet({
                               </p>
                             )}
                           </div>
-                          <p className="shrink-0 font-medium">
+                          <p className="shrink-0 font-bold text-foreground">
                             {formatCurrencyMXN(payment.amount)}
                           </p>
                           <button
@@ -356,21 +397,27 @@ export function RentalDetailSheet({
           )}
 
           {rental && rental.status === "ACTIVE" && (
-            <SheetFooter>
-              <Button
-                type="button"
-                size="lg"
-                onClick={() => setPaymentDialogOpen(true)}
-              >
-                Registrar pago
-              </Button>
+            <SheetFooter className="sticky -bottom-4 -mx-4 -mb-4 z-20 mt-auto flex-row gap-2 border-t bg-background px-4 pt-3 pb-8 shadow-none">
               <Button
                 type="button"
                 size="lg"
                 variant="outline"
-                onClick={() => setReturnDialogOpen(true)}
+                onClick={() => {
+                  setReturnDialogOpen(true);
+                }}
+                className="flex-1 bg-white hover:bg-slate-50 border border-slate-200 shadow-xs"
               >
                 Devolver
+              </Button>
+              <Button
+                type="button"
+                size="lg"
+                onClick={() => {
+                  setPaymentDialogOpen(true);
+                }}
+                className="flex-1"
+              >
+                Registrar pago
               </Button>
             </SheetFooter>
           )}
@@ -383,11 +430,22 @@ export function RentalDetailSheet({
           onOpenChange={setPaymentDialogOpen}
           rentalId={rental.id}
           folio={rental.folio}
+          businessName={import.meta.env.VITE_BUSINESS_NAME}
+          businessPhone={import.meta.env.VITE_BUSINESS_PHONE}
+          customerName={rental.expand?.customer_id?.name ?? ""}
+          customerPhone={rental.expand?.customer_id?.phone ?? ""}
           suggestedAmount={suggestedAmount}
           initialRentAmount={rental.initial_rent_amount}
           hasPreviousRentPayment={!!lastRentPayment}
-          onRegistered={() => {
+          onRegistered={(_payment, receipt) => {
+            // Unlike `onReturned` below (a return closes the rental out
+            // entirely), a payment leaves the rental active — the detail
+            // sheet stays open underneath the success summary so "Aceptar"
+            // just reveals the same, now-updated rental instead of
+            // redirecting the visitor away from what they were looking at.
             setPaymentDialogOpen(false);
+            setPaymentCreatedReceipt(receipt);
+            setPaymentSummaryOpen(true);
             reload();
             onRentalChanged?.();
           }}
@@ -417,8 +475,10 @@ export function RentalDetailSheet({
             .reduce((sum, payment) => sum + payment.amount, 0)}
           hasPreviousRentPayment={!!lastRentPayment}
           onReturned={(receipt) => {
+            setReturnDialogOpen(false);
             setReturnReceipt(receipt);
             setReturnSummaryOpen(true);
+            onOpenChange(false);
             reload();
             onRentalChanged?.();
           }}
@@ -427,13 +487,24 @@ export function RentalDetailSheet({
 
       <ReturnCreatedSummary
         open={returnSummaryOpen}
-        onOpenChange={setReturnSummaryOpen}
+        onOpenChange={(next) => {
+          setReturnSummaryOpen(next);
+          if (!next) {
+            onOpenChange(false);
+          }
+        }}
         receipt={returnReceipt}
         onGoHome={() => {
           setReturnSummaryOpen(false);
           onOpenChange(false);
-          navigate("/dashboard");
         }}
+      />
+
+      <PaymentCreatedSummary
+        open={paymentSummaryOpen}
+        onOpenChange={setPaymentSummaryOpen}
+        receipt={paymentCreatedReceipt}
+        onContinue={() => setPaymentSummaryOpen(false)}
       />
 
       {rental && (
@@ -466,21 +537,4 @@ export function RentalDetailSheet({
       />
     </>
   );
-}
-
-// §16.10-adjacent: plain-text date+time formatting for the payment history
-// timeline — no library, matches the rest of this file's `toLocaleDateString`
-// usage but adds a time component ("29 ago 2026 · 2:41 PM").
-function formatPaymentDateTime(iso: string): string {
-  const date = new Date(iso);
-  const datePart = date.toLocaleDateString("es-MX", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-  const timePart = date.toLocaleTimeString("es-MX", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-  return `${datePart} · ${timePart}`;
 }

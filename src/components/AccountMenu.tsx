@@ -6,6 +6,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -42,7 +43,12 @@ export function AccountMenu() {
   const navigate = useNavigate();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  function handleLogout() {
+  function openConfirm() {
+    setConfirmOpen(true);
+  }
+
+  function handleConfirmLogout() {
+    setConfirmOpen(false);
     logout();
     navigate("/login");
   }
@@ -66,7 +72,8 @@ export function AccountMenu() {
             <UserPen aria-hidden="true" />
             Perfil
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setConfirmOpen(true)}>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={openConfirm}>
             <LogOut aria-hidden="true" />
             Cerrar sesión
           </DropdownMenuItem>
@@ -78,11 +85,8 @@ export function AccountMenu() {
         onOpenChange={setConfirmOpen}
         title="¿Cerrar sesión?"
         description="Tendrás que volver a escribir tu contraseña para entrar de nuevo."
-        confirmLabel="Sí, cerrar sesión"
-        onConfirm={() => {
-          handleLogout();
-          setConfirmOpen(false);
-        }}
+        confirmLabel="Sí, salir"
+        onConfirm={handleConfirmLogout}
       />
     </>
   );

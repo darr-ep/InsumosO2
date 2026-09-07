@@ -2,6 +2,7 @@ import { daysSince } from "@/domain/rentals/dashboard";
 import { rentalItemTypeLabel } from "@/domain/rentals/rental";
 import type { RentalItemType } from "@/domain/rentals/rental";
 import { paymentTypeLabel } from "@/domain/payments/payment";
+import { formatDateDisplay } from "@/lib/formatDate";
 
 /**
  * SDD.md §22 (generación de comprobantes — contenido de renta y de
@@ -160,7 +161,7 @@ export function formatReceiptLines(receipt: ReceiptData): string[] {
       `Folio: ${receipt.folio}`,
       `Cliente: ${receipt.customerName} (${receipt.customerPhone})`,
       `${paymentTypeLabel(receipt.paymentType)}: ${currencyFormatter.format(receipt.amount)}`,
-      `Fecha: ${receipt.date.toLocaleDateString("es-MX")}`,
+      `Fecha: ${formatDateDisplay(receipt.date)}`,
       ...(receipt.note ? [`Nota: ${receipt.note}`] : []),
     ];
   }

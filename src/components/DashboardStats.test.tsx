@@ -105,7 +105,7 @@ describe("DashboardStats (compact 3-tile stats row)", () => {
     expect(value).not.toHaveClass("text-destructive");
   });
 
-  it("shows an availability value of 2 or more with the --success token", () => {
+  it("shows an availability value of 2 or more with neutral text-foreground", () => {
     renderStats({
       activeRentalsCount: 0,
       concentradoresDisponibles: 0,
@@ -117,9 +117,10 @@ describe("DashboardStats (compact 3-tile stats row)", () => {
     });
     const value = within(tanquesTile).getByText("4");
 
-    expect(value).toHaveClass("text-success");
+    expect(value).toHaveClass("text-foreground");
     expect(value).not.toHaveClass("text-destructive");
     expect(value).not.toHaveClass("text-warning");
+    expect(value).not.toHaveClass("text-success");
   });
 
   it("keeps 'Rentas activas' neutral-weighted regardless of value — never green, even when non-zero", () => {

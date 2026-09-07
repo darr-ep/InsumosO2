@@ -10,29 +10,7 @@ import { rentalItemTypeLabel } from "@/domain/rentals/rental";
 import type { ReceiptData } from "@/domain/rentals/receipt";
 import { paymentTypeLabel } from "@/domain/payments/payment";
 import { useReceiptActions } from "@/printing/useReceiptActions";
-
-/**
- * SDD.md §22 (generación de comprobantes — modal, no pantalla/ruta aparte,
- * de renta y de devolución) + §21 (compartir es opcional, nunca
- * bloqueante) + §18 (Nueva renta → confirmar → modal Comprobante; Devolver
- * → confirmar → modal Comprobante de devolución) + §16.6. One shared modal
- * for both flows (task 1.9, extended task 3.2) — `receipt.kind`
- * discriminates the content.
- *
- * §23.2/§23.3/§23.4/CU8 (task 5.4): Bluetooth printing is tried first when
- * available (`webBluetoothPrinter.isAvailable()` — resolves `false` on
- * unsupported browsers/devices such as iOS Safari, so the button simply
- * never appears there, per CU8's iPhone scenario). Any failure — no
- * printer available, connection failure, write failure — shows §21's
- * exact message plus a retry option; `Compartir` (`ShareFallbackPrinter`)
- * always stays available alongside it. Printing never touches
- * `onOpenChange` — the rental is already saved by the time this dialog
- * is open, regardless of print outcome (§23's "regla de oro").
- *
- * Redesign Round 3: print/share orchestration lives in `useReceiptActions`
- * now, shared with the short post-creation confirmation
- * (`RentalCreatedSummary`) so neither duplicates the Bluetooth-first flow.
- */
+import { formatDateDisplay } from "@/lib/formatDate";
 
 const currencyFormatter = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -79,7 +57,7 @@ export function ReceiptDialog({
               <img
                 src="/logo.png"
                 alt={receipt.businessName}
-                className="mx-auto size-12"
+                className="mx-auto h-10 w-auto max-w-[180px] object-contain"
               />
               <DialogTitle>
                 {receipt.kind === "return"
@@ -105,11 +83,11 @@ export function ReceiptDialog({
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Fecha de inicio</dt>
-                  <dd>{receipt.startedAt.toLocaleDateString("es-MX")}</dd>
+                  <dd>{formatDateDisplay(receipt.startedAt)}</dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Fecha de devolución</dt>
-                  <dd>{receipt.returnedAt.toLocaleDateString("es-MX")}</dd>
+                  <dd>{formatDateDisplay(receipt.returnedAt)}</dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Tiempo rentado</dt>
@@ -136,7 +114,7 @@ export function ReceiptDialog({
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Fecha</dt>
-                  <dd>{receipt.date.toLocaleDateString("es-MX")}</dd>
+                  <dd>{formatDateDisplay(receipt.date)}</dd>
                 </div>
                 <div className="flex justify-between font-semibold">
                   <dt>{paymentTypeLabel(receipt.paymentType)}</dt>
@@ -161,7 +139,7 @@ export function ReceiptDialog({
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Fecha</dt>
-                  <dd>{receipt.date.toLocaleDateString("es-MX")}</dd>
+                  <dd>{formatDateDisplay(receipt.date)}</dd>
                 </div>
                 {receipt.items.map((item) => (
                   <div className="flex justify-between" key={item.itemType}>

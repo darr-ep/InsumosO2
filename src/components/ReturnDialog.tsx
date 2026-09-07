@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { toast } from "sonner";
 import { Receipt, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CurrencyInput } from "@/components/ui/currency-input";
@@ -13,6 +12,7 @@ import {
 } from "@/components/ui/sheet";
 import { CustomerCard } from "@/components/CustomerCard";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { LoadingDialog } from "@/components/LoadingDialog";
 import { returnRental } from "@/data/rentals.repo";
 import { handleIfStaleSession } from "@/data/staleSession";
 import { daysSince } from "@/domain/rentals/dashboard";
@@ -24,6 +24,7 @@ import {
 import { rentalItemTypeLabel } from "@/domain/rentals/rental";
 import { returnFormSchema } from "@/domain/rentals/return";
 import { formatCurrencyMXN } from "@/lib/currency";
+import { formatDateDisplay } from "@/lib/formatDate";
 
 /**
  * SDD.md §7.3 (flujo Devolución) + §16.8 + §16.10 (acción "Devolver" sobre
@@ -194,12 +195,11 @@ export function ReturnDialog({
           depositReturned: parsed.data.deposit_returned,
         }),
       );
-      // §16.13/§17 (gap-fill finding 4): §16.13 explicitly lists
-      // devolución as a state needing its own explicit visual
-      // confirmation — this dialog closes into the Comprobante modal, but
-      // gave zero acknowledgment before it, same silent-success gap
-      // PaymentDialog had.
-      toast.success("Devolución registrada.");
+      // §16.13/§17 (gap-fill finding 4) originally added a toast here for
+      // an explicit visual confirmation — since superseded by
+      // `ReturnCreatedSummary` (design-fidelity), which now shows that same
+      // "Devolución registrada" confirmation as its own dialog right after
+      // this one closes. Keeping both showed the message twice.
       onOpenChange(false);
     } catch (error) {
       // §14 gap-fill: a rotated/expired session (still locally "valid" per
@@ -221,7 +221,7 @@ export function ReturnDialog({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent showCloseButton={false}>
+        <SheetContent showCloseButton={false} className="bg-muted">
           <SheetHeader className="flex-row items-center justify-between gap-2 border-b-0 pr-4">
             <SheetTitle>Devolver renta</SheetTitle>
             <span className="bg-primary-soft text-primary shrink-0 rounded-full px-2.5 py-1 text-xs font-medium">
@@ -239,7 +239,7 @@ export function ReturnDialog({
             <dl className="bg-card flex flex-col gap-2 rounded-lg border p-3 text-sm">
               <div className="flex justify-between gap-2">
                 <dt className="text-muted-foreground">Producto(s)</dt>
-                <dd className="text-right">
+                <dd className="text-right font-semibold text-foreground">
                   {items
                     .map(
                       (item) => `${item.quantity} x ${rentalItemTypeLabel(item.itemType)}`,
@@ -249,23 +249,23 @@ export function ReturnDialog({
               </div>
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Fecha de inicio</dt>
-                <dd>{startedAt.toLocaleDateString("es-MX")}</dd>
+                <dd className="font-semibold text-foreground">{formatDateDisplay(startedAt)}</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Tiempo transcurrido</dt>
-                <dd>{elapsedDays} días</dd>
+                <dd className="font-semibold text-foreground">{elapsedDays} días</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Depósito</dt>
-                <dd>{formatCurrencyMXN(depositAmount)}</dd>
+                <dd className="font-semibold text-foreground">{formatCurrencyMXN(depositAmount)}</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Renta inicial</dt>
-                <dd>{formatCurrencyMXN(initialRentAmount)}</dd>
+                <dd className="font-semibold text-foreground">{formatCurrencyMXN(initialRentAmount)}</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Total pagado en rentas</dt>
-                <dd>{formatCurrencyMXN(totalRentPaid)}</dd>
+                <dd className="font-semibold text-foreground">{formatCurrencyMXN(totalRentPaid)}</dd>
               </div>
             </dl>
           </section>
@@ -290,34 +290,20 @@ export function ReturnDialog({
               )}
               <CurrencyInput
                 id="return-amount-collected"
-                placeholder="$ 0"
+                placeholder={formatCurrencyMXN(hasPreviousRentPayment ? suggestedAmount : initialRentAmount)}
                 value={amountCollected}
                 onChange={setAmountCollected}
               />
             </div>
 
-            {/* §7.3 (business-owner finding, post-launch audit): a rental with
-                no deposit has nothing to give back — showing this field anyway
-                invites confusion (and a stray non-zero "devolución" for money
-                that was never collected). Renta/monto cobrado above always
-                stays, deposit is the only conditional part. */}
             {hasDeposit && (
               <div className="flex flex-col gap-1.5">
-                {/* Business-owner finding: `suggestedDepositReturn` always
-                    equals `depositAmount` (see its own docblock) — a
-                    "Sugerido: $X" line here would just repeat the read-only
-                    "Depósito" row shown a few lines above, verbatim, every
-                    single time. Removed. Post-launch UX pass: the placeholder
-                    no longer carries the suggested number either (now a
-                    static "$ 0", matching "Monto cobrado") — the read-only
-                    "Depósito" row above is the only remaining reference for
-                    this amount. */}
                 <Label htmlFor="return-deposit-returned">
                   Depósito a devolver
                 </Label>
                 <CurrencyInput
                   id="return-deposit-returned"
-                  placeholder="$ 0"
+                  placeholder={formatCurrencyMXN(depositAmount)}
                   value={depositReturned}
                   onChange={setDepositReturned}
                 />
@@ -336,7 +322,7 @@ export function ReturnDialog({
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
                 rows={3}
-                className="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 w-full min-w-0 rounded-md border bg-transparent px-3 py-2 text-base outline-none transition-[color,box-shadow] focus-visible:ring-[3px]"
+                className="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 w-full min-w-0 rounded-md border bg-card px-3 py-2 text-base outline-none transition-[color,box-shadow] focus-visible:ring-[3px]"
               />
             </div>
 
@@ -345,10 +331,10 @@ export function ReturnDialog({
             )}
           </section>
 
-          <SheetFooter>
+          <SheetFooter className="bg-background border-t px-4 pt-3 pb-6 mt-auto flex-col items-stretch">
             <div className="flex items-center justify-between text-sm font-semibold">
               <span>Total a entregar</span>
-              <span className="text-primary">
+              <span className="text-primary font-bold text-base">
                 {formatCurrencyMXN(totalToHandBack)}
               </span>
             </div>
@@ -360,7 +346,7 @@ export function ReturnDialog({
               onClick={() => setConfirmOpen(true)}
               className="w-full"
             >
-              {isSubmitting ? "Guardando…" : "Confirmar devolución"}
+              Confirmar devolución
             </Button>
           </SheetFooter>
         </SheetContent>
@@ -372,11 +358,26 @@ export function ReturnDialog({
         title="¿Devolver esta renta?"
         description={`La renta ${folio} se marcará como devuelta. Esta acción no se puede deshacer.`}
         confirmLabel="Sí, devolver"
-        isConfirming={isSubmitting}
-        onConfirm={async () => {
-          await handleConfirm();
+        onConfirm={() => {
+          // Pencil ground truth ("Carga · Procesando devolución"): the
+          // actual submit uses the separate, button-less LoadingDialog
+          // below, not this ConfirmDialog's own (button-based) loading
+          // state — so this popup closes immediately on confirm instead of
+          // staying open with disabled buttons for the mutation's duration.
           setConfirmOpen(false);
+          void handleConfirm();
         }}
+      />
+
+      <LoadingDialog
+        open={isSubmitting}
+        // Opens in the same commit that ConfirmDialog's "Sí, devolver"
+        // closes it (setConfirmOpen(false) + setIsSubmitting(true) are
+        // batched into one commit) — see LoadingDialog's own manageHistory
+        // doc for why this must opt out.
+        manageHistory={false}
+        title="Procesando devolución..."
+        description="Estamos devolviendo la renta y calculando el depósito."
       />
     </>
   );

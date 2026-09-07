@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +10,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { SegmentedToggle } from "@/components/ui/segmented-toggle";
+import { LoadingDialog } from "@/components/LoadingDialog";
+import { AnimatedSwitch } from "@/components/ui/animated-switch";
 import { PaymentSuggestionField } from "@/components/PaymentSuggestionField";
 import { createPayment } from "@/data/payments.repo";
 import { handleIfStaleSession } from "@/data/staleSession";
@@ -21,6 +21,7 @@ import {
   type PaymentDialogType,
   type PaymentFormValues,
 } from "@/domain/payments/payment";
+import { buildPaymentReceipt, type PaymentReceiptData } from "@/domain/rentals/receipt";
 import { formatCurrencyMXN } from "@/lib/currency";
 
 /**
@@ -48,10 +49,14 @@ export interface PaymentDialogProps {
   onOpenChange: (open: boolean) => void;
   rentalId: string;
   folio: string;
+  businessName: string;
+  businessPhone: string;
+  customerName: string;
+  customerPhone: string;
   suggestedAmount: number;
   initialRentAmount: number;
   hasPreviousRentPayment: boolean;
-  onRegistered?: (payment: PaymentRecord) => void;
+  onRegistered?: (payment: PaymentRecord, receipt: PaymentReceiptData) => void;
 }
 
 export function PaymentDialog({
@@ -59,6 +64,10 @@ export function PaymentDialog({
   onOpenChange,
   rentalId,
   folio,
+  businessName,
+  businessPhone,
+  customerName,
+  customerPhone,
   suggestedAmount,
   initialRentAmount,
   hasPreviousRentPayment,
@@ -133,12 +142,26 @@ export function PaymentDialog({
         note: pendingPayment.note ? pendingPayment.note : undefined,
       });
 
-      onRegistered?.(payment);
-      // §16.13/§17 (gap-fill finding 4): the sheet behind this dialog
-      // updates silently on success — a Toast gives explicit confirmation
-      // ("pago registrado", §17's own example) instead of leaving the user
-      // to notice the change on their own.
-      toast.success("Pago registrado.");
+      // design-fidelity ("Éxito · Pago registrado"/"Ajuste registrado"
+      // pencil frames): the receipt screen IS the confirmation now — no
+      // separate toast alongside it (superseding the earlier
+      // toast-only feedback from §16.13/§17's gap-fill finding 4).
+      // `PaymentCreatedSummary` is owned by the parent (mirrors
+      // `ReturnDialog`'s `onReturned`/`ReturnCreatedSummary` handoff).
+      onRegistered?.(
+        payment,
+        buildPaymentReceipt({
+          businessName,
+          businessPhone,
+          folio,
+          customerName,
+          customerPhone,
+          paymentType: pendingPayment.payment_type,
+          amount: pendingPayment.amount,
+          date: new Date(payment.created),
+          note: pendingPayment.note ? pendingPayment.note : undefined,
+        }),
+      );
       onOpenChange(false);
     } catch (error) {
       // §14 gap-fill: a rotated/expired session (still locally "valid" per
@@ -154,7 +177,6 @@ export function PaymentDialog({
       );
     } finally {
       setIsSubmitting(false);
-      setConfirmOpen(false);
     }
   }
 
@@ -162,8 +184,10 @@ export function PaymentDialog({
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Registrar pago</DialogTitle>
+          <DialogHeader className="border-b-0 pl-4 pr-12 text-left items-start justify-start">
+            <DialogTitle className="text-left text-lg font-semibold text-slate-900">
+              Registrar pago
+            </DialogTitle>
           </DialogHeader>
 
           {/* Pill-style mode toggle (post-launch polish): a deliberate, scoped
@@ -174,7 +198,7 @@ export function PaymentDialog({
               (design-fidelity Slice C, design obs #2224 §C1) so
               `CustomerDetailSheet`'s Activas/Historial toggle can reuse the
               exact same pattern instead of drifting into a second copy. */}
-          <SegmentedToggle
+          <AnimatedSwitch
             value={mode}
             onChange={setMode}
             ariaLabel="Tipo de movimiento"
@@ -240,7 +264,7 @@ export function PaymentDialog({
               onClick={handleSubmitClick}
               className="w-full"
             >
-              {isSubmitting ? "Guardando…" : "Confirmar"}
+              Confirmar
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -256,12 +280,39 @@ export function PaymentDialog({
         }
         description={
           pendingPayment?.payment_type === "adjustment"
-            ? `Se registrará un ajuste de ${formatCurrencyMXN(pendingPayment?.amount ?? 0)} en la renta ${folio}. Los ajustes no se pueden editar ni borrar después.`
-            : `Se registrará un pago de ${formatCurrencyMXN(pendingPayment?.amount ?? 0)} en la renta ${folio}. Los pagos no se pueden editar ni borrar después.`
+            ? `Se registrará un ajuste de ${formatCurrencyMXN(pendingPayment?.amount ?? 0)} en la renta de ${customerName}. Los ajustes no se pueden editar ni borrar después.`
+            : `Se registrará un pago de ${formatCurrencyMXN(pendingPayment?.amount ?? 0)} en la renta de ${customerName}. Los pagos no se pueden editar ni borrar después.`
         }
         confirmLabel="Sí, registrar"
-        isConfirming={isSubmitting}
-        onConfirm={handleConfirm}
+        onConfirm={() => {
+          // Pencil ground truth ("Carga · Procesando pago"/"Registrando
+          // ajuste"): the actual submit uses the separate, button-less
+          // LoadingDialog below, not this ConfirmDialog's own (button-based)
+          // loading state — so this popup closes immediately on confirm
+          // instead of staying open with disabled buttons for the
+          // mutation's duration.
+          setConfirmOpen(false);
+          void handleConfirm();
+        }}
+      />
+
+      <LoadingDialog
+        open={isSubmitting}
+        // Opens in the same commit that ConfirmDialog's "Sí, registrar"
+        // closes it (setConfirmOpen(false) + setIsSubmitting(true) are
+        // batched into one commit) — see LoadingDialog's own manageHistory
+        // doc for why this must opt out.
+        manageHistory={false}
+        title={
+          pendingPayment?.payment_type === "adjustment"
+            ? "Registrando ajuste..."
+            : "Procesando pago..."
+        }
+        description={
+          pendingPayment?.payment_type === "adjustment"
+            ? "Estamos aplicando el ajuste al historial de la renta."
+            : "Estamos registrando el pago de la renta."
+        }
       />
     </>
   );

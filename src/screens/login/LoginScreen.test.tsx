@@ -163,7 +163,7 @@ describe("LoginScreen — real login (§14, §16.6, CU1, gap-fill)", () => {
     });
   });
 
-  it("shows a generic 'credenciales incorrectas' message on a failed login, without leaking whether the user or password was wrong", async () => {
+  it("shows a generic 'contraseña incorrecta' message on a failed login, without leaking whether the user or password was wrong", async () => {
     getLoginDirectory.mockResolvedValue([juan]);
     loginWithPassword.mockRejectedValue(makeClientResponseError(400));
     const user = userEvent.setup();
@@ -175,7 +175,7 @@ describe("LoginScreen — real login (§14, §16.6, CU1, gap-fill)", () => {
     await user.click(screen.getByRole("button", { name: "Entrar" }));
 
     expect(
-      await screen.findByText("Credenciales incorrectas."),
+      await screen.findByText("Contraseña incorrecta, inténtalo de nuevo."),
     ).toBeInTheDocument();
   });
 
@@ -197,7 +197,9 @@ describe("LoginScreen — real login (§14, §16.6, CU1, gap-fill)", () => {
     await user.type(await screen.findByLabelText("Contraseña"), "wrong");
     await user.click(screen.getByRole("button", { name: "Entrar" }));
 
-    const errorText = await screen.findByText("Credenciales incorrectas.");
+    const errorText = await screen.findByText(
+      "Contraseña incorrecta, inténtalo de nuevo.",
+    );
     const banner = errorText.closest(".bg-red-100")!;
     expect(banner).not.toBeNull();
     expect(banner).toHaveClass("rounded-lg", "p-3");

@@ -46,11 +46,11 @@ export function ItemQuantityPicker({
           <li
             key={itemType}
             className={cn(
-              "flex items-center justify-between rounded-md border p-2.5",
+              "bg-card flex items-center justify-between rounded-2xl border p-3.5 shadow-xs",
               invalid && "border-destructive",
             )}
           >
-            <span className="font-medium">{label}</span>
+            <span className="font-semibold text-foreground">{label}</span>
             <div className="flex items-center gap-3">
               <Button
                 type="button"
@@ -58,12 +58,16 @@ export function ItemQuantityPicker({
                 size="icon"
                 aria-label={`Quitar un ${label.toLowerCase()}`}
                 disabled={quantity <= 0}
+                className={cn(
+                  "rounded-full size-9",
+                  quantity > 0 && "border-primary text-primary hover:bg-primary/10",
+                )}
                 onClick={() => setQuantity(itemType, Math.max(0, quantity - 1))}
               >
                 <Minus aria-hidden="true" />
               </Button>
               <span
-                className="w-6 text-center text-lg font-semibold"
+                className="w-6 text-center text-lg font-bold text-foreground"
                 aria-label={`Cantidad de ${label.toLowerCase()}`}
               >
                 {quantity}
@@ -73,6 +77,7 @@ export function ItemQuantityPicker({
                 variant="outline"
                 size="icon"
                 aria-label={`Agregar un ${label.toLowerCase()}`}
+                className="rounded-full size-9 border-primary text-primary hover:bg-primary/10"
                 onClick={() => setQuantity(itemType, quantity + 1)}
               >
                 <Plus aria-hidden="true" />

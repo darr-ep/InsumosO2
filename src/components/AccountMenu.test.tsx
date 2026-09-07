@@ -106,13 +106,13 @@ describe("AccountMenu (extracted from AppLayout, Redesign Round 2 Batch 1: Heade
     expect(logout).not.toHaveBeenCalled();
   });
 
-  it("clears the session and redirects to /login when Cerrar sesión is confirmed", async () => {
+  it("clears the session and redirects to /login immediately once Sí, salir is tapped", async () => {
     const user = userEvent.setup();
     renderMenu();
 
     await user.click(screen.getByRole("button", { name: "Cuenta" }));
     await user.click(screen.getByRole("menuitem", { name: "Cerrar sesión" }));
-    await user.click(screen.getByRole("button", { name: "Sí, cerrar sesión" }));
+    await user.click(screen.getByRole("button", { name: "Sí, salir" }));
 
     expect(logout).toHaveBeenCalled();
     expect(navigate).toHaveBeenCalledWith("/login");

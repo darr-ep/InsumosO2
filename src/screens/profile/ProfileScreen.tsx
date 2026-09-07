@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Lock, User } from "lucide-react";
 import { toast } from "sonner";
 import { ClientResponseError } from "pocketbase";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AppHeader } from "@/components/AppHeader";
 import { UserAvatar } from "@/components/UserAvatar";
+import { LoadingDialog } from "@/components/LoadingDialog";
 import {
   changeOwnPassword,
   currentAuthUser,
@@ -143,15 +145,18 @@ export function ProfileScreen() {
       <main className="flex flex-1 flex-col overflow-y-auto">
         <div className="flex flex-1 flex-col gap-6 px-4 pt-2 pb-8">
           <section className="flex flex-col items-center gap-2">
-            <UserAvatar
-              name={user.name}
-              avatarUrl={ownAvatarUrl(user)}
-              size={96}
-            />
+            <div className="rounded-full border-2 border-slate-200 bg-white p-0.5 overflow-hidden">
+              <UserAvatar
+                name={user.name}
+                avatarUrl={ownAvatarUrl(user)}
+                size={96}
+              />
+            </div>
           </section>
 
-          <section className="flex flex-col gap-3 border-t pt-4">
-            <h2 className="text-sm font-semibold text-muted-foreground">
+          <section className="flex flex-col gap-3 pt-4">
+            <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
+              <User aria-hidden="true" className="size-4 text-slate-900" />
               Datos personales
             </h2>
             <form
@@ -200,13 +205,14 @@ export function ProfileScreen() {
               )}
 
               <Button type="submit" disabled={isSavingProfile}>
-                {isSavingProfile ? "Guardando…" : "Guardar"}
+                Guardar
               </Button>
             </form>
           </section>
 
           <section className="flex flex-col gap-3 border-t pt-4">
-            <h2 className="text-sm font-semibold text-muted-foreground">
+            <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
+              <Lock aria-hidden="true" className="size-4 text-slate-900" />
               Cambiar contraseña
             </h2>
             <form
@@ -224,6 +230,7 @@ export function ProfileScreen() {
                   id="profile-old-password"
                   type="password"
                   autoComplete="current-password"
+                  placeholder="••••••••"
                   aria-invalid={!!passwordForm.formState.errors.oldPassword}
                   {...passwordForm.register("oldPassword")}
                 />
@@ -240,6 +247,7 @@ export function ProfileScreen() {
                   id="profile-new-password"
                   type="password"
                   autoComplete="new-password"
+                  placeholder="••••••••"
                   aria-invalid={!!passwordForm.formState.errors.password}
                   {...passwordForm.register("password")}
                 />
@@ -258,6 +266,7 @@ export function ProfileScreen() {
                   id="profile-new-password-confirm"
                   type="password"
                   autoComplete="new-password"
+                  placeholder="••••••••"
                   aria-invalid={!!passwordForm.formState.errors.passwordConfirm}
                   {...passwordForm.register("passwordConfirm")}
                 />
@@ -273,12 +282,18 @@ export function ProfileScreen() {
               )}
 
               <Button type="submit" disabled={isChangingPassword}>
-                {isChangingPassword ? "Guardando…" : "Guardar"}
+                Guardar
               </Button>
             </form>
           </section>
         </div>
       </main>
+
+      <LoadingDialog
+        open={isSavingProfile || isChangingPassword}
+        title="Guardando cambios..."
+        description="Estamos actualizando tu información."
+      />
     </div>
   );
 }

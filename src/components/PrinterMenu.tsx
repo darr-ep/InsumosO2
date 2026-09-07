@@ -14,12 +14,22 @@ import { webBluetoothPrinter } from "@/printing/WebBluetoothPrinter";
 import { isAutoPrintEnabled, setAutoPrintEnabled } from "@/printing/printSettings";
 import type { RentalReceiptData } from "@/domain/rentals/receipt";
 import { cn } from "@/lib/utils";
+import { LoadingDialog } from "@/components/LoadingDialog";
 
 export function PrinterMenu() {
   const [isAvailable, setIsAvailable] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState(webBluetoothPrinter.connectionStatus);
   const [deviceName, setDeviceName] = useState<string | null>(webBluetoothPrinter.deviceName);
-  const [isLoading, setIsLoading] = useState(false);
+  // "Carga · Conectando impresora" (pencil ground truth) only applies to the
+  // Connect action, never to "Imprimir prueba" — both shared the same plain
+  // `isLoading` boolean before, which would have popped up the wrong copy
+  // ("Conectando impresora...") during a test print. Tracking which action
+  // is in flight keeps `isLoading`'s existing disable-the-menu-items
+  // behavior for both, while only gating the loading popup on Connect.
+  const [activeAction, setActiveAction] = useState<
+    "connect" | "test-print" | null
+  >(null);
+  const isLoading = activeAction !== null;
   const [autoPrint, setAutoPrint] = useState(() => isAutoPrintEnabled());
 
   useEffect(() => {
@@ -39,7 +49,7 @@ export function PrinterMenu() {
   }
 
   async function handleConnect() {
-    setIsLoading(true);
+    setActiveAction("connect");
     try {
       await webBluetoothPrinter.connect();
       toast.success("Impresora conectada correctamente");
@@ -49,7 +59,7 @@ export function PrinterMenu() {
           (error instanceof Error ? error.message : String(error)),
       );
     } finally {
-      setIsLoading(false);
+      setActiveAction(null);
     }
   }
 
@@ -76,7 +86,7 @@ export function PrinterMenu() {
   }
 
   async function handleTestPrint() {
-    setIsLoading(true);
+    setActiveAction("test-print");
     try {
       const testReceipt: RentalReceiptData = {
         kind: "create",
@@ -99,7 +109,7 @@ export function PrinterMenu() {
           (error instanceof Error ? error.message : String(error)),
       );
     } finally {
-      setIsLoading(false);
+      setActiveAction(null);
     }
   }
 
@@ -208,6 +218,7 @@ export function PrinterMenu() {
               <FileText aria-hidden="true" className="mr-2 size-4" />
               Imprimir prueba
             </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={() => void handleDisconnect()} disabled={isLoading}>
               <Unplug aria-hidden="true" className="mr-2 size-4" />
               Desconectar
@@ -215,6 +226,12 @@ export function PrinterMenu() {
           </>
         )}
       </DropdownMenuContent>
+
+      <LoadingDialog
+        open={activeAction === "connect"}
+        title="Conectando impresora..."
+        description="Buscamos tu impresora y configuramos la conexión."
+      />
     </DropdownMenu>
   );
 }

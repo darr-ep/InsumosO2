@@ -31,6 +31,9 @@ pocketbase
 # CodeGraph local index cache
 .codegraph/
 
+# Generated design-fidelity audit screenshots (see scripts/captureScreenshots.mjs)
+.screenshots/
+
 # Throwaway validation spikes (see sdd-init/insumoso2) — not part of this
 # app's scaffold or git history, kept on disk only for local reference.
 /test-pocketbase/

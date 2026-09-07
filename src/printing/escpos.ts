@@ -2,6 +2,7 @@ import type { ReceiptData } from "@/domain/rentals/receipt";
 import { rentalItemTypeLabel } from "@/domain/rentals/rental";
 import { paymentTypeLabel } from "@/domain/payments/payment";
 import { packRaster, type DitheredImage } from "@/printing/imageEscpos";
+import { formatDateDisplay } from "@/lib/formatDate";
 
 const ESC = 0x1b;
 const GS = 0x1d;
@@ -160,7 +161,7 @@ export function buildStructuredTicket(
   parts.push(latin1Bytes(`Folio: ${receipt.folio}\n`));
   const targetDate =
     receipt.kind === "return" ? receipt.returnedAt : receipt.date;
-  const dateStr = targetDate.toLocaleDateString("es-MX");
+  const dateStr = formatDateDisplay(targetDate);
   const timeStr = targetDate.toLocaleTimeString("es-MX", {
     hour: "2-digit",
     minute: "2-digit",
@@ -183,7 +184,7 @@ export function buildStructuredTicket(
       latin1Bytes(
         formatRow(
           "Fecha inicio:",
-          receipt.startedAt.toLocaleDateString("es-MX"),
+          formatDateDisplay(receipt.startedAt),
         ) + "\n",
       ),
     );
@@ -191,7 +192,7 @@ export function buildStructuredTicket(
       latin1Bytes(
         formatRow(
           "Fecha devolución:",
-          receipt.returnedAt.toLocaleDateString("es-MX"),
+          formatDateDisplay(receipt.returnedAt),
         ) + "\n",
       ),
     );

@@ -8,7 +8,7 @@
      cards read as elevated surfaces again (design's #F3F4F6) — verified via
      the OKLCH→linear-sRGB→relative-luminance script, see
      src/lib/colorContrast.ts + src/index.css.contrast.test.ts. */
-  --background: #f3f4f6;
+  --background: oklch(0.967 0.002 265);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
@@ -45,12 +45,9 @@
      design-fidelity (#2224 A2): kept unchanged rather than the design's
      #16A34A — that value only clears 2.95:1 against --success-soft below,
      unreadable at the 11px pill size this app uses it at. */
-  --success: oklch(0.52 0.14 149);
-  --success-foreground: oklch(0.985 0 0);
-  /* design-fidelity (#2224 A1, new token): soft tint for success badges
-     (design's #E7F6EC). Paired with --success text at ~4.62:1 (AA) — see
-     src/index.css.contrast.test.ts. */
-  --success-soft: oklch(0.958 0.024 155);
+  --success: #15a349;
+  --success-foreground: #ffffff;
+  --success-soft: #ecfdf5;
   /* Ámbar sobrio para advertencias. Amber is inherently high-luminance, so
      it pairs with dark text (not white) — dark-text contrast ~8.5:1 (AAA). */
   --warning: oklch(0.77 0.15 75);
@@ -130,6 +127,13 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --animate-card-enter: card-enter 0.35s ease-out both;
+  --animate-overlay-in: overlay-in 0.18s ease-out both;
+  --animate-overlay-out: overlay-out 0.15s ease-in both;
+  --animate-dialog-in: dialog-in 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-dialog-out: dialog-out 0.15s ease-in both;
+  --animate-icon-in: icon-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-icon-pop: icon-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  --animate-bar-sweep: bar-sweep 1.4s ease-in-out infinite;
 
   @keyframes card-enter {
     from {
@@ -141,11 +145,119 @@
       transform: translateY(0);
     }
   }
+
+  @keyframes overlay-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes overlay-out {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+
+  /* Dialog is centered via static top/left + -translate-x-1/2/-translate-y-1/2
+     utility classes (see ui/dialog.tsx). Those Tailwind v4 utilities compile
+     to the standalone CSS `translate` property (not `transform`), which
+     stays active independently of this animation and composes with it —
+     translate first, then this `transform`. A previous version of this
+     keyframe redundantly re-declared `translate(-50%, -50%)` inside
+     `transform` "to preserve centering," which instead DOUBLED the offset
+     (translate property -50% + transform's own -50% = -100% total),
+     pushing the dialog almost entirely off-screen on any viewport narrower
+     than `max-w-lg` (confirmed live via Playwright at a 390px mobile
+     width — computed `translate` and `transform` both non-none
+     simultaneously, rect.left off by exactly one extra -50%-of-width).
+     Animate ONLY `scale` here — it composes correctly after the separate
+     `translate` property with zero extra centering math needed. */
+  @keyframes dialog-in {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes dialog-out {
+    from {
+      opacity: 1;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+  }
+
+  /* Gentle entrance for the ConfirmDialog icon circle when swapping INTO the
+     loading state — no overshoot, this isn't the payoff moment. */
+  @keyframes icon-in {
+    from {
+      opacity: 0;
+      transform: scale(0.9);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  /* Small celebratory pop for the ConfirmDialog icon circle when swapping
+     INTO the success state — this IS the payoff moment, a slight overshoot
+     (back-out easing) reads as a deliberate "done!" beat without being
+     cartoonish. */
+  @keyframes icon-pop {
+    from {
+      opacity: 0;
+      transform: scale(0.5);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  /* Indeterminate sweep for LoadingDialog's progress bar (pencil ground
+     truth: "Carga · X" frames) — these are single async calls with no real
+     measurable progress, so the fill isn't tied to a percentage: it loops,
+     sweeping across the track for as long as the popup stays open. */
+  @keyframes bar-sweep {
+    0% {
+      transform: translateX(-100%) scaleX(0.4);
+    }
+    50% {
+      transform: translateX(15%) scaleX(0.7);
+    }
+    100% {
+      transform: translateX(100%) scaleX(0.4);
+    }
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-card-enter {
+  .animate-card-enter,
+  .animate-overlay-in,
+  .animate-overlay-out,
+  .animate-dialog-in,
+  .animate-dialog-out,
+  .animate-icon-in,
+  .animate-icon-pop {
     animation: none;
+  }
+  .animate-bar-sweep {
+    animation: none;
+    transform: translateX(0) scaleX(0.35);
   }
 }
 

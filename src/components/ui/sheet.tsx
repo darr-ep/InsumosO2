@@ -3,6 +3,7 @@ import { Drawer } from "vaul";
 import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { useHistoryBackClose } from "@/lib/useHistoryBackClose";
 
 // shadcn/ui Drawer / Sheet backed by Vaul (§16.2, §16.5, §16.6).
 // Provides native mobile drag-to-dismiss gesture, spring physics animations,
@@ -10,12 +11,20 @@ import { cn } from "@/lib/utils";
 
 function Sheet({
   shouldScaleBackground = false,
+  open = false,
+  onOpenChange,
   ...props
 }: React.ComponentProps<typeof Drawer.Root>) {
+  // Makes the Android/browser back gesture close this sheet instead of
+  // navigating the screen underneath it away — see useHistoryBackClose's
+  // own docblock for why this needs to live at the shared primitive.
+  useHistoryBackClose(open, () => onOpenChange?.(false));
   return (
     <Drawer.Root
       data-slot="sheet"
       shouldScaleBackground={shouldScaleBackground}
+      open={open}
+      onOpenChange={onOpenChange}
       {...props}
     />
   );
@@ -44,7 +53,7 @@ function SheetOverlay({
 function SheetContent({
   className,
   children,
-  showCloseButton = true,
+  showCloseButton = false,
   showHandle = true,
   ...props
 }: React.ComponentProps<typeof Drawer.Content> & {
@@ -57,7 +66,7 @@ function SheetContent({
       <Drawer.Content
         data-slot="sheet-content"
         className={cn(
-          "bg-card fixed inset-x-0 bottom-0 z-50 max-h-[90vh] flex flex-col rounded-t-2xl border border-b-0 shadow-2xl overflow-hidden focus:outline-none",
+          "bg-background fixed inset-x-0 bottom-0 z-50 max-h-[90dvh] flex flex-col rounded-t-2xl border border-b-0 shadow-2xl overflow-hidden focus:outline-none",
           className,
         )}
         {...props}
@@ -65,19 +74,19 @@ function SheetContent({
         {showHandle && (
           <div
             data-slot="sheet-handle"
-            className="mx-auto mt-3 h-1.5 w-12 shrink-0 rounded-full bg-muted-foreground/30 cursor-grab active:cursor-grabbing"
+            className="mx-auto mt-2.5 mb-1 h-1.5 w-12 shrink-0 rounded-full bg-muted-foreground/30 cursor-grab active:cursor-grabbing"
           />
         )}
         {showCloseButton && (
           <Drawer.Close
             data-slot="sheet-close"
-            className="ring-offset-background focus:ring-ring absolute top-[18px] right-3 z-30 flex size-9 items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:outline-none disabled:pointer-events-none"
+            className="absolute top-[18px] right-3 z-30 flex size-9 items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 ring-0 outline-none border-none disabled:pointer-events-none"
           >
             <X aria-hidden="true" className="size-4" />
             <span className="sr-only">Cerrar</span>
           </Drawer.Close>
         )}
-        <div className="flex-1 overflow-y-auto p-4 pt-3 flex flex-col gap-4">
+        <div className="flex-1 overflow-y-auto p-4 pt-1 flex flex-col gap-4">
           {children}
         </div>
       </Drawer.Content>
@@ -90,7 +99,7 @@ function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="sheet-header"
       className={cn(
-        "sticky -top-3 -mx-4 -mt-3 z-20 flex flex-col gap-1.5 bg-card px-4 pt-3 pb-3 border-b pr-12",
+        "sticky -top-1 -mx-4 -mt-1 z-20 flex flex-col gap-1.5 bg-background px-4 pt-1.5 pb-2.5",
         className,
       )}
       {...props}
@@ -103,7 +112,7 @@ function SheetFooter({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="sheet-footer"
       className={cn(
-        "sticky -bottom-4 -mx-4 -mb-4 z-20 mt-auto flex flex-col gap-2 bg-card px-4 pt-3 pb-4 border-t",
+        "sticky -bottom-4 -mx-4 -mb-4 z-20 mt-auto flex flex-col gap-2 bg-background px-4 pt-3 pb-4 border-t",
         className,
       )}
       {...props}

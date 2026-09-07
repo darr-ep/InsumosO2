@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CustomerPicker, type CustomerPickerProps } from "@/components/CustomerPicker";
 import type { CustomerFormSubmitValues } from "@/components/CustomerForm";
@@ -36,9 +36,12 @@ const searchCustomers = vi.fn();
 // resolves it into a real `createCustomer` call, at rental-confirm time).
 const createCustomer = vi.fn();
 
+const listCustomers = vi.fn();
+
 vi.mock("@/data/customers.repo", () => ({
   searchCustomers: (...args: unknown[]) => searchCustomers(...args),
   createCustomer: (...args: unknown[]) => createCustomer(...args),
+  listCustomers: (...args: unknown[]) => listCustomers(...args),
 }));
 
 const juan = {
@@ -51,6 +54,8 @@ describe("CustomerPicker (§7.1)", () => {
   beforeEach(() => {
     searchCustomers.mockReset();
     createCustomer.mockReset();
+    listCustomers.mockReset();
+    listCustomers.mockResolvedValue([]);
   });
 
   it("searches as the user types and lets them pick a result", async () => {
@@ -72,7 +77,7 @@ describe("CustomerPicker (§7.1)", () => {
     expect(onSelect).toHaveBeenCalledWith(juan);
   });
 
-  it("shows the selected customer with an option to change it", () => {
+  it("shows the selected customer card with checked state and no 'Ver ficha'", () => {
     const onSelect = vi.fn();
     render(
       <CustomerPicker
@@ -83,32 +88,13 @@ describe("CustomerPicker (§7.1)", () => {
     );
 
     expect(screen.getByText("Juan Pérez")).toBeInTheDocument();
-    expect(screen.getByText("5512345678")).toBeInTheDocument();
-    // No "Ver ficha" affordance unless the caller opts in.
+    expect(screen.getByText("551 234 5678")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Ver ficha" }),
     ).not.toBeInTheDocument();
   });
 
-  it("calls onViewCustomer with the selected customer's id when 'Ver ficha' is pressed (§16.6)", async () => {
-    const onSelect = vi.fn();
-    const onViewCustomer = vi.fn();
-    const user = userEvent.setup();
-    render(
-      <CustomerPicker
-        selectedCustomer={juan}
-        onSelect={onSelect}
-        onSelectDraft={vi.fn()}
-        onViewCustomer={onViewCustomer}
-      />,
-    );
-
-    await user.click(screen.getByRole("button", { name: "Ver ficha" }));
-
-    expect(onViewCustomer).toHaveBeenCalledWith("c1");
-  });
-
-  it("shows a tappable 'Crear cliente nuevo' row (not plain text) when a search comes back empty", async () => {
+  it("shows a tappable 'Crear cliente nuevo' button that opens the create form with the typed query", async () => {
     searchCustomers.mockResolvedValue([]);
     const onSelect = vi.fn();
     const onSelectDraft = vi.fn();
@@ -123,37 +109,10 @@ describe("CustomerPicker (§7.1)", () => {
     const createButton = await screen.findByRole("button", {
       name: /Crear cliente nuevo/,
     });
-    expect(createButton).toHaveTextContent("Juan Pérez");
-  });
+    expect(createButton).toBeInTheDocument();
 
-  it("does not flash 'Crear cliente nuevo' before the debounced search actually resolves", async () => {
-    searchCustomers.mockResolvedValue([]);
-    const onSelect = vi.fn();
-    const onSelectDraft = vi.fn();
-    const user = userEvent.setup();
-    render(<CustomerPicker onSelect={onSelect} onSelectDraft={onSelectDraft} />);
-
-    // Fires the debounced-search effect via fireEvent instead of
-    // user.type()'s per-keystroke delay, so the assertion right below runs
-    // as close to synchronously-after-change as possible, still well inside
-    // the 300ms debounce window.
-    await user.type(
-      screen.getByLabelText("Buscar cliente por nombre o teléfono"),
-      "J",
-    );
-
-    // Right after typing, the debounce hasn't fired yet — the "no results,
-    // create new" suggestion must not appear before a real search for this
-    // text has actually run and confirmed zero matches.
-    expect(searchCustomers).not.toHaveBeenCalled();
-    expect(
-      screen.queryByRole("button", { name: /Crear cliente nuevo/ }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByText("Buscando…")).toBeInTheDocument();
-
-    expect(
-      await screen.findByRole("button", { name: /Crear cliente nuevo/ }),
-    ).toBeInTheDocument();
+    await user.click(createButton);
+    expect(await screen.findByDisplayValue("Juan Pérez")).toBeInTheDocument();
   });
 
   it("tapping 'Crear cliente nuevo' opens the form pre-filled with the typed query, and reports the draft continuously via onSelectDraft — no submit button, and createCustomer is never called here", async () => {
@@ -200,12 +159,14 @@ describe("CustomerPicker (§7.1)", () => {
     const draft = { name: "Juan Pérez", phone: "", credentialPhoto: null };
     const onSelect = vi.fn();
     const onSelectDraft = vi.fn();
+    const cancelCreatingRef = { current: null as (() => void) | null };
     const user = userEvent.setup();
     render(
       <CustomerPicker
         pendingNewCustomer={draft}
         onSelect={onSelect}
         onSelectDraft={onSelectDraft}
+        cancelCreatingRef={cancelCreatingRef}
       />,
     );
 
@@ -217,9 +178,9 @@ describe("CustomerPicker (§7.1)", () => {
       await screen.findByRole("button", { name: /Crear cliente nuevo/ }),
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "‹ Volver a buscar" }),
-    );
+    act(() => {
+      cancelCreatingRef.current?.();
+    });
 
     // Name is non-empty (prefilled from the search query) — the discard
     // confirmation must appear before the draft is actually cleared.
@@ -241,8 +202,9 @@ describe("CustomerPicker (§7.1)", () => {
     searchCustomers.mockResolvedValue([]);
     const onSelect = vi.fn();
     const onSelectDraft = vi.fn();
+    const cancelCreatingRef = { current: null as (() => void) | null };
     const user = userEvent.setup();
-    render(<ControlledPicker onSelect={onSelect} onSelectDraft={onSelectDraft} />);
+    render(<ControlledPicker onSelect={onSelect} onSelectDraft={onSelectDraft} cancelCreatingRef={cancelCreatingRef} />);
 
     await user.type(
       screen.getByLabelText("Buscar cliente por nombre o teléfono"),
@@ -262,9 +224,9 @@ describe("CustomerPicker (§7.1)", () => {
       }),
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "‹ Volver a buscar" }),
-    );
+    act(() => {
+      cancelCreatingRef.current?.();
+    });
 
     expect(
       screen.queryByRole("heading", { name: "¿Descartar el cliente nuevo?" }),
@@ -278,8 +240,9 @@ describe("CustomerPicker (§7.1)", () => {
     searchCustomers.mockResolvedValue([]);
     const onSelect = vi.fn();
     const onSelectDraft = vi.fn();
+    const cancelCreatingRef = { current: null as (() => void) | null };
     const user = userEvent.setup();
-    render(<ControlledPicker onSelect={onSelect} onSelectDraft={onSelectDraft} />);
+    render(<ControlledPicker onSelect={onSelect} onSelectDraft={onSelectDraft} cancelCreatingRef={cancelCreatingRef} />);
 
     await user.type(
       screen.getByLabelText("Buscar cliente por nombre o teléfono"),
@@ -296,11 +259,11 @@ describe("CustomerPicker (§7.1)", () => {
       }),
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "‹ Volver a buscar" }),
-    );
+    act(() => {
+      cancelCreatingRef.current?.();
+    });
     expect(
-      screen.getByRole("heading", { name: "¿Descartar el cliente nuevo?" }),
+      await screen.findByRole("heading", { name: "¿Descartar el cliente nuevo?" }),
     ).toBeInTheDocument();
     await user.click(
       screen.getByRole("button", { name: "Seguir capturando" }),
@@ -319,12 +282,14 @@ describe("CustomerPicker (§7.1)", () => {
     const onSelect = vi.fn();
     const onSelectDraft = vi.fn();
     const onCreatingChange = vi.fn();
+    const cancelCreatingRef = { current: null as (() => void) | null };
     const user = userEvent.setup();
     render(
       <CustomerPicker
         onSelect={onSelect}
         onSelectDraft={onSelectDraft}
         onCreatingChange={onCreatingChange}
+        cancelCreatingRef={cancelCreatingRef}
       />,
     );
 
@@ -345,9 +310,7 @@ describe("CustomerPicker (§7.1)", () => {
       expect(onCreatingChange).toHaveBeenLastCalledWith(true),
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "‹ Volver a buscar" }),
-    );
+    cancelCreatingRef.current?.();
 
     await waitFor(() =>
       expect(onCreatingChange).toHaveBeenLastCalledWith(false),

@@ -1,4 +1,4 @@
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -44,6 +44,18 @@ import {
  * and completed anyway. `preventDefault()` on all three while
  * `isConfirming` is true keeps the popup open and the mutation the only way
  * out until it actually resolves.
+ *
+ * 3-state redesign (pencil ground truth: "Alerta" / "Alerta · Cargando" /
+ * "Alerta · Éxito" frames) — `status` is a new, additive, optional prop.
+ * Omitting it (or passing `"idle"`) renders byte-identical markup to the
+ * original single-state component, so every existing call site keeps
+ * working with zero changes. Only a caller that opts into the full
+ * confirm→loading→success sequence (currently just the Cerrar sesión flow
+ * in `AccountMenu.tsx` — the one real case with no separate downstream
+ * summary screen) needs to pass `status` plus the `loading*`/`success*`
+ * copy. The Payment/Return "Carga · Procesando…" loading toasts use a
+ * different, progress-bar-based pattern and are deliberately out of scope
+ * here.
  */
 export interface ConfirmDialogProps {
   open: boolean;
@@ -55,6 +67,17 @@ export interface ConfirmDialogProps {
   onConfirm: () => void | Promise<void>;
   tone?: "default" | "destructive";
   isConfirming?: boolean;
+  status?: "idle" | "loading" | "success";
+  loadingTitle?: string;
+  loadingDescription?: string;
+  successTitle?: string;
+  successDescription?: string;
+  successLabel?: string;
+  onDismissSuccess?: () => void;
+  // Forwarded to the underlying `Dialog` — see its own `manageHistory` doc.
+  // Only a `useBlocker`-driven caller (RentalNewScreen's exit guard) needs
+  // to pass `false`; every other call site keeps the default.
+  manageHistory?: boolean;
 }
 
 export function ConfirmDialog({
@@ -67,59 +90,130 @@ export function ConfirmDialog({
   onConfirm,
   tone = "default",
   isConfirming = false,
+  status = "idle",
+  loadingTitle,
+  loadingDescription,
+  successTitle,
+  successDescription,
+  successLabel = "Listo",
+  onDismissSuccess,
+  manageHistory = true,
 }: ConfirmDialogProps) {
+  const isBlocked = isConfirming || status !== "idle";
+  const isLoading = status === "loading";
+  const isSuccess = status === "success";
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange} manageHistory={manageHistory}>
       <DialogContent
         showCloseButton={false}
         className="max-w-[330px]"
         overlayClassName="bg-black/30 backdrop-blur-none"
         onEscapeKeyDown={(event) => {
-          if (isConfirming) event.preventDefault();
+          if (isBlocked) event.preventDefault();
         }}
         onPointerDownOutside={(event) => {
-          if (isConfirming) event.preventDefault();
+          if (isBlocked) event.preventDefault();
         }}
         onInteractOutside={(event) => {
-          if (isConfirming) event.preventDefault();
+          if (isBlocked) event.preventDefault();
         }}
       >
         <div className="flex flex-col items-center gap-3 text-center">
-          <div className="flex size-12 items-center justify-center rounded-full bg-rose-50 dark:bg-rose-950/40">
-            <AlertTriangle aria-hidden="true" className="size-6 text-red-600" />
-          </div>
-          <DialogTitle className="text-center">{title}</DialogTitle>
+          {isSuccess ? (
+            // `key` forces a remount on every entry into this state so the
+            // one-shot `animate-icon-pop` entrance replays each time
+            // (a className alone wouldn't re-trigger on a prop change).
+            <div
+              key="success"
+              className="animate-icon-pop flex size-12 items-center justify-center rounded-full bg-green-50 dark:bg-green-950/40"
+            >
+              <Check aria-hidden="true" className="size-6 text-green-600" />
+            </div>
+          ) : isLoading ? (
+            <div
+              key="loading"
+              className="animate-icon-in flex size-12 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-950/40"
+            >
+              <Loader2
+                aria-hidden="true"
+                className="text-primary size-6 animate-spin"
+              />
+            </div>
+          ) : (
+            <div
+              key="idle"
+              className="flex size-12 items-center justify-center rounded-full bg-rose-50 dark:bg-rose-950/40"
+            >
+              <AlertTriangle
+                aria-hidden="true"
+                className="size-6 text-red-600"
+              />
+            </div>
+          )}
+          <DialogTitle className="text-center">
+            {isSuccess
+              ? (successTitle ?? title)
+              : isLoading
+                ? (loadingTitle ?? title)
+                : title}
+          </DialogTitle>
           <DialogDescription className="text-center">
-            {description}
+            {isSuccess
+              ? (successDescription ?? description)
+              : isLoading
+                ? (loadingDescription ?? description)
+                : description}
           </DialogDescription>
         </div>
 
-        <DialogFooter className="flex-row gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="lg"
-            className="flex-1"
-            disabled={isConfirming}
-            onClick={() => onOpenChange(false)}
-          >
-            {cancelLabel}
-          </Button>
-          <Button
-            type="button"
-            variant={tone === "destructive" ? "destructive" : "default"}
-            size="lg"
-            className={
-              tone === "destructive"
-                ? "flex-1"
-                : "flex-1 bg-neutral-900 text-white hover:bg-neutral-800"
-            }
-            disabled={isConfirming}
-            onClick={() => void onConfirm()}
-          >
-            {confirmLabel}
-          </Button>
-        </DialogFooter>
+        {isSuccess ? (
+          <DialogFooter>
+            <Button
+              type="button"
+              size="lg"
+              className="w-full bg-neutral-900 text-white hover:bg-neutral-800"
+              onClick={onDismissSuccess ?? (() => onOpenChange(false))}
+            >
+              <Check aria-hidden="true" />
+              {successLabel}
+            </Button>
+          </DialogFooter>
+        ) : (
+          <DialogFooter className="flex-row gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              className="flex-1"
+              disabled={isBlocked}
+              onClick={() => onOpenChange(false)}
+            >
+              {cancelLabel}
+            </Button>
+            <Button
+              type="button"
+              variant={tone === "destructive" ? "destructive" : "default"}
+              size="lg"
+              className={
+                tone === "destructive"
+                  ? "flex-1"
+                  : "flex-1 bg-neutral-900 text-white hover:bg-neutral-800"
+              }
+              disabled={isBlocked}
+              onClick={() => void onConfirm()}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 aria-hidden="true" className="animate-spin" />
+                  Procesando...
+                </>
+              ) : (
+                confirmLabel
+              )}
+            </Button>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );

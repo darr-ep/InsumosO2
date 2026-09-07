@@ -38,7 +38,10 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
   });
 
   it("shows the suggested value as a placeholder (never prefilled) and registers a rent payment once typed", async () => {
-    createPayment.mockResolvedValueOnce({ id: "p1" });
+    createPayment.mockResolvedValueOnce({
+      id: "p1",
+      created: "2026-08-29T10:00:00.000Z",
+    });
     const onOpenChange = vi.fn();
     const onRegistered = vi.fn();
     const user = userEvent.setup();
@@ -49,6 +52,10 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         onOpenChange={onOpenChange}
         rentalId="r1"
         folio="R-000001"
+        businessName="Insumos O2"
+        businessPhone="771 131 3535"
+        customerName="Juan Pérez"
+        customerPhone="5512345678"
         suggestedAmount={3000}
         initialRentAmount={2800}
         hasPreviousRentPayment
@@ -77,7 +84,21 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
       paymentType: "rent",
       note: undefined,
     });
-    expect(onRegistered).toHaveBeenCalledWith({ id: "p1" });
+    expect(onRegistered).toHaveBeenCalledWith(
+      { id: "p1", created: "2026-08-29T10:00:00.000Z" },
+      {
+        kind: "payment",
+        businessName: "Insumos O2",
+        businessPhone: "771 131 3535",
+        folio: "R-000001",
+        customerName: "Juan Pérez",
+        customerPhone: "5512345678",
+        paymentType: "rent",
+        amount: 3000,
+        date: new Date("2026-08-29T10:00:00.000Z"),
+        note: undefined,
+      },
+    );
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
@@ -90,6 +111,10 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         onOpenChange={() => {}}
         rentalId="r1"
         folio="R-000001"
+        businessName="Insumos O2"
+        businessPhone="771 131 3535"
+        customerName="Juan Pérez"
+        customerPhone="5512345678"
         suggestedAmount={3000}
         initialRentAmount={2800}
         hasPreviousRentPayment
@@ -104,7 +129,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Se registrará un pago de $3,000.00 en la renta R-000001. Los pagos no se pueden editar ni borrar después.",
+        "Se registrará un pago de $3,000.00 en la renta de Juan Pérez. Los pagos no se pueden editar ni borrar después.",
       ),
     ).toBeInTheDocument();
     expect(createPayment).not.toHaveBeenCalled();
@@ -124,13 +149,17 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         onOpenChange={() => {}}
         rentalId="r1"
         folio="R-000001"
+        businessName="Insumos O2"
+        businessPhone="771 131 3535"
+        customerName="Juan Pérez"
+        customerPhone="5512345678"
         suggestedAmount={3000}
         initialRentAmount={2800}
         hasPreviousRentPayment
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Ajuste" }));
+    await user.click(screen.getByRole("radio", { name: "Ajuste" }));
     await user.clear(screen.getByLabelText("Monto del ajuste"));
     await user.type(screen.getByLabelText("Monto del ajuste"), "-200");
     await user.type(
@@ -144,7 +173,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Se registrará un ajuste de -$200.00 en la renta R-000001. Los ajustes no se pueden editar ni borrar después.",
+        "Se registrará un ajuste de -$200.00 en la renta de Juan Pérez. Los ajustes no se pueden editar ni borrar después.",
       ),
     ).toBeInTheDocument();
     expect(createPayment).not.toHaveBeenCalled();
@@ -155,8 +184,12 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
     await waitFor(() => expect(createPayment).toHaveBeenCalledTimes(1));
   });
 
-  it("fires a success toast when the payment is registered (§16.13/§17, gap-fill finding 4)", async () => {
-    createPayment.mockResolvedValueOnce({ id: "p1" });
+  it("does NOT fire a toast on success — the PaymentCreatedSummary receipt (handed to onRegistered) is the confirmation now, design-fidelity 'Éxito · Pago registrado', superseding the old §16.13/§17 gap-fill toast", async () => {
+    createPayment.mockResolvedValueOnce({
+      id: "p1",
+      created: "2026-08-29T10:00:00.000Z",
+    });
+    const onRegistered = vi.fn();
     const user = userEvent.setup();
 
     render(
@@ -165,9 +198,14 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         onOpenChange={() => {}}
         rentalId="r1"
         folio="R-000001"
+        businessName="Insumos O2"
+        businessPhone="771 131 3535"
+        customerName="Juan Pérez"
+        customerPhone="5512345678"
         suggestedAmount={3000}
         initialRentAmount={2800}
         hasPreviousRentPayment
+        onRegistered={onRegistered}
       />,
     );
 
@@ -175,7 +213,9 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
     await user.click(screen.getByRole("button", { name: "Confirmar" }));
     await user.click(screen.getByRole("button", { name: "Sí, registrar" }));
 
-    expect(toast.success).toHaveBeenCalledWith("Pago registrado.");
+    await waitFor(() => expect(onRegistered).toHaveBeenCalled());
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(onRegistered.mock.calls[0][1]).toMatchObject({ kind: "payment" });
   });
 
   it("does NOT fire a success toast when the payment fails to save (§16.13/§17, gap-fill finding 4)", async () => {
@@ -188,6 +228,10 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         onOpenChange={() => {}}
         rentalId="r1"
         folio="R-000001"
+        businessName="Insumos O2"
+        businessPhone="771 131 3535"
+        customerName="Juan Pérez"
+        customerPhone="5512345678"
         suggestedAmount={3000}
         initialRentAmount={2800}
         hasPreviousRentPayment
@@ -214,6 +258,10 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         onOpenChange={() => {}}
         rentalId="r1"
         folio="R-000001"
+        businessName="Insumos O2"
+        businessPhone="771 131 3535"
+        customerName="Juan Pérez"
+        customerPhone="5512345678"
         suggestedAmount={3000}
         initialRentAmount={2800}
         hasPreviousRentPayment
@@ -239,13 +287,17 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         onOpenChange={() => {}}
         rentalId="r1"
         folio="R-000001"
+        businessName="Insumos O2"
+        businessPhone="771 131 3535"
+        customerName="Juan Pérez"
+        customerPhone="5512345678"
         suggestedAmount={3000}
         initialRentAmount={2800}
         hasPreviousRentPayment
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Ajuste" }));
+    await user.click(screen.getByRole("radio", { name: "Ajuste" }));
     await user.clear(screen.getByLabelText("Monto del ajuste"));
     await user.type(screen.getByLabelText("Monto del ajuste"), "-200");
     await user.click(screen.getByRole("button", { name: "Confirmar" }));
@@ -271,13 +323,17 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         onOpenChange={() => {}}
         rentalId="r1"
         folio="R-000001"
+        businessName="Insumos O2"
+        businessPhone="771 131 3535"
+        customerName="Juan Pérez"
+        customerPhone="5512345678"
         suggestedAmount={3000}
         initialRentAmount={2800}
         hasPreviousRentPayment
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Ajuste" }));
+    await user.click(screen.getByRole("radio", { name: "Ajuste" }));
     await user.clear(screen.getByLabelText("Monto del ajuste"));
     await user.type(screen.getByLabelText("Monto del ajuste"), "-200");
     await user.type(
@@ -305,6 +361,10 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         onOpenChange={() => {}}
         rentalId="r1"
         folio="R-000001"
+        businessName="Insumos O2"
+        businessPhone="771 131 3535"
+        customerName="Juan Pérez"
+        customerPhone="5512345678"
         suggestedAmount={3000}
         initialRentAmount={2800}
         hasPreviousRentPayment
@@ -341,6 +401,10 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         onOpenChange={() => {}}
         rentalId="r1"
         folio="R-000001"
+        businessName="Insumos O2"
+        businessPhone="771 131 3535"
+        customerName="Juan Pérez"
+        customerPhone="5512345678"
         suggestedAmount={3000}
         initialRentAmount={2800}
         hasPreviousRentPayment
@@ -374,6 +438,10 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         onOpenChange={() => {}}
         rentalId="r1"
         folio="R-000001"
+        businessName="Insumos O2"
+        businessPhone="771 131 3535"
+        customerName="Juan Pérez"
+        customerPhone="5512345678"
         suggestedAmount={3000}
         initialRentAmount={2800}
         hasPreviousRentPayment
@@ -402,6 +470,10 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         onOpenChange={() => {}}
         rentalId="r1"
         folio="R-000001"
+        businessName="Insumos O2"
+        businessPhone="771 131 3535"
+        customerName="Juan Pérez"
+        customerPhone="5512345678"
         suggestedAmount={3000}
         initialRentAmount={2800}
         hasPreviousRentPayment
@@ -419,7 +491,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
     expect(createPayment).not.toHaveBeenCalled();
   });
 
-  it("disables the confirmation dialog's buttons while submitting (isConfirming), reverting to the idle trigger after success (§16.13, design-fidelity #2/#3)", async () => {
+  it("closes the confirmation popup immediately and shows the 'Procesando pago...' loading popup while submitting, reverting to the idle trigger after success (§16.13, design-fidelity #2/#3, pencil ground truth 'Carga · Procesando pago')", async () => {
     let resolveCreatePayment: (value: { id: string }) => void = () => {};
     createPayment.mockImplementationOnce(
       () =>
@@ -435,6 +507,10 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
         onOpenChange={() => {}}
         rentalId="r1"
         folio="R-000001"
+        businessName="Insumos O2"
+        businessPhone="771 131 3535"
+        customerName="Juan Pérez"
+        customerPhone="5512345678"
         suggestedAmount={3000}
         initialRentAmount={2800}
         hasPreviousRentPayment
@@ -445,14 +521,18 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
     await user.click(screen.getByRole("button", { name: "Confirmar" }));
     await user.click(screen.getByRole("button", { name: "Sí, registrar" }));
 
-    // design B2: `isConfirming` disables BOTH ConfirmDialog buttons during
-    // the async mutation — the underlying "Confirmar" trigger is
-    // `aria-hidden` behind the still-open ConfirmDialog while this is
-    // pending (Radix nested-dialog inert behavior), so it's not queryable.
+    // The button-based ConfirmDialog closes immediately on confirm — the
+    // real per-action loading state is the separate, button-less
+    // LoadingDialog, not ConfirmDialog's own loading state. The underlying
+    // "Confirmar" trigger is `aria-hidden` behind the now-open
+    // LoadingDialog (Radix modal-dialog inert behavior), so it's not
+    // queryable while this is pending.
     expect(
-      screen.getByRole("button", { name: "Sí, registrar" }),
-    ).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Cancelar" })).toBeDisabled();
+      screen.queryByRole("heading", { name: "¿Registrar este pago?" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Procesando pago..." }),
+    ).toBeInTheDocument();
 
     resolveCreatePayment({ id: "p1" });
 
@@ -460,7 +540,53 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
       await screen.findByRole("button", { name: "Confirmar" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("heading", { name: "¿Registrar este pago?" }),
+      screen.queryByRole("heading", { name: "Procesando pago..." }),
     ).not.toBeInTheDocument();
+  });
+
+  it("shows the 'Registrando ajuste...' loading popup (not 'Procesando pago...') while submitting an adjustment", async () => {
+    let resolveCreatePayment: (value: { id: string }) => void = () => {};
+    createPayment.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveCreatePayment = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+
+    render(
+      <PaymentDialog
+        open
+        onOpenChange={() => {}}
+        rentalId="r1"
+        folio="R-000001"
+        businessName="Insumos O2"
+        businessPhone="771 131 3535"
+        customerName="Juan Pérez"
+        customerPhone="5512345678"
+        suggestedAmount={3000}
+        initialRentAmount={2800}
+        hasPreviousRentPayment
+      />,
+    );
+
+    await user.click(screen.getByRole("radio", { name: "Ajuste" }));
+    await user.type(screen.getByLabelText("Monto del ajuste"), "-100");
+    await user.type(
+      screen.getByLabelText("Nota"),
+      "Descuento por equipo dañado",
+    );
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
+    await user.click(screen.getByRole("button", { name: "Sí, registrar" }));
+
+    expect(
+      screen.getByRole("heading", { name: "Registrando ajuste..." }),
+    ).toBeInTheDocument();
+
+    resolveCreatePayment({ id: "p1" });
+
+    expect(
+      await screen.findByRole("button", { name: "Confirmar" }),
+    ).toBeInTheDocument();
   });
 });

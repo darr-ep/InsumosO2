@@ -33,33 +33,43 @@ export interface AppHeaderProps {
   title: string;
   /** @default false */
   showBack?: boolean;
+  onBack?: () => void;
   titleClassName?: string;
 }
 
 export function AppHeader({
   title,
   showBack = false,
+  onBack,
   titleClassName,
 }: AppHeaderProps) {
   const navigate = useNavigate();
 
+  const handleBack = () => {
+    if (onBack) {
+      onBack();
+    } else {
+      navigate(-1);
+    }
+  };
+
   if (showBack) {
     return (
-      <header className="flex items-center justify-between px-2 py-2">
+      <header className="bg-card flex items-center justify-between border-b px-2 py-2.5">
         <div className="flex items-center gap-2">
           <Button
             type="button"
             variant="ghost"
             size="icon"
             aria-label="Volver"
-            onClick={() => navigate(-1)}
+            onClick={handleBack}
             className="rounded-full"
           >
             <ArrowLeft aria-hidden="true" className="!size-[24px]" />
           </Button>
           <h1
             className={cn(
-              "text-xl font-bold tracking-tight",
+              "text-lg font-semibold tracking-tight",
               titleClassName,
             )}
           >

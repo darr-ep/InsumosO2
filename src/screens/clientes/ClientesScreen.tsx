@@ -1,5 +1,5 @@
-import { memo, useEffect, useMemo, useState } from "react";
-import { Users } from "lucide-react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, Users } from "lucide-react";
 import { CustomerCard } from "@/components/CustomerCard";
 import { CustomerDetailSheet } from "@/components/CustomerDetailSheet";
 import { EmptyState } from "@/components/EmptyState";
@@ -137,6 +137,8 @@ export const ClientesScreen = memo(function ClientesScreen({
     };
   }, [query]);
 
+  const [displayLimit, setDisplayLimit] = useState(20);
+
   function openCustomerDetail(customerId: string) {
     setSelectedCustomerId(customerId);
     setCustomerDetailOpen(true);
@@ -149,9 +151,42 @@ export const ClientesScreen = memo(function ClientesScreen({
   // setState-in-effect cascading render for the "query was cleared" case).
   const visibleResults = isSearchActive ? results : [];
   const visibleCustomers = isSearchActive ? visibleResults : (customers ?? []);
+  const displayedCustomers = visibleCustomers.slice(0, displayLimit);
+
+  useEffect(() => {
+    setDisplayLimit(20);
+  }, [query]);
+
+  const observerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const target = observerRef.current;
+    if (!target) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setDisplayLimit((prev) => prev + 20);
+        }
+      },
+      { rootMargin: "100px" },
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+    // Same dependency shape as DashboardScreen's identical observer effect
+    // (`[rentals]`): depend on the underlying list's identity, not on
+    // `displayLimit`/`displayedCustomers.length`. A freshly-created
+    // IntersectionObserver fires its callback immediately with the CURRENT
+    // intersection state — depending on the derived count recreated the
+    // observer on every "load 20 more", and since the sentinel was still
+    // on-screen right after growing the list, that fresh observer
+    // immediately re-fired and loaded the next 20 too, cascading through
+    // the whole list in one go instead of one batch per real scroll.
+  }, [visibleCustomers]);
 
   return (
-    <div className="flex flex-col gap-4 px-4 pt-2 pb-8">
+    <div className="flex flex-col gap-4 px-4 pt-2 pb-5">
       {isSearchActive ? (
         <>
           {searchError && (
@@ -186,8 +221,8 @@ export const ClientesScreen = memo(function ClientesScreen({
           )}
 
           {customers !== null && customers.length > 0 && (
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold text-foreground">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-foreground">
                 Clientes
               </h2>
               <span className="bg-primary-soft text-primary rounded-full px-2 py-0.5 text-xs font-medium">
@@ -199,25 +234,36 @@ export const ClientesScreen = memo(function ClientesScreen({
       )}
 
       {visibleCustomers.length > 0 && (
-        <ul className="flex flex-col gap-2">
-          {visibleCustomers.map((customer, index) => {
-            const activeCount = activeRentalCounts.get(customer.id) ?? 0;
-            return (
-              <li
-                key={customer.id}
-                className="animate-card-enter"
-                style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
-              >
-                <CustomerCard
-                  name={customer.name}
-                  phone={customer.phone}
-                  activeCount={activeCount}
-                  onClick={() => openCustomerDetail(customer.id)}
-                />
-              </li>
-            );
-          })}
-        </ul>
+        <>
+          <ul className="flex flex-col gap-2">
+            {displayedCustomers.map((customer, index) => {
+              const activeCount = activeRentalCounts.get(customer.id) ?? 0;
+              return (
+                <li
+                  key={customer.id}
+                  className="animate-card-enter"
+                  style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
+                >
+                  <CustomerCard
+                    name={customer.name}
+                    phone={customer.phone}
+                    activeCount={activeCount}
+                    onClick={() => openCustomerDetail(customer.id)}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+          {displayedCustomers.length < visibleCustomers.length && (
+            <div
+              ref={observerRef}
+              className="flex items-center justify-center py-4 text-xs text-muted-foreground"
+            >
+              <Loader2 className="mr-2 size-4 animate-spin text-primary" />
+              <span>Cargando más clientes…</span>
+            </div>
+          )}
+        </>
       )}
 
       <CustomerDetailSheet

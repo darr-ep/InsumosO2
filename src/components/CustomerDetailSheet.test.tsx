@@ -154,11 +154,11 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
     expect(screen.queryByText("R-000003")).not.toBeInTheDocument();
 
     expect(
-      screen.getByRole("button", { name: "Activas" }),
-    ).toHaveAttribute("aria-pressed", "true");
+      screen.getByRole("radio", { name: /^Activas/ }),
+    ).toHaveAttribute("aria-checked", "true");
     expect(
-      screen.getByRole("button", { name: "Historial" }),
-    ).toHaveAttribute("aria-pressed", "false");
+      screen.getByRole("radio", { name: /^Historial/ }),
+    ).toHaveAttribute("aria-checked", "false");
   });
 
   it("switches to the Historial segment when tapped, hiding Activas entirely", async () => {
@@ -173,7 +173,7 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
     renderSheet();
     await screen.findByText("Juan Pérez");
 
-    await user.click(screen.getByRole("button", { name: "Historial" }));
+    await user.click(screen.getByRole("radio", { name: /^Historial/ }));
 
     expect(screen.getByText("R-000003")).toBeInTheDocument();
     expect(screen.getByText("R-000002")).toBeInTheDocument();
@@ -192,30 +192,26 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
     expect(await screen.findByText("Juan Pérez")).toBeInTheDocument();
     // Activas is empty (only a RETURNED rental exists), but the toggle
     // itself still renders — this is NOT the "Sin rentas" zero-total case.
-    expect(screen.getByText("Sin rentas activas.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Historial" })).toBeInTheDocument();
+    expect(screen.getByText("Sin rentas activas")).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /^Historial/ })).toBeInTheDocument();
   });
 
-  // design-fidelity Slice C (design obs #2224 §5, task 5): the customer-wide
-  // "Sin rentas" empty state — distinct from the per-segment case above —
-  // only appears when the customer has NO rentals at all, and offers a
-  // "+ Nueva renta" CTA instead of the toggle (nothing to toggle between).
-  it("shows the 'Sin rentas' empty state with a '+ Nueva renta' CTA when the customer has no rentals at all, instead of the toggle", async () => {
+  it("shows the 'Sin rentas activas' empty state with a '+ Nueva renta' CTA and keep the toggle available when the customer has no rentals at all", async () => {
     getCustomer.mockResolvedValue(customerWithPhoto);
     listRentalsForCustomer.mockResolvedValue([]);
 
     renderSheet();
 
-    expect(await screen.findByText("Sin rentas")).toBeInTheDocument();
+    expect(await screen.findByText("Sin rentas activas")).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Activas" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("radio", { name: /^Activas/ }),
+    ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "+ Nueva renta" }),
+      screen.getByRole("button", { name: /Nueva renta/i }),
     ).toBeInTheDocument();
   });
 
-  it("navigates to /nueva-renta and closes the sheet when the 'Sin rentas' CTA is tapped", async () => {
+  it("navigates to /nueva-renta and closes the sheet when the 'Sin rentas activas' CTA is tapped", async () => {
     getCustomer.mockResolvedValue(customerWithPhoto);
     listRentalsForCustomer.mockResolvedValue([]);
     const onOpenChange = vi.fn();
@@ -223,7 +219,7 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
 
     renderSheet({ onOpenChange });
     await user.click(
-      await screen.findByRole("button", { name: "+ Nueva renta" }),
+      await screen.findByRole("button", { name: /Nueva renta/i }),
     );
 
     expect(navigate).toHaveBeenCalledWith("/nueva-renta");
@@ -239,8 +235,22 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
 
     renderSheet();
 
-    const telLink = await screen.findByRole("link", { name: /5512345678/ });
+    const telLink = await screen.findByRole("link", { name: /551\s*234\s*5678/ });
     expect(telLink).toHaveAttribute("href", "tel:5512345678");
+  });
+
+  // design-fidelity post-audit bugfix batch (pencil ground truth): the
+  // phone row, the credential card, and every rental row (active +
+  // historial) must sit on a white card, matching the rest of the
+  // redesigned sheet — none of these had a background before this batch.
+  it("renders the phone row as a white card", async () => {
+    getCustomer.mockResolvedValue(customerWithPhoto);
+    listRentalsForCustomer.mockResolvedValue([]);
+
+    renderSheet();
+
+    const telLink = await screen.findByRole("link", { name: /551\s*234\s*5678/ });
+    expect(telLink.closest(".bg-white")).not.toBeNull();
   });
 
   it("opens the rental's detail sheet when an active rental row is tapped (Redesign Round 3, punto E)", async () => {
@@ -268,6 +278,18 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
     expect(
       await screen.findByRole("heading", { name: "Renta R-000004" }),
     ).toBeInTheDocument();
+  });
+
+  it("renders an active rental row as a white card", async () => {
+    getCustomer.mockResolvedValue(customerWithPhoto);
+    listRentalsForCustomer.mockResolvedValue([
+      { id: "r1", folio: "R-000004", status: "ACTIVE", initial_rent_amount: 2800 },
+    ]);
+
+    renderSheet();
+
+    const row = (await screen.findByText("R-000004")).closest("button")!;
+    expect(row).toHaveClass("bg-white");
   });
 
   it("fetches the credential eagerly when the sheet opens (no button tap needed) and shows a blurred ID-card preview with a 'Ver credencial' reveal button (CU7)", async () => {
@@ -465,7 +487,7 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows the 'credencial pendiente' state, uploads via the camera in one step (capture IS the upload), and then shows the eager blurred preview (§16.13/Anexo A.5)", async () => {
+  it("shows the 'Sin credencial registrada' state when pending, and opens edit mode with camera capture", async () => {
     getCustomer.mockResolvedValue(customerPending);
     listRentalsForCustomer.mockResolvedValue([]);
     const updatedCustomer = { ...customerPending, credential_photo: "nueva.jpg" };
@@ -477,9 +499,11 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
 
     renderSheet({ customerId: "c2" });
 
-    expect(
-      await screen.findByText("Credencial pendiente. Puedes agregarla ahora."),
-    ).toBeInTheDocument();
+    const pendingText = await screen.findByText(
+      "Sin credencial registrada",
+    );
+    expect(pendingText).toBeInTheDocument();
+    expect(pendingText.closest(".bg-white")).not.toBeNull();
     // No "Ver credencial" and no eager fetch while pending — there's
     // nothing to view yet.
     expect(
@@ -487,26 +511,19 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
     ).not.toBeInTheDocument();
     expect(getCredentialPhotoUrl).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole("button", { name: "Simular captura" }));
-
-    await waitFor(() =>
-      expect(updateCustomerCredentialPhoto).toHaveBeenCalledWith(
-        "c2",
-        expect.any(File),
-      ),
-    );
-
-    await waitFor(() =>
-      expect(getCredentialPhotoUrl).toHaveBeenCalledWith(updatedCustomer),
-    );
-    const image = await screen.findByAltText("Credencial del cliente");
-    expect(image.className).toMatch(/blur-md/);
+    // Camera is not rendered directly in the detail view
     expect(
-      screen.getByRole("button", { name: "Ver credencial" }),
+      screen.queryByRole("button", { name: "Simular captura" }),
+    ).not.toBeInTheDocument();
+
+    // Entering edit mode makes the camera capture available
+    await user.click(screen.getByRole("button", { name: /editar cliente/i }));
+    expect(
+      await screen.findByRole("button", { name: "Simular captura" }),
     ).toBeInTheDocument();
   });
 
-  it("shows a 'Guardando…' label while the retry upload is in flight", async () => {
+  it("shows a 'Guardando…' label while the credential retry-upload (fired from inside edit mode) is in flight", async () => {
     getCustomer.mockResolvedValue(customerPending);
     listRentalsForCustomer.mockResolvedValue([]);
     let resolveUpload: (value: typeof customerPending) => void = () => {};
@@ -518,6 +535,8 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
     const user = userEvent.setup();
 
     renderSheet({ customerId: "c2" });
+    await screen.findByText("Sin credencial registrada");
+    await user.click(screen.getByRole("button", { name: /editar cliente/i }));
     await user.click(
       await screen.findByRole("button", { name: "Simular captura" }),
     );
@@ -530,22 +549,43 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
     );
   });
 
-  it("shows an error and keeps the camera available when the retry upload fails", async () => {
+  it("shows the retry-upload error even after the user already saved name/phone and left edit mode (the upload is fire-and-forget from inside the edit form)", async () => {
     getCustomer.mockResolvedValue(customerPending);
     listRentalsForCustomer.mockResolvedValue([]);
-    updateCustomerCredentialPhoto.mockRejectedValue(new Error("network"));
+    let rejectUpload: (error: Error) => void = () => {};
+    updateCustomerCredentialPhoto.mockReturnValue(
+      new Promise((_resolve, reject) => {
+        rejectUpload = reject;
+      }),
+    );
+    updateCustomerContactInfo.mockResolvedValue({
+      ...customerPending,
+      name: "María L. López",
+    });
     const user = userEvent.setup();
 
     renderSheet({ customerId: "c2" });
+    await screen.findByText("Sin credencial registrada");
+    await user.click(screen.getByRole("button", { name: /editar cliente/i }));
     await user.click(
       await screen.findByRole("button", { name: "Simular captura" }),
     );
+    expect(await screen.findByText("Guardando…")).toBeInTheDocument();
 
+    // Save name/phone before the background photo upload settles — exits
+    // edit mode while the upload is still in flight.
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: /editar cliente/i }),
+      ).toBeInTheDocument(),
+    );
+
+    // The upload now fails — the error must still surface even though
+    // `isEditing` is already false.
+    rejectUpload(new Error("network"));
     expect(
       await screen.findByText("No se pudo subir la foto. Intenta de nuevo."),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Simular captura" }),
     ).toBeInTheDocument();
   });
 

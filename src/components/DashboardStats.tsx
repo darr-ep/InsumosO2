@@ -97,7 +97,7 @@ function availabilityValueClassName(value: number): string {
   if (value === 1) {
     return "text-warning";
   }
-  return "text-success";
+  return "text-foreground";
 }
 
 export function DashboardStats({
@@ -174,7 +174,7 @@ export function DashboardStats({
         <div
           role="group"
           aria-label={`Rentas activas: ${activeRentalsCount}`}
-          className="bg-card flex flex-col items-center justify-center gap-1 rounded-md border p-3"
+          className="bg-card flex flex-col items-center justify-center gap-1 rounded-2xl border p-3 shadow-xs h-full"
         >
           <ClipboardList
             aria-hidden="true"
@@ -182,13 +182,13 @@ export function DashboardStats({
             className="text-primary size-5"
           />
           {isRefreshing ? (
-            <Skeleton className="h-9 w-8" />
+            <Skeleton className="h-8 w-8" />
           ) : (
-            <span className="text-foreground text-3xl font-bold">
+            <span className="text-foreground text-2xl font-bold">
               {activeRentalsCount}
             </span>
           )}
-          <span className="text-center text-xs text-muted-foreground">
+          <span className="text-center text-xs text-muted-foreground leading-tight">
             Rentas activas
           </span>
         </div>
@@ -196,12 +196,12 @@ export function DashboardStats({
         <div
           role="group"
           aria-label={`Concentradores disponibles: ${concentradoresDisponibles}`}
-          className="bg-card rounded-md border"
+          className="bg-card rounded-2xl border shadow-xs h-full flex"
         >
           <button
             type="button"
             onClick={() => openEditDialog("concentradores")}
-            className="flex w-full flex-col items-center gap-1 p-3"
+            className="flex w-full flex-col items-center justify-center gap-1 p-3"
           >
             <Wind
               aria-hidden="true"
@@ -209,18 +209,18 @@ export function DashboardStats({
               className="size-5 text-[#D97706]"
             />
             {isRefreshing ? (
-              <Skeleton className="h-7 w-6" />
+              <Skeleton className="h-8 w-8" />
             ) : (
               <span
                 className={cn(
-                  "text-xl font-semibold",
+                  "text-2xl font-bold",
                   availabilityValueClassName(concentradoresDisponibles),
                 )}
               >
                 {concentradoresDisponibles}
               </span>
             )}
-            <span className="text-center text-xs text-muted-foreground">
+            <span className="text-center text-xs text-muted-foreground leading-tight">
               Concentradores disponibles
             </span>
           </button>
@@ -229,12 +229,12 @@ export function DashboardStats({
         <div
           role="group"
           aria-label={`Tanques disponibles: ${tanquesDisponibles}`}
-          className="bg-card rounded-md border"
+          className="bg-card rounded-2xl border shadow-xs h-full flex"
         >
           <button
             type="button"
             onClick={() => openEditDialog("tanques")}
-            className="flex w-full flex-col items-center gap-1 p-3"
+            className="flex w-full flex-col items-center justify-center gap-1 p-3"
           >
             <Droplet
               aria-hidden="true"
@@ -242,18 +242,18 @@ export function DashboardStats({
               className="size-5 text-[#0D9488]"
             />
             {isRefreshing ? (
-              <Skeleton className="h-7 w-6" />
+              <Skeleton className="h-8 w-8" />
             ) : (
               <span
                 className={cn(
-                  "text-xl font-semibold",
+                  "text-2xl font-bold",
                   availabilityValueClassName(tanquesDisponibles),
                 )}
               >
                 {tanquesDisponibles}
               </span>
             )}
-            <span className="text-center text-xs text-muted-foreground">
+            <span className="text-center text-xs text-muted-foreground leading-tight">
               Tanques disponibles
             </span>
           </button>

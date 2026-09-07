@@ -89,8 +89,8 @@ describe("totalPaid (§16.10, task 3.3)", () => {
 });
 
 describe("paymentTypeLabel (Redesign Round 3 — historial de pagos)", () => {
-  it("labels rent as Mensualidad", () => {
-    expect(paymentTypeLabel("rent")).toBe("Mensualidad");
+  it("labels rent as Pago", () => {
+    expect(paymentTypeLabel("rent")).toBe("Pago");
   });
 
   it("labels deposit as Depósito inicial (disambiguated from ReturnDialog's 'Depósito a devolver')", () => {

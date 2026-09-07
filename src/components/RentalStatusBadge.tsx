@@ -26,9 +26,15 @@ import { rentalStatusLabel } from "@/domain/rentals/rental";
 
 export interface RentalStatusBadgeProps {
   status: "ACTIVE" | "RETURNED";
+  bordered?: boolean;
+  className?: string;
 }
 
-export function RentalStatusBadge({ status }: RentalStatusBadgeProps) {
+export function RentalStatusBadge({
+  status,
+  bordered = false,
+  className,
+}: RentalStatusBadgeProps) {
   const isActive = status === "ACTIVE";
 
   return (
@@ -36,8 +42,9 @@ export function RentalStatusBadge({ status }: RentalStatusBadgeProps) {
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full px-[9px] py-[6px] text-[11px] font-medium",
         isActive
-          ? "bg-success-soft text-success"
+          ? cn("bg-success-soft text-success", bordered && "border border-emerald-300")
           : "bg-muted text-muted-foreground",
+        className,
       )}
     >
       {isActive && (

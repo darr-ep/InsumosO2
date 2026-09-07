@@ -1,7 +1,8 @@
-﻿import type { ReactNode } from "react";
-import { ChevronRight, Phone } from "lucide-react";
+import type { ReactNode } from "react";
+import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/UserAvatar";
+import { formatPhoneDisplay } from "@/lib/phone";
 
 /**
  * design-fidelity Slice C (§4.2, design obs #2224 §C2/C3):
@@ -31,6 +32,7 @@ export interface CustomerCardProps {
   className?: string;
   ariaLabel?: string;
   trailing?: ReactNode;
+  avatarTone?: "solid" | "soft";
 }
 
 export function CustomerCard({
@@ -41,19 +43,19 @@ export function CustomerCard({
   className,
   ariaLabel,
   trailing,
+  avatarTone = "soft",
 }: CustomerCardProps) {
   const showBadge = activeCount !== undefined && activeCount > 0;
   const showChevron = Boolean(onClick) && !trailing && !showBadge;
 
   const content = (
     <>
-      <UserAvatar name={name || "—"} avatarUrl={null} tone="soft" size={40} />
+      <UserAvatar name={name || "—"} avatarUrl={null} tone={avatarTone} size={40} />
       <div className="min-w-0 flex-1">
-        <p className="font-medium text-foreground truncate">{name || "—"}</p>
+        <p className="font-semibold text-foreground truncate">{name || "—"}</p>
         {phone && (
-          <p className="text-muted-foreground text-sm flex items-center gap-1">
-            <Phone aria-hidden="true" className="size-3 shrink-0" />
-            <span>{phone}</span>
+          <p className="text-muted-foreground text-sm">
+            <span>{formatPhoneDisplay(phone)}</span>
           </p>
         )}
       </div>
@@ -67,7 +69,7 @@ export function CustomerCard({
         {showChevron && (
           <ChevronRight
             aria-hidden="true"
-            className="size-4 text-muted-foreground group-hover:text-foreground shrink-0 transition-colors"
+            className="size-5 text-muted-foreground group-hover:text-foreground shrink-0 transition-colors"
           />
         )}
       </div>
@@ -81,7 +83,7 @@ export function CustomerCard({
         onClick={onClick}
         aria-label={ariaLabel ?? name}
         className={cn(
-          "group flex w-full items-center gap-3 rounded-lg border bg-card p-3 text-left transition-all hover:bg-accent/50 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          "group flex w-full items-center gap-3 rounded-2xl border bg-card p-3 text-left transition-all hover:bg-accent/50 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           className,
         )}
       >
@@ -93,7 +95,7 @@ export function CustomerCard({
   return (
     <div
       className={cn(
-        "flex w-full items-center gap-3 rounded-lg border bg-card p-3",
+        "flex w-full items-center gap-3 rounded-2xl border bg-card p-3",
         className,
       )}
     >

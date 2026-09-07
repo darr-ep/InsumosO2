@@ -98,7 +98,7 @@ export function AnimatedSwitch<T extends string>({
       aria-label={ariaLabel}
       onKeyDown={handleKeyDown}
       className={cn(
-        "relative inline-flex items-center rounded-full border border-input bg-background p-1",
+        "relative inline-flex items-center rounded-full border border-slate-200 bg-white p-1 shrink-0 shadow-2xs",
         className,
       )}
     >
@@ -125,7 +125,7 @@ export function AnimatedSwitch<T extends string>({
             tabIndex={isSelected ? 0 : -1}
             onClick={() => selectByIndex(index)}
             className={cn(
-              "relative z-10 flex-1 rounded-full px-4 py-1.5 text-sm transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "relative z-10 flex-1 rounded-full px-4 py-1.5 text-sm transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring whitespace-nowrap shrink-0",
               isSelected
                 ? "font-bold text-primary-foreground"
                 : "font-medium text-muted-foreground",

@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { DashboardScreen } from "@/screens/dashboard/DashboardScreen";
 import { DataCacheProvider } from "@/app/DataCacheContext";
+import { formatDateDisplay } from "@/lib/formatDate";
 
 const listActiveRentals = vi.fn();
 const listActiveRentalItems = vi.fn();
@@ -186,7 +187,7 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
       name: "Concentradores disponibles: 3",
     });
     expect(within(concentradoresTile).getByText("3")).toHaveClass(
-      "text-success",
+      "text-foreground",
     );
 
     // Total tanques = 0 → available is clamped to 0 regardless of active
@@ -635,7 +636,7 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
     // list shows for an identical rental.
     it("shows the same start-date line ('Inicio {fecha}') on a search result as the main list shows for an identical rental (root cause: search branch never passed the date as RentalCard children)", async () => {
       const created = "2026-08-01T10:00:00.000Z";
-      const expectedDate = new Date(created).toLocaleDateString("es-MX");
+      const expectedDate = formatDateDisplay(created);
 
       searchRentals.mockResolvedValue([
         {

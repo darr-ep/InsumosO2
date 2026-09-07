@@ -84,6 +84,20 @@ export function ReturnCreatedSummary({
   return (
     <Dialog
       open={open}
+      // This dialog always opens in the SAME commit that closes both
+      // `ReturnDialog`'s Sheet and the parent `RentalDetailSheet` (see
+      // `RentalDetailSheet.tsx`'s `onReturned`) — real-device testing found
+      // that "Aceptar" could then land the app on a totally different
+      // screen instead of just dismissing this popup. Root cause: the
+      // shared `useHistoryBackClose` hook pushes one raw history entry per
+      // open modal; with two sheets closing (each popping their own entry
+      // via a deferred `history.back()`) at the exact moment this dialog's
+      // own entry gets pushed, whichever `back()` fires next can end up
+      // popping THIS dialog's freshly-pushed entry instead of its intended
+      // target, leaving the two real entries unbalanced. Opting this
+      // terminal, always-explicitly-dismissed confirmation out of that
+      // bookkeeping removes it from that race entirely.
+      manageHistory={false}
       onOpenChange={(next) => {
         if (!next) {
           reset();
@@ -95,32 +109,42 @@ export function ReturnCreatedSummary({
         {receipt && (
           <>
             <DialogHeader>
-              <DialogTitle className="text-success">
-                Devolución registrada ✓
-              </DialogTitle>
+              <div className="flex flex-col items-center gap-2 text-center">
+                <div className="bg-success-soft flex size-12 items-center justify-center rounded-full">
+                  <Check aria-hidden="true" className="text-success size-6" />
+                </div>
+                <DialogTitle>Devolución registrada</DialogTitle>
+              </div>
               <DialogDescription>Folio {receipt.folio}</DialogDescription>
             </DialogHeader>
 
-            <dl className="flex flex-col gap-2 text-sm">
+            <dl className="bg-muted flex flex-col gap-2 rounded-lg p-3 text-sm">
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Cliente</dt>
-                <dd>{receipt.customerName}</dd>
+                <dd className="font-semibold text-foreground">{receipt.customerName}</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Monto cobrado</dt>
-                <dd>{currencyFormatter.format(receipt.amountCollected)}</dd>
+                <dd className="font-semibold text-foreground">{currencyFormatter.format(receipt.amountCollected)}</dd>
               </div>
-              <div className="flex justify-between font-semibold">
-                <dt>Depósito devuelto</dt>
-                <dd>{currencyFormatter.format(receipt.depositReturned)}</dd>
-              </div>
+              {receipt.depositReturned > 0 && (
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Depósito devuelto</dt>
+                  <dd className="font-semibold text-foreground">{currencyFormatter.format(receipt.depositReturned)}</dd>
+                </div>
+              )}
             </dl>
 
             {printStatus === "failed" && (
-              <p className="text-destructive text-sm">
-                La devolución se guardó correctamente, pero no se pudo
-                imprimir el comprobante.
-              </p>
+              <div className="flex items-start gap-2 rounded-lg bg-amber-100 p-3 text-sm text-amber-700">
+                <TriangleAlert
+                  aria-hidden="true"
+                  className="mt-0.5 size-4 shrink-0"
+                />
+                <p>
+                  La devolución se guardó, pero no se pudo imprimir el comprobante.
+                </p>
+              </div>
             )}
             {printStatus === "printed" && (
               <p className="text-success text-sm">Comprobante impreso.</p>
@@ -146,17 +170,17 @@ export function ReturnCreatedSummary({
                   {shareAvailable && (
                     <Button
                       type="button"
-                      variant="outline"
+                      variant="secondary"
                       onClick={() => void handleShare()}
                       className="flex-1"
                     >
-                      Compartir comprobante
+                      Compartir
                     </Button>
                   )}
                 </div>
               )}
               <Button type="button" onClick={onGoHome} className="w-full">
-                Volver al inicio
+                Aceptar
               </Button>
             </DialogFooter>
           </>

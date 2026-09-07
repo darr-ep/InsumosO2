@@ -58,7 +58,7 @@ export interface DataCacheValue {
   refreshCustomers: () => Promise<void>;
 }
 
-const DataCacheContext = createContext<DataCacheValue | null>(null);
+export const DataCacheContext = createContext<DataCacheValue | null>(null);
 
 export function DataCacheProvider({ children }: { children: ReactNode }) {
   const [rentals, setRentals] = useState<RentalWithCustomer[] | null>(null);

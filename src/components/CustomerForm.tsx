@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { CredentialCameraCapture } from "@/components/CredentialCameraCapture";
 import { customerFormSchema, type CustomerFormValues } from "@/domain/customers/customer";
 import { ID_CARD_ASPECT_RATIO } from "@/lib/credentialCameraCrop";
+import { cleanPhoneDigits, formatPhoneDisplay } from "@/lib/phone";
 
 /**
  * SDD.md §7.1 (cliente nuevo: nombre, teléfono, foto de credencial) + §20
@@ -154,10 +155,16 @@ export function CustomerForm({
     register,
     handleSubmit,
     control,
+    setValue,
+    clearErrors,
+    trigger,
     formState: { errors },
   } = useForm<CustomerFormValues>({
     resolver: zodResolver(customerFormSchema),
-    defaultValues: { name: "", phone: "", ...initialValues },
+    defaultValues: {
+      name: initialValues?.name ?? "",
+      phone: cleanPhoneDigits(initialValues?.phone ?? ""),
+    },
     ...(liveReport ? { mode: "onBlur" as const } : {}),
   });
 
@@ -223,7 +230,14 @@ export function CustomerForm({
           autoComplete="name"
           placeholder="Ej. Juan Pérez"
           aria-invalid={!!errors.name}
-          {...register("name")}
+          className="bg-card"
+          {...register("name", {
+            onChange: (e) => {
+              if (e.target.value.trim().length >= 2) {
+                clearErrors("name");
+              }
+            },
+          })}
         />
         {errors.name && (
           <p className="text-destructive text-sm">{errors.name.message}</p>
@@ -237,9 +251,21 @@ export function CustomerForm({
           type="tel"
           inputMode="numeric"
           autoComplete="tel"
-          placeholder="5512345678"
+          maxLength={12}
+          placeholder="775 123 4567"
           aria-invalid={!!errors.phone}
-          {...register("phone")}
+          className="bg-card"
+          value={formatPhoneDisplay(watchedPhone || "")}
+          onChange={(e) => {
+            const digits = cleanPhoneDigits(e.target.value);
+            setValue("phone", digits, { shouldValidate: true });
+            if (digits.length === 10) {
+              clearErrors("phone");
+            }
+          }}
+          onBlur={() => {
+            void trigger("phone");
+          }}
         />
         {errors.phone && (
           <p className="text-destructive text-sm">{errors.phone.message}</p>
@@ -263,7 +289,7 @@ export function CustomerForm({
                 />
               )}
             </div>
-            <Button type="button" variant="outline" onClick={handleRetakePhoto}>
+            <Button type="button" variant="outline" size="sm" onClick={handleRetakePhoto}>
               Cambiar foto
             </Button>
           </div>

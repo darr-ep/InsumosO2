@@ -121,9 +121,9 @@ describe("ClientesScreen (Redesign Round 2, Batch 2 — Clientes screen)", () =>
     renderScreen();
 
     expect(await screen.findByText("Juan Pérez")).toBeInTheDocument();
-    expect(screen.getByText("5512345678")).toBeInTheDocument();
+    expect(screen.getByText("551 234 5678")).toBeInTheDocument();
     expect(screen.getByText("Ana Ruiz")).toBeInTheDocument();
-    expect(screen.getByText("5522223333")).toBeInTheDocument();
+    expect(screen.getByText("552 222 3333")).toBeInTheDocument();
   });
 
   it("shows an active-rental-count badge per customer, singular/plural, and hides it at zero (Redesign — UX/UI pass, business-owner request)", async () => {
@@ -216,6 +216,67 @@ describe("ClientesScreen (Redesign Round 2, Batch 2 — Clientes screen)", () =>
     ).toBeInTheDocument();
   });
 
+  // Regression: the incremental "load 20 more" observer must behave the
+  // same way DashboardScreen's identical pattern does — one observer
+  // instance kept alive across batches, only recreated when the underlying
+  // list itself changes. The previous bug depended on the derived
+  // displayed-count, so growing the list by 20 tore down and recreated the
+  // observer; IntersectionObserver fires its callback immediately on
+  // `observe()` with the current (still-intersecting) state, so that
+  // recreation cascaded straight through the whole list instead of loading
+  // one batch per real scroll.
+  it("keeps the same IntersectionObserver instance alive as more customers load, instead of recreating it per batch", async () => {
+    const manyCustomers = Array.from({ length: 45 }, (_, index) => ({
+      id: `c${index}`,
+      name: `Cliente ${index}`,
+      phone: "5510000000",
+    }));
+    listCustomers.mockResolvedValue(manyCustomers);
+
+    let observerCallCount = 0;
+    let capturedCallback: IntersectionObserverCallback | null = null;
+    const observe = vi.fn();
+    const disconnect = vi.fn();
+    class FakeIntersectionObserver {
+      constructor(callback: IntersectionObserverCallback) {
+        observerCallCount++;
+        capturedCallback = callback;
+      }
+      observe = observe;
+      disconnect = disconnect;
+      unobserve = vi.fn();
+      takeRecords = vi.fn(() => []);
+      root = null;
+      rootMargin = "";
+      thresholds = [];
+    }
+    vi.stubGlobal("IntersectionObserver", FakeIntersectionObserver);
+
+    renderScreen();
+
+    await screen.findByText("Cliente 0");
+    expect(screen.getByText("Cliente 19")).toBeInTheDocument();
+    expect(screen.queryByText("Cliente 20")).not.toBeInTheDocument();
+    expect(observerCallCount).toBe(1);
+
+    // Simulate the sentinel still being on-screen right after a batch loads
+    // — exactly the condition that used to cascade through the whole list.
+    capturedCallback!(
+      [{ isIntersecting: true } as IntersectionObserverEntry],
+      new FakeIntersectionObserver(() => {}) as unknown as IntersectionObserver,
+    );
+
+    expect(await screen.findByText("Cliente 20")).toBeInTheDocument();
+    expect(screen.getByText("Cliente 39")).toBeInTheDocument();
+    expect(screen.queryByText("Cliente 40")).not.toBeInTheDocument();
+    // Only the one extra instance created above by the test itself to pass
+    // as the (unused) `observer` arg to the callback — the component's own
+    // effect must not have created a second one of its own.
+    expect(observerCallCount).toBe(2);
+
+    vi.unstubAllGlobals();
+  });
+
   // design-fidelity Slice C (design obs #2224 §C1): the two stacked
   // "Rentas activas"/"Historial" sections were replaced by a single list
   // controlled by a segmented Activas/Historial toggle — this test now
@@ -234,10 +295,10 @@ describe("ClientesScreen (Redesign Round 2, Batch 2 — Clientes screen)", () =>
 
     expect(getCustomer).toHaveBeenCalledWith("c1");
     expect(
-      await screen.findByRole("button", { name: "Activas" }),
+      await screen.findByRole("radio", { name: /^Activas/ }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Historial" }),
+      screen.getByRole("radio", { name: /^Historial/ }),
     ).toBeInTheDocument();
   });
 });

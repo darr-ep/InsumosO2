@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { Lock, PackageOpen, Pencil } from "lucide-react";
+import { IdCard, Loader2, Lock, PackageOpen, Pencil, Phone, Plus, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -12,13 +13,13 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { SegmentedToggle } from "@/components/ui/segmented-toggle";
-import { EmptyState } from "@/components/EmptyState";
+import { AnimatedSwitch } from "@/components/ui/animated-switch";
 import { RentalStatusBadge } from "@/components/RentalStatusBadge";
 import { RentalDetailSheet } from "@/components/RentalDetailSheet";
-import { CredentialCameraCapture } from "@/components/CredentialCameraCapture";
 import { CustomerEditForm } from "@/components/CustomerEditForm";
 import { ID_CARD_ASPECT_RATIO } from "@/lib/credentialCameraCrop";
+import { formatPhoneDisplay } from "@/lib/phone";
+import { formatDateDisplay } from "@/lib/formatDate";
 import {
   getCredentialPhotoUrl,
   getCustomer,
@@ -29,44 +30,6 @@ import {
 import { listRentalsForCustomer, type RentalRecord } from "@/data/rentals.repo";
 import { isCredentialPending } from "@/domain/customers/customer";
 import { formatCurrencyMXN } from "@/lib/currency";
-
-/**
- * SDD.md §16.6 (ficha de cliente — vista contextual, no ruta) + §15
- * (credencial protegida) + §16.13 ("credencial pendiente" es un estado a
- * diseñar explícitamente) + CU7. Task 3.4.
- *
- * Opened from `RentalDetailSheet` (§18) or from `CustomerPicker` inside
- * "Nueva renta" (§16.6) — wiring is task 3.5, this component only needs a
- * `customerId`.
- *
- * Real bug fix (Redesign Round 2, Batch 2 — Clientes screen): the rentals
- * list used to be one mislabeled "Historial de rentas" section mixing
- * ACTIVE and RETURNED rentals together, contradicting the business owner's
- * own principle stated in this same round's brief ("Diferenciar claramente
- * 'rentas activas' del 'historial de rentas'"). Now split into two
- * sections filtered client-side over the already-fetched `rentals` array —
- * zero new fetches, pure display fix.
- *
- * Feature: Credential Photo Camera + Compression (Batch 3b) — two real UX
- * changes, business owner's explicit request:
- * 1. Eager fetch + blur-and-reveal: as soon as the sheet opens for a
- *    non-pending customer, `getCredentialPhotoUrl` is called automatically
- *    (still gated behind opening this one customer's own detail sheet —
- *    never a bulk listing, so §15's "no aparece en listados" still holds).
- *    The image renders immediately inside a fixed ID-card-shaped box
- *    (reusing `CredentialCameraCapture`'s own `ID_CARD_ASPECT_RATIO`) with
- *    a CSS blur and a "Ver credencial" overlay button. Revealing is a
- *    client-side toggle (`revealed` state) — no re-fetch.
- * 2. The retry-upload flow ("credencial pendiente") now uses
- *    `CredentialCameraCapture` directly, wired straight to
- *    `updateCustomerCredentialPhoto` — capture already IS a compressed,
- *    correctly-shaped `File` (see that component's own tests), so the
- *    former two-step `retryFile` state + separate "Guardar credencial"
- *    confirm button is gone; `onCapture` firing goes straight to the
- *    upload call, keeping the "Guardando…" loading-state pattern already
- *    established elsewhere in this project (`CustomerForm`, other write
- *    dialogs).
- */
 
 export interface CustomerDetailSheetProps {
   open: boolean;
@@ -85,9 +48,6 @@ export function CustomerDetailSheet({
   const [customer, setCustomer] = useState<CustomerRecord | null>(null);
   const [rentals, setRentals] = useState<RentalRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
-  // design-fidelity Slice C (design obs #2224 §C1): replaces the two
-  // always-visible stacked sections with a single filtered list, toggled by
-  // a `SegmentedToggle` — "Activas" is the default segment.
   const [rentalSegment, setRentalSegment] = useState<"activas" | "historial">(
     "activas",
   );
@@ -97,16 +57,13 @@ export function CustomerDetailSheet({
   const [isLoadingCredential, setIsLoadingCredential] = useState(false);
   const [revealed, setRevealed] = useState(false);
 
-  const [retryError, setRetryError] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
   const [credentialViewerOpen, setCredentialViewerOpen] = useState(false);
 
-  // Redesign — UX/UI pass (business-owner request): edit name/phone
-  // in-place, without recreating the customer.
   const [isEditing, setIsEditing] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
-
+  const [isUploadingCredentialPhoto, setIsUploadingCredentialPhoto] =
+    useState(false);
   const [selectedRentalId, setSelectedRentalId] = useState<string | null>(
     null,
   );
@@ -117,19 +74,19 @@ export function CustomerDetailSheet({
     setRentalDetailOpen(true);
   }
 
-  // Pure fetch, no setState inside — same reasoning as
-  // RentalDetailSheet.tsx#fetchRentalDetail: avoids a
-  // react-hooks/set-state-in-effect false positive when this is called
-  // directly from the effect body below.
   function fetchCustomerDetail(id: string) {
     return Promise.all([getCustomer(id), listRentalsForCustomer(id)]);
   }
 
   useEffect(() => {
     if (!open || !customerId) {
+      setCustomer(null);
+      setRentals([]);
       return;
     }
 
+    setCustomer(null);
+    setRentals([]);
     let cancelled = false;
 
     fetchCustomerDetail(customerId)
@@ -144,14 +101,11 @@ export function CustomerDetailSheet({
         setCredentialUrl(null);
         setCredentialError(null);
         setRevealed(false);
-        setRetryError(null);
         setIsEditing(false);
         setEditError(null);
+        setIsUploadingCredentialPhoto(false);
         setRentalSegment("activas");
 
-        // Eager fetch: fires as soon as the sheet opens for a customer who
-        // already has a credential photo — no button tap needed. Still
-        // gated behind this one customer's own sheet, never a listing.
         if (!isCredentialPending(customerResult.credential_photo)) {
           setIsLoadingCredential(true);
           getCredentialPhotoUrl(customerResult)
@@ -188,8 +142,8 @@ export function CustomerDetailSheet({
       return;
     }
 
-    setIsUploading(true);
-    setRetryError(null);
+    setEditError(null);
+    setIsUploadingCredentialPhoto(true);
 
     try {
       const updated = await updateCustomerCredentialPhoto(customer.id, file);
@@ -197,8 +151,6 @@ export function CustomerDetailSheet({
       setCredentialUrl(null);
       setRevealed(false);
 
-      // Same eager-fetch behavior as on sheet open — the freshly uploaded
-      // photo shows up blurred immediately, no extra tap required.
       if (!isCredentialPending(updated.credential_photo)) {
         setIsLoadingCredential(true);
         try {
@@ -211,9 +163,9 @@ export function CustomerDetailSheet({
         }
       }
     } catch {
-      setRetryError("No se pudo subir la foto. Intenta de nuevo.");
+      setEditError("No se pudo subir la foto. Intenta de nuevo.");
     } finally {
-      setIsUploading(false);
+      setIsUploadingCredentialPhoto(false);
     }
   }
 
@@ -237,244 +189,380 @@ export function CustomerDetailSheet({
     }
   }
 
+  const [displayLimit, setDisplayLimit] = useState(20);
+
+  useEffect(() => {
+    setDisplayLimit(20);
+  }, [rentalSegment, customerId, open]);
+
   const pending = customer
     ? isCredentialPending(customer.credential_photo)
     : false;
 
-  // Real bug fix (Redesign Round 2, Batch 2): this section used to be one
-  // "Historial de rentas" list mixing ACTIVE and RETURNED rentals together
-  // — mislabeled, and a direct contradiction of the business owner's own
-  // explicit principle ("Diferenciar claramente 'rentas activas' del
-  // 'historial de rentas'"). Pure client-side filter over the
-  // already-fetched `rentals` array — zero new fetches.
-  const activeRentals = rentals.filter((rental) => rental.status === "ACTIVE");
-  const historialRentals = rentals.filter(
-    (rental) => rental.status !== "ACTIVE",
+  // Memoized so the pagination observer effects below (each keyed on one of
+  // these references) don't see a new identity — and recreate the observer
+  // — on every unrelated render: `.filter()` otherwise allocates a fresh
+  // array every render regardless of whether `rentals` itself changed.
+  const activeRentals = useMemo(
+    () => rentals.filter((rental) => rental.status === "ACTIVE"),
+    [rentals],
   );
+  const historialRentals = useMemo(
+    () => rentals.filter((rental) => rental.status !== "ACTIVE"),
+    [rentals],
+  );
+  const displayedActiveRentals = activeRentals.slice(0, displayLimit);
+  const displayedHistorialRentals = historialRentals.slice(0, displayLimit);
+
+  const activeSentinelRef = useRef<HTMLDivElement | null>(null);
+  const historialSentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // Stable ref + one effect per sentinel, keyed on the underlying list (not
+  // a derived count) — a freshly-created IntersectionObserver fires
+  // immediately with the CURRENT intersection state, so depending on a
+  // count that changes every "load 20 more" recreates the observer and
+  // cascades through the whole list (same root cause fixed in
+  // ClientesScreen/DashboardScreen). `rentalSegment` is also a dependency
+  // because switching tabs mounts a brand-new sentinel node that the
+  // previous effect run never saw.
+  useEffect(() => {
+    const target = activeSentinelRef.current;
+    if (!target) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) {
+        setDisplayLimit((prev) => prev + 20);
+      }
+    });
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [activeRentals, rentalSegment]);
+
+  useEffect(() => {
+    const target = historialSentinelRef.current;
+    if (!target) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) {
+        setDisplayLimit((prev) => prev + 20);
+      }
+    });
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [historialRentals, rentalSegment]);
 
   return (
     <>
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent>
-        {error && <p className="text-destructive text-sm">{error}</p>}
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent className="bg-background">
+          {error && <p className="text-destructive text-sm">{error}</p>}
 
-        {!customer && !error && (
-          <p className="text-muted-foreground text-sm">Cargando…</p>
-        )}
-
-        {customer && (
-          <>
-            {isEditing ? (
-              <div className="flex flex-col gap-2">
-                <CustomerEditForm
-                  initialValues={{ name: customer.name, phone: customer.phone }}
-                  onSubmit={(values) => void handleSaveEdit(values)}
-                  onCancel={() => {
-                    setIsEditing(false);
-                    setEditError(null);
-                  }}
-                  isSubmitting={isSavingEdit}
-                />
-                {editError && (
-                  <p className="text-destructive text-sm">{editError}</p>
-                )}
+          {!customer && !error && (
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-7 w-44 rounded-md" />
+                <Skeleton className="size-8 rounded-full" />
               </div>
-            ) : (
-              <>
-                <SheetHeader className="flex-row items-center gap-1">
-                  <SheetTitle>{customer.name}</SheetTitle>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label="Editar cliente"
-                    onClick={() => setIsEditing(true)}
-                  >
-                    <Pencil aria-hidden="true" />
-                  </Button>
-                </SheetHeader>
-                <a
-                  href={`tel:${customer.phone}`}
-                  className="text-muted-foreground text-sm"
-                >
-                  {customer.phone}
-                </a>
-              </>
-            )}
-
-            <section className="flex flex-col gap-2">
-              <h2 className="text-sm font-semibold text-muted-foreground">
-                Credencial
-              </h2>
-
-              {pending ? (
+              <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
                 <div className="flex flex-col gap-2">
-                  {/* §16.13/§21/Anexo A.5: "credencial pendiente" made
-                      visible here, with a way to complete it later — not a
-                      dead end. */}
-                  <p className="text-muted-foreground text-sm">
-                    Credencial pendiente. Puedes agregarla ahora.
-                  </p>
-                  {isUploading ? (
-                    <p className="text-muted-foreground text-sm">
-                      Guardando…
-                    </p>
-                  ) : (
-                    <CredentialCameraCapture
-                      onCapture={(file) => void handleRetryCapture(file)}
-                    />
-                  )}
-                  {retryError && (
-                    <p className="text-destructive text-sm">{retryError}</p>
-                  )}
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="h-5 w-32" />
                 </div>
-              ) : credentialUrl ? (
-                <div
-                  className="relative w-full max-w-xs overflow-hidden rounded-md border bg-black"
-                  style={{ aspectRatio: ID_CARD_ASPECT_RATIO }}
-                >
-                  <img
-                    src={credentialUrl}
-                    alt="Credencial del cliente"
-                    onClick={() => revealed && setCredentialViewerOpen(true)}
-                    className={`h-full w-full object-cover transition-[filter] duration-200 ${
-                      revealed ? "cursor-zoom-in" : "blur-md"
-                    }`}
+                <Skeleton className="size-11 rounded-full" />
+              </div>
+              <div className="flex flex-col gap-2 pt-2">
+                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-40 w-full rounded-2xl" />
+              </div>
+              <div className="flex flex-col gap-3 pt-2">
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-5 w-20" />
+                  <Skeleton className="h-8 w-36 rounded-full" />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Skeleton className="h-16 w-full rounded-2xl" />
+                  <Skeleton className="h-16 w-full rounded-2xl" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {customer && (
+            <>
+              {/* Rendered regardless of `isEditing`: the credential-photo
+                  retry-upload is fired from inside the edit form but is
+                  fire-and-forget, so it can still be loading or fail after
+                  the user already saved the name/phone and left edit mode —
+                  gating this on `isEditing` would silently swallow it. */}
+              {isUploadingCredentialPhoto && (
+                <p className="text-muted-foreground text-sm">Guardando…</p>
+              )}
+              {editError && (
+                <p className="text-destructive text-sm">{editError}</p>
+              )}
+              {isEditing ? (
+                <div className="flex flex-col gap-2">
+                  <CustomerEditForm
+                    initialValues={{ name: customer.name, phone: customer.phone }}
+                    credentialUrl={credentialUrl}
+                    onPhotoCaptured={(file) => void handleRetryCapture(file)}
+                    onSubmit={(values) => void handleSaveEdit(values)}
+                    onCancel={() => {
+                      setIsEditing(false);
+                      setEditError(null);
+                    }}
+                    isSubmitting={isSavingEdit}
                   />
-                  {!revealed && (
-                    <div className="absolute inset-0 flex items-center justify-center">
+                </div>
+              ) : (
+                <>
+                  <SheetHeader className="flex-row items-center justify-between gap-2 border-b-0 pb-1">
+                    <div className="flex items-center gap-2">
+                      <SheetTitle className="text-lg font-semibold py-1">{customer.name}</SheetTitle>
                       <Button
                         type="button"
-                        variant="secondary"
-                        className="bg-card/80"
-                        onClick={() => setRevealed(true)}
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 text-muted-foreground hover:text-foreground"
+                        aria-label="Editar cliente"
+                        onClick={() => setIsEditing(true)}
                       >
-                        <Lock aria-hidden="true" />
-                        Ver credencial
+                        <Pencil aria-hidden="true" className="size-4" />
                       </Button>
                     </div>
-                  )}
-                </div>
-              ) : isLoadingCredential ? (
-                <p className="text-muted-foreground text-sm">Cargando…</p>
-              ) : null}
+                  </SheetHeader>
 
-              {credentialError && (
-                <p className="text-destructive text-sm">{credentialError}</p>
-              )}
-            </section>
+                  <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-3 shadow-xs">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-medium text-slate-500">Teléfono</span>
+                        <a
+                          href={`tel:${customer.phone}`}
+                          className="text-base font-semibold text-slate-900 hover:underline"
+                        >
+                          {formatPhoneDisplay(customer.phone)}
+                        </a>
+                      </div>
+                      <a
+                      href={`tel:${customer.phone}`}
+                      className="flex size-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 transition-colors shrink-0"
+                      aria-label={`Llamar a ${customer.name}`}
+                    >
+                      <Phone aria-hidden="true" className="size-5" />
+                    </a>
+                  </div>
 
-            {rentals.length === 0 ? (
-              <EmptyState
-                icon={PackageOpen}
-                title="Sin rentas"
-                description="Este cliente todavía no tiene ninguna renta."
-                action={{
-                  label: "+ Nueva renta",
-                  onClick: () => {
-                    onOpenChange(false);
-                    navigate("/nueva-renta");
-                  },
-                }}
-              />
-            ) : (
-              <section className="flex flex-col gap-2">
-                <SegmentedToggle
-                  value={rentalSegment}
-                  onChange={setRentalSegment}
-                  ariaLabel="Filtrar rentas"
-                  options={[
-                    { value: "activas", label: "Activas" },
-                    { value: "historial", label: "Historial" },
-                  ]}
-                />
+                  <section className="flex flex-col gap-2 pt-2">
+                    <h2 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                      <IdCard aria-hidden="true" className="text-primary size-4" />
+                      Credencial
+                    </h2>
 
-                {rentalSegment === "activas" ? (
-                  activeRentals.length === 0 ? (
-                    <p className="text-muted-foreground text-sm">
-                      Sin rentas activas.
-                    </p>
-                  ) : (
-                    <ul className="flex flex-col gap-2">
-                      {activeRentals.map((rental) => (
-                        <RentalRow
-                          key={rental.id}
-                          rental={rental}
-                          onClick={() => openRentalDetail(rental.id)}
+                    {pending ? (
+                      <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-xs">
+                        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+                          <IdCard className="size-4" />
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <p className="text-sm font-semibold text-slate-900 leading-tight">
+                            Sin credencial registrada
+                          </p>
+                          <p className="text-xs text-muted-foreground leading-tight mt-0.5">
+                            Puedes capturarla o actualizarla editando los datos del cliente.
+                          </p>
+                        </div>
+                      </div>
+                    ) : credentialUrl ? (
+                      <div
+                        className="relative w-full overflow-hidden rounded-2xl border bg-black shadow-xs"
+                        style={{ aspectRatio: ID_CARD_ASPECT_RATIO }}
+                      >
+                        <img
+                          src={credentialUrl}
+                          alt="Credencial del cliente"
+                          onClick={() => revealed && setCredentialViewerOpen(true)}
+                          className={`h-full w-full object-cover transition-[filter] duration-200 ${
+                            revealed ? "cursor-zoom-in" : "blur-md"
+                          }`}
                         />
-                      ))}
-                    </ul>
-                  )
-                ) : historialRentals.length === 0 ? (
-                  <p className="text-muted-foreground text-sm">
-                    Sin historial.
-                  </p>
-                ) : (
-                  <ul className="flex flex-col gap-2">
-                    {historialRentals.map((rental) => (
-                      <RentalRow
-                        key={rental.id}
-                        rental={rental}
-                        onClick={() => openRentalDetail(rental.id)}
+                        {!revealed && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              className="rounded-full bg-white text-slate-900 hover:bg-slate-100 font-medium px-4 shadow-md flex items-center gap-2"
+                              onClick={() => setRevealed(true)}
+                            >
+                              <Lock aria-hidden="true" className="size-4" />
+                              Ver credencial
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    ) : isLoadingCredential ? (
+                      <p className="text-muted-foreground text-sm">Cargando…</p>
+                    ) : null}
+
+                    {credentialError && (
+                      <p className="text-destructive text-sm">{credentialError}</p>
+                    )}
+                  </section>
+
+                  <section className="flex flex-col gap-3 pt-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <h2 className="flex items-center gap-1.5 text-base font-bold text-foreground">
+                        <Receipt aria-hidden="true" className="text-primary size-4" />
+                        Rentas
+                      </h2>
+                      <AnimatedSwitch
+                        value={rentalSegment}
+                        onChange={setRentalSegment}
+                        ariaLabel="Filtrar rentas"
+                        options={[
+                          { value: "activas", label: "Activas", count: activeRentals.length },
+                          { value: "historial", label: "Historial", count: historialRentals.length },
+                        ]}
                       />
-                    ))}
-                  </ul>
-                )}
-              </section>
-            )}
-          </>
-        )}
-      </SheetContent>
-    </Sheet>
+                    </div>
 
-    {credentialUrl && (
-      <Dialog
-        open={credentialViewerOpen}
-        onOpenChange={setCredentialViewerOpen}
-      >
-        <DialogContent className="max-w-md">
-          <img
-            src={credentialUrl}
-            alt="Credencial del cliente (ampliada)"
-            className="w-full rounded-md"
-          />
-        </DialogContent>
-      </Dialog>
-    )}
+                    {rentalSegment === "activas" ? (
+                      activeRentals.length === 0 ? (
+                        <div className="flex flex-col gap-3">
+                          <div className="rounded-2xl border bg-white p-6 text-center flex flex-col items-center gap-2 shadow-xs">
+                            <div className="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                              <PackageOpen className="size-5" />
+                            </div>
+                            <p className="text-sm font-semibold text-slate-900">Sin rentas activas</p>
+                            <p className="text-xs text-muted-foreground">Este cliente no tiene rentas en curso actualmente.</p>
+                          </div>
+                          <Button
+                            type="button"
+                            className="w-full flex items-center justify-center gap-2"
+                            onClick={() => {
+                              onOpenChange(false);
+                              navigate("/nueva-renta");
+                            }}
+                          >
+                            <Plus className="size-4" />
+                            Nueva renta
+                          </Button>
+                        </div>
+                      ) : (
+                        <>
+                          <ul className="flex flex-col gap-2">
+                            {displayedActiveRentals.map((rental) => (
+                              <RentalRow
+                                key={rental.id}
+                                rental={rental}
+                                onClick={() => openRentalDetail(rental.id)}
+                              />
+                            ))}
+                          </ul>
+                          {displayedActiveRentals.length < activeRentals.length && (
+                            <div
+                              ref={activeSentinelRef}
+                              className="flex items-center justify-center py-4 text-xs text-muted-foreground"
+                            >
+                              <Loader2 className="mr-2 size-4 animate-spin text-primary" />
+                              <span>Cargando más rentas…</span>
+                            </div>
+                          )}
+                        </>
+                      )
+                    ) : historialRentals.length === 0 ? (
+                      <div className="rounded-2xl border bg-white p-6 text-center flex flex-col items-center gap-2 shadow-xs">
+                        <div className="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                          <PackageOpen className="size-5" />
+                        </div>
+                        <p className="text-sm font-semibold text-slate-900">Sin historial</p>
+                        <p className="text-xs text-muted-foreground">No hay rentas finalizadas anteriores.</p>
+                      </div>
+                    ) : (
+                      <>
+                        <ul className="flex flex-col gap-2">
+                          {displayedHistorialRentals.map((rental) => (
+                            <RentalRow
+                              key={rental.id}
+                              rental={rental}
+                              onClick={() => openRentalDetail(rental.id)}
+                              isHistory
+                            />
+                          ))}
+                        </ul>
+                        {displayedHistorialRentals.length < historialRentals.length && (
+                          <div
+                            ref={historialSentinelRef}
+                            className="flex items-center justify-center py-4 text-xs text-muted-foreground"
+                          >
+                            <Loader2 className="mr-2 size-4 animate-spin text-primary" />
+                            <span>Cargando más rentas…</span>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </section>
+                </>
+              )}
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
 
-    <RentalDetailSheet
-      open={rentalDetailOpen}
-      onOpenChange={setRentalDetailOpen}
-      rentalId={selectedRentalId}
-    />
+      {credentialUrl && (
+        <Dialog
+          open={credentialViewerOpen}
+          onOpenChange={setCredentialViewerOpen}
+        >
+          <DialogContent className="max-w-md">
+            <img
+              src={credentialUrl}
+              alt="Credencial del cliente (ampliada)"
+              className="w-full rounded-md"
+            />
+          </DialogContent>
+        </Dialog>
+      )}
+
+      <RentalDetailSheet
+        open={rentalDetailOpen}
+        onOpenChange={setRentalDetailOpen}
+        rentalId={selectedRentalId}
+      />
     </>
   );
 }
 
-// Redesign Round 3, punto E: rentas activas e historial ahora son
-// clickeables — `onClick` abre `RentalDetailSheet` para esa renta, en vez de
-// ser solo texto informativo.
 function RentalRow({
   rental,
   onClick,
+  isHistory = false,
 }: {
   rental: RentalRecord;
   onClick: () => void;
+  isHistory?: boolean;
 }) {
   return (
     <li>
       <button
         type="button"
         onClick={onClick}
-        className="flex w-full items-center justify-between rounded-md border p-3 text-left hover:bg-accent"
+        className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-white p-3.5 text-left transition-colors hover:bg-slate-50 shadow-xs"
       >
-        <div>
-          <p className="font-medium">{rental.folio}</p>
-          <p className="text-muted-foreground text-sm">
-            {formatCurrencyMXN(rental.initial_rent_amount)}
+        <div className="flex flex-col gap-0.5">
+          <p className={`font-semibold ${isHistory ? "text-muted-foreground" : "text-foreground"}`}>
+            {rental.folio}
+          </p>
+          <p className="text-muted-foreground text-xs">
+            Inicio {formatDateDisplay(rental.created)}
           </p>
         </div>
-        <RentalStatusBadge status={rental.status} />
+        <div className="flex flex-col items-end gap-1">
+          <RentalStatusBadge status={rental.status} />
+          <span className={`font-bold ${isHistory ? "text-muted-foreground" : "text-foreground"}`}>
+            {formatCurrencyMXN(rental.initial_rent_amount)}
+          </span>
+        </div>
       </button>
     </li>
   );

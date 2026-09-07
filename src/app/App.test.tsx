@@ -284,7 +284,7 @@ describe("App", () => {
       const user = userEvent.setup();
       render(<App />);
 
-      await screen.findByRole("heading", { name: "Nueva renta" });
+      await screen.findByRole("heading", { name: "Cliente" });
 
       // "Cliente nuevo" is now reached via the unified search-or-create
       // field: a no-results search offers "Crear cliente nuevo", which opens
@@ -310,7 +310,7 @@ describe("App", () => {
       // Redirected to /login, not left on a confusing generic error.
       expect(await screen.findByText("Insumos O2")).toBeInTheDocument();
       expect(
-        screen.queryByRole("heading", { name: "Nueva renta" }),
+        screen.queryByRole("heading", { name: "Cliente" }),
       ).not.toBeInTheDocument();
       expect(
         screen.queryByText("No se pudo guardar el cliente. Intenta de nuevo."),
@@ -324,7 +324,7 @@ describe("App", () => {
       const user = userEvent.setup();
       render(<App />);
 
-      await screen.findByRole("heading", { name: "Nueva renta" });
+      await screen.findByRole("heading", { name: "Cliente" });
 
       // design-fidelity D1: "Nueva renta" is now a 3-step wizard.
       searchCustomers.mockResolvedValue([]);
@@ -347,7 +347,7 @@ describe("App", () => {
       ).toBeInTheDocument();
       await waitFor(() =>
         expect(
-          screen.getByRole("heading", { name: "Nueva renta" }),
+          screen.getByRole("heading", { name: "Confirmar" }),
         ).toBeInTheDocument(),
       );
     });

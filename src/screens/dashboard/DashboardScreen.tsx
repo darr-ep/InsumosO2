@@ -1,7 +1,8 @@
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import {
   CalendarDays,
   Droplet,
+  Loader2,
   PackageOpen,
   Wind,
 } from "lucide-react";
@@ -23,6 +24,7 @@ import {
   availableStock,
   countActiveQuantityByType,
 } from "@/domain/rentals/availability";
+import { formatDateDisplay } from "@/lib/formatDate";
 import { formatCurrencyMXN } from "@/lib/currency";
 
 /**
@@ -183,8 +185,27 @@ export const DashboardScreen = memo(function DashboardScreen({
   );
   const [customerDetailOpen, setCustomerDetailOpen] = useState(false);
   const [showStaleOnly, setShowStaleOnly] = useState(false);
+  const [displayLimit, setDisplayLimit] = useState(20);
+  const observerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => loadRentalsIfNeeded(), [loadRentalsIfNeeded]);
+
+  useEffect(() => {
+    const target = observerRef.current;
+    if (!target) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setDisplayLimit((prev) => prev + 20);
+        }
+      },
+      { rootMargin: "100px" },
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [rentals]);
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -290,10 +311,11 @@ export const DashboardScreen = memo(function DashboardScreen({
 
   const visibleActiveRentals =
     showStaleOnly && staleRentals.length > 0 ? staleRentals : rentals ?? [];
+  const displayedRentals = visibleActiveRentals.slice(0, displayLimit);
 
   return (
     <div className="flex flex-1 min-h-full flex-col">
-      <div className="flex flex-1 flex-col gap-6 px-4 pt-2">
+      <div className="flex flex-1 flex-col gap-6 px-4 pt-2 pb-5">
 
         {isSearchActive ? (
           <>
@@ -324,7 +346,7 @@ export const DashboardScreen = memo(function DashboardScreen({
                       <p className="flex items-center gap-1.5">
                         <CalendarDays aria-hidden="true" className="size-3.5" />
                         Inicio{" "}
-                        {new Date(rental.created).toLocaleDateString("es-MX")}
+                        {formatDateDisplay(rental.created)}
                       </p>
                     </RentalCard>
                   </li>
@@ -376,7 +398,7 @@ export const DashboardScreen = memo(function DashboardScreen({
 
                 {rentals.length > 0 && (
                   <div className="flex items-center justify-between">
-                    <h2 className="text-sm font-semibold text-foreground">
+                    <h2 className="text-base font-bold text-foreground">
                       Rentas activas
                     </h2>
                     <span className="bg-primary-soft text-primary rounded-full px-2 py-0.5 text-xs font-medium">
@@ -391,46 +413,52 @@ export const DashboardScreen = memo(function DashboardScreen({
                     title="No hay rentas activas todavía."
                   />
                 ) : (
-                  <ul className="flex flex-col gap-3">
-                    {visibleActiveRentals.map((rental, index) => (
-                      <li
-                        key={rental.id}
-                        className="animate-card-enter"
-                        style={{
-                          animationDelay: `${Math.min(index, 8) * 40}ms`,
-                        }}
-                      >
-                        <RentalCard
-                          customerName={
-                            rental.expand?.customer_id?.name ?? "Cliente"
-                          }
-                          status={rental.status}
-                          folio={rental.folio}
-                          onClick={() => openRentalDetail(rental.id)}
-                          phone={rental.expand?.customer_id?.phone}
-                          amount={formatCurrencyMXN(rental.initial_rent_amount)}
-                          itemTypeIcon={rentalItemTypeIcon(rental.id)}
-                          cardClassName={
-                            isStaleRental(
-                              new Date(rental.created),
-                              thresholdDays,
-                              now,
-                            )
-                              ? "border-warning"
-                              : undefined
-                          }
+                  <>
+                    <ul className="flex flex-col gap-3">
+                      {displayedRentals.map((rental, index) => (
+                        <li
+                          key={rental.id}
+                          className="animate-card-enter"
+                          style={{
+                            animationDelay: `${Math.min(index, 8) * 40}ms`,
+                          }}
                         >
-                          <p className="flex items-center gap-1.5">
-                            <CalendarDays aria-hidden="true" className="size-3.5" />
-                            Inicio{" "}
-                            {new Date(rental.created).toLocaleDateString(
-                              "es-MX",
-                            )}
-                          </p>
-                        </RentalCard>
-                      </li>
-                    ))}
-                  </ul>
+                          <RentalCard
+                            customerName={
+                              rental.expand?.customer_id?.name ?? "Cliente"
+                            }
+                            status={rental.status}
+                            folio={rental.folio}
+                            onClick={() => openRentalDetail(rental.id)}
+                            phone={rental.expand?.customer_id?.phone}
+                            amount={formatCurrencyMXN(rental.initial_rent_amount)}
+                            itemTypeIcon={rentalItemTypeIcon(rental.id)}
+                            cardClassName={
+                              isStaleRental(
+                                new Date(rental.created),
+                                thresholdDays,
+                                now,
+                              )
+                                ? "border-warning"
+                                : undefined
+                            }
+                          >
+                            <p className="flex items-center gap-1.5">
+                              <CalendarDays aria-hidden="true" className="size-3.5" />
+                              Inicio{" "}
+                              {formatDateDisplay(rental.created)}
+                            </p>
+                          </RentalCard>
+                        </li>
+                      ))}
+                    </ul>
+                    {displayedRentals.length < visibleActiveRentals.length && (
+                      <div ref={observerRef} className="flex items-center justify-center py-4 text-xs text-muted-foreground">
+                        <Loader2 className="mr-2 size-4 animate-spin text-primary" />
+                        <span>Cargando más rentas…</span>
+                      </div>
+                    )}
+                  </>
                 )}
               </>
             )}

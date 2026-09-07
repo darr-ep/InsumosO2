@@ -3,6 +3,7 @@ import { Phone, Tag } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RentalStatusBadge } from "@/components/RentalStatusBadge";
 import type { RentalStatus } from "@/data/rentals.repo";
+import { cn } from "@/lib/utils";
 
 /**
  * SDD.md §17 ("RentalCard (folio, cliente, estado, tiempo transcurrido)").
@@ -86,7 +87,7 @@ export function RentalCard({
 }: RentalCardProps) {
   return (
     <button type="button" className="w-full text-left" onClick={onClick}>
-      <Card className={cardClassName}>
+      <Card className={cn("gap-1.5 py-3", cardClassName)}>
         <CardHeader>
           <div className="flex items-center justify-between gap-2">
             <CardTitle>{customerName}</CardTitle>

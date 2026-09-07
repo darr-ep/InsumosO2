@@ -30,7 +30,7 @@ describe("CustomerCard (design-fidelity §4.2)", () => {
       <CustomerCard name="Juan Pérez" phone="5512345678" onClick={vi.fn()} />,
     );
 
-    expect(screen.getByText("5512345678")).toBeInTheDocument();
+    expect(screen.getByText("551 234 5678")).toBeInTheDocument();
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 
@@ -41,7 +41,7 @@ describe("CustomerCard (design-fidelity §4.2)", () => {
       <CustomerCard name="Juan Pérez" phone="5512345678" onClick={onClick} />,
     );
 
-    await user.click(screen.getByText("5512345678"));
+    await user.click(screen.getByText("551 234 5678"));
 
     expect(onClick).toHaveBeenCalledTimes(1);
   });
@@ -95,6 +95,6 @@ describe("CustomerCard (design-fidelity §4.2)", () => {
 
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
-    expect(screen.getByText("5512345678")).toBeInTheDocument();
+    expect(screen.getByText("551 234 5678")).toBeInTheDocument();
   });
 });

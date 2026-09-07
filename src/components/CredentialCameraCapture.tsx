@@ -69,6 +69,7 @@ export interface CredentialCameraCaptureProps {
   // Requests the camera immediately on mount instead of waiting for the
   // idle "Tomar foto" tap — see file doc comment (used only for retakes).
   autoStart?: boolean;
+  active?: boolean;
 }
 
 function blobToFile(blob: Blob, filename: string): File {
@@ -155,6 +156,7 @@ export function CredentialCameraCapture({
   onCapture,
   onCancel,
   autoStart = false,
+  active = true,
 }: CredentialCameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -177,6 +179,13 @@ export function CredentialCameraCapture({
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
   }, []);
+
+  useEffect(() => {
+    if (!active) {
+      stopStream();
+      setMode(supportsGetUserMedia() ? "idle" : "fallback");
+    }
+  }, [active, stopStream]);
 
   useEffect(() => {
     unmountedRef.current = false;
@@ -290,17 +299,28 @@ export function CredentialCameraCapture({
     <div className="flex flex-col gap-3">
       {(mode === "idle" || mode === "loading" || mode === "live") && (
         <div
-          className="relative flex items-center justify-center overflow-hidden rounded-md bg-black"
+          className={`relative flex flex-col items-center justify-center gap-3 overflow-hidden rounded-md ${
+            mode === "live" ? "bg-black" : "bg-card border"
+          }`}
           style={{ aspectRatio: ID_CARD_ASPECT_RATIO }}
         >
           {mode === "idle" && (
-            <Button type="button" onClick={() => void startCamera()}>
-              <Camera aria-hidden="true" />
-              Tomar foto
-            </Button>
+            <>
+              {/* pencil ground truth ("Nueva renta - Crear cliente" /
+                  "Modal Cliente - Editar" frames): the idle placeholder is a
+                  white/light card with a light-blue camera-icon circle above
+                  the "Tomar foto" button — not a bare black void. */}
+              <div className="flex size-12 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-950/40">
+                <Camera aria-hidden="true" className="text-primary size-6" />
+              </div>
+              <Button type="button" onClick={() => void startCamera()}>
+                <Camera aria-hidden="true" />
+                Tomar foto
+              </Button>
+            </>
           )}
           {mode === "loading" && (
-            <p className="text-sm text-white/80">Iniciando cámara…</p>
+            <p className="text-sm text-muted-foreground">Iniciando cámara…</p>
           )}
           {mode === "live" && (
             // object-cover on this fixed-aspect-ratio box crops the video

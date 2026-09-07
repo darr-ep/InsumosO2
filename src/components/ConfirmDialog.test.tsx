@@ -243,6 +243,160 @@ describe("ConfirmDialog (design-fidelity, shared component)", () => {
     expect(confirmButton).not.toHaveClass("bg-neutral-900");
   });
 
+  it("renders the loading state: spinner icon, loading copy, disabled Cancelar, and a 'Procesando...' confirm button", () => {
+    render(
+      <ConfirmDialog
+        open
+        onOpenChange={() => {}}
+        title="¿Cerrar sesión?"
+        description="Tendrás que volver a escribir tu contraseña para entrar de nuevo."
+        onConfirm={() => {}}
+        status="loading"
+        loadingTitle="Cerrando sesión..."
+        loadingDescription="Estamos cerrando tu sesión de forma segura."
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Cerrando sesión..." }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Estamos cerrando tu sesión de forma segura."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancelar" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Procesando..." }),
+    ).toBeDisabled();
+  });
+
+  it("renders the success state: check icon, success copy, and a single full-width Listo button (no Cancelar)", async () => {
+    const onDismissSuccess = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <ConfirmDialog
+        open
+        onOpenChange={() => {}}
+        title="¿Cerrar sesión?"
+        description="Tendrás que volver a escribir tu contraseña para entrar de nuevo."
+        onConfirm={() => {}}
+        status="success"
+        successTitle="Sesión cerrada"
+        successDescription="Has salido de la sesión. Vuelve pronto."
+        onDismissSuccess={onDismissSuccess}
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Sesión cerrada" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Has salido de la sesión. Vuelve pronto."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Cancelar" }),
+    ).not.toBeInTheDocument();
+
+    const doneButton = screen.getByRole("button", { name: "Listo" });
+    await user.click(doneButton);
+
+    expect(onDismissSuccess).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to onOpenChange(false) on the success 'Listo' button when onDismissSuccess is omitted", async () => {
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <ConfirmDialog
+        open
+        onOpenChange={onOpenChange}
+        title="¿Cerrar sesión?"
+        description="Tendrás que volver a escribir tu contraseña para entrar de nuevo."
+        onConfirm={() => {}}
+        status="success"
+        successTitle="Sesión cerrada"
+        successDescription="Has salido de la sesión. Vuelve pronto."
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Listo" }));
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("does not dismiss via Escape while status is 'loading', even if isConfirming is not set", async () => {
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <ConfirmDialog
+        open
+        onOpenChange={onOpenChange}
+        title="¿Cerrar sesión?"
+        description="Tendrás que volver a escribir tu contraseña para entrar de nuevo."
+        onConfirm={() => {}}
+        status="loading"
+      />,
+    );
+
+    await user.keyboard("{Escape}");
+
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it("does not dismiss via Escape while status is 'success'", async () => {
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <ConfirmDialog
+        open
+        onOpenChange={onOpenChange}
+        title="¿Cerrar sesión?"
+        description="Tendrás que volver a escribir tu contraseña para entrar de nuevo."
+        onConfirm={() => {}}
+        status="success"
+      />,
+    );
+
+    await user.keyboard("{Escape}");
+
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it("replays the icon entrance animation on every transition into loading/success (remounts via key rather than reusing the DOM node)", () => {
+    const props = {
+      open: true,
+      onOpenChange: () => {},
+      title: "¿Cerrar sesión?",
+      description:
+        "Tendrás que volver a escribir tu contraseña para entrar de nuevo.",
+      onConfirm: () => {},
+    };
+
+    // `ConfirmDialog` renders through a Radix `Portal` (teleported onto
+    // `document.body`, outside RTL's `container`) — query via `document.body`
+    // like every other test in this file does through `screen`.
+    const { rerender } = render(<ConfirmDialog {...props} status="idle" />);
+    const idleIcon = document.body.querySelector(".size-12.rounded-full");
+    expect(idleIcon).not.toHaveClass("animate-icon-in");
+    expect(idleIcon).not.toHaveClass("animate-icon-pop");
+
+    rerender(<ConfirmDialog {...props} status="loading" />);
+    const loadingIcon = document.body.querySelector(".animate-icon-in");
+    expect(loadingIcon).toBeInTheDocument();
+    // A different DOM node than the idle icon proves the `key` change forced
+    // a remount — a one-shot CSS animation class alone wouldn't replay on a
+    // prop change without this, it would only ever play once on first mount.
+    expect(loadingIcon).not.toBe(idleIcon);
+
+    rerender(<ConfirmDialog {...props} status="success" />);
+    const successIcon = document.body.querySelector(".animate-icon-pop");
+    expect(successIcon).toBeInTheDocument();
+    expect(successIcon).not.toBe(loadingIcon);
+  });
+
   it("does not render when open is false", () => {
     render(
       <ConfirmDialog
