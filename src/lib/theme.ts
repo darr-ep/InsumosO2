@@ -65,27 +65,63 @@ function notify(): void {
   }
 }
 
+// Legacy MediaQueryList shape (Safari/WebKit < 14, still found on older
+// shop-floor tablets) — no addEventListener/removeEventListener, only the
+// deprecated addListener/removeListener pair.
+interface LegacyMediaQueryList {
+  addListener(listener: () => void): void;
+}
+
+function hasLegacyAddListener(
+  media: MediaQueryList,
+): media is MediaQueryList & LegacyMediaQueryList {
+  return typeof (media as unknown as LegacyMediaQueryList).addListener === "function";
+}
+
 // Attached once, lazily, on first subscription — kept registered for the
 // document's whole lifetime rather than added/removed per preference change.
 // It only acts while `preference === "system"`, so picking an explicit
 // light/dark preference makes it a no-op without needing to detach it; a
 // single always-on listener is simpler than churning `addEventListener`
 // calls for identical behavior.
+//
+// Real gap found in review: neither the addEventListener/addListener feature
+// check nor a surrounding try/catch existed here originally. `useApplyTheme`
+// runs unconditionally at the app root (including the unauthenticated
+// `/login` route), so an uncaught throw here — e.g. on Safari/WebKit < 14,
+// which only exposes the deprecated `addListener` — was caught by the
+// top-level ErrorBoundary and replaced the ENTIRE app with the generic error
+// screen, on every mount, with no in-app recovery (both "Reintentar" and
+// "Recargar página" just remount and re-throw). A failure to live-update on
+// OS preference changes is a fully acceptable degradation; crashing the app
+// over it is not.
 let mediaListenerAttached = false;
 function ensureMediaListenerAttached(): void {
   if (mediaListenerAttached) {
     return;
   }
-  const media = getMediaQueryList();
-  if (!media) {
-    return;
-  }
-  media.addEventListener("change", () => {
-    if (preference === "system") {
-      notify();
+  try {
+    const media = getMediaQueryList();
+    if (!media) {
+      return;
     }
-  });
-  mediaListenerAttached = true;
+    const handleChange = () => {
+      if (preference === "system") {
+        notify();
+      }
+    };
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", handleChange);
+    } else if (hasLegacyAddListener(media)) {
+      media.addListener(handleChange);
+    } else {
+      return;
+    }
+    mediaListenerAttached = true;
+  } catch {
+    // Degrade to "system preference changes won't live-update until next
+    // reload" rather than letting this take down the whole app.
+  }
 }
 
 export function setThemePreference(next: ThemePreference): void {

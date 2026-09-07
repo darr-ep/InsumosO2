@@ -315,12 +315,12 @@ export function RentalDetailSheet({
                       const badgeClass = isDeposit
                         ? "bg-primary-soft text-primary"
                         : isAdjustment
-                          ? "bg-amber-50 text-amber-600 dark:bg-amber-950/40"
+                          ? "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400"
                           : "bg-success-soft text-success";
                       const iconColorClass = isDeposit
                         ? "text-primary"
                         : isAdjustment
-                          ? "text-amber-600"
+                          ? "text-amber-600 dark:text-amber-400"
                           : "text-success";
 
                       return (

@@ -90,7 +90,11 @@
   --foreground: #f2f4f8;
   --card: #1a1023;
   --card-foreground: #f2f4f8;
-  --popover: #1a1023;
+  /* Design's "Menús y overlays" row (#262A31) — same value as --card-soft,
+     NOT --card. A prior pass here incorrectly copied --card's value;
+     verified against the Pencil "Sistema de tokens · modo oscuro" sheet.
+     popover-foreground on this value is ~13.1:1, comfortably AA. */
+  --popover: #262a31;
   --popover-foreground: #f2f4f8;
   --primary: #4d88ff;
   --primary-foreground: #0b1220;

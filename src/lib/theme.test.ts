@@ -21,7 +21,7 @@ const STORAGE_KEY = "insumoso2-theme";
 const mediaState = { matches: false };
 let changeHandler: (() => void) | undefined;
 
-beforeAll(() => {
+function installStandardMatchMediaMock() {
   vi.spyOn(window, "matchMedia").mockImplementation((query: string) => {
     return {
       get matches() {
@@ -38,6 +38,10 @@ beforeAll(() => {
       dispatchEvent: () => false,
     } as unknown as MediaQueryList;
   });
+}
+
+beforeAll(() => {
+  installStandardMatchMediaMock();
 });
 
 function fireSystemPreferenceChange(prefersDark: boolean) {
@@ -116,12 +120,75 @@ describe("theme", () => {
   });
 
   it("ignores OS preference changes once an explicit preference is set", () => {
+    // Render our own hook first so `changeHandler` is guaranteed populated
+    // by THIS test regardless of file order — `theme.ts` attaches its
+    // matchMedia listener at most once ever (module-level guard), so a test
+    // that only fires the shared `changeHandler` without ever subscribing
+    // itself can pass vacuously (as a no-op) if run in isolation/reordered.
+    renderHook(() => useThemePreference());
+
     setThemePreference("light");
     fireSystemPreferenceChange(true);
 
     expect(getThemePreference()).toBe("light");
     expect(getEffectiveTheme()).toBe("light");
     expect(document.documentElement.classList.contains("dark")).toBe(false);
+  });
+
+  it("falls back to the legacy addListener/removeListener API when addEventListener is unavailable (Safari/WebKit < 14)", async () => {
+    const legacyState = { matches: false };
+    let legacyHandler: (() => void) | undefined;
+    vi.spyOn(window, "matchMedia").mockImplementation((query: string) => {
+      return {
+        get matches() {
+          return legacyState.matches;
+        },
+        media: query,
+        onchange: null,
+        addListener: (handler: () => void) => {
+          legacyHandler = handler;
+        },
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      } as unknown as MediaQueryList;
+    });
+
+    vi.resetModules();
+    const fresh = await import("@/lib/theme");
+    const { result } = renderHook(() => fresh.useThemePreference());
+
+    legacyState.matches = true;
+    act(() => {
+      legacyHandler?.();
+    });
+
+    await waitFor(() => {
+      expect(result.current[1]).toBe("dark");
+    });
+  });
+
+  it("does not crash the app when matchMedia throws on call (e.g. a restricted/sandboxed engine)", async () => {
+    vi.spyOn(window, "matchMedia").mockImplementation(() => {
+      throw new Error("matchMedia not supported on this engine");
+    });
+
+    try {
+      vi.resetModules();
+      const fresh = await import("@/lib/theme");
+
+      // Only asserting the subscription path (what ensureMediaListenerAttached
+      // guards) doesn't throw — a throwing matchMedia breaking direct
+      // getEffectiveTheme()/systemPrefersDark() calls elsewhere is a separate,
+      // pre-existing question outside this fix's scope.
+      expect(() => {
+        renderHook(() => fresh.useApplyTheme());
+      }).not.toThrow();
+    } finally {
+      // Restore the standard shared mock — this test's throwing mock would
+      // otherwise leak into every later test's afterEach (setThemePreference
+      // → notify → getEffectiveTheme → systemPrefersDark → matchMedia).
+      installStandardMatchMediaMock();
+    }
   });
 
   it("falls back to 'system' for a corrupted/unexpected stored value on fresh module load", async () => {
