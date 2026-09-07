@@ -42,7 +42,7 @@ function SheetOverlay({
     <Drawer.Overlay
       data-slot="sheet-overlay"
       className={cn(
-        "fixed inset-0 z-50 bg-black/50 backdrop-blur-xs transition-opacity duration-300",
+        "fixed inset-0 z-50 bg-scrim backdrop-blur-xs transition-opacity duration-300",
         className,
       )}
       {...props}

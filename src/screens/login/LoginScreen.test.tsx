@@ -186,7 +186,7 @@ describe("LoginScreen — real login (§14, §16.6, CU1, gap-fill)", () => {
   // correction over the previous rose-family colors (`bg-rose-50`/
   // `border-rose-200`/`text-red-700`) and missing icon. Copy is unchanged
   // (security-motivated generic message).
-  it("renders the login error inside the designed red-100 banner container, with a triangle-alert icon and no border", async () => {
+  it("renders the login error inside the destructive-soft banner container, with a triangle-alert icon and no border", async () => {
     getLoginDirectory.mockResolvedValue([juan]);
     loginWithPassword.mockRejectedValue(makeClientResponseError(400));
     const user = userEvent.setup();
@@ -200,12 +200,12 @@ describe("LoginScreen — real login (§14, §16.6, CU1, gap-fill)", () => {
     const errorText = await screen.findByText(
       "Contraseña incorrecta, inténtalo de nuevo.",
     );
-    const banner = errorText.closest(".bg-red-100")!;
+    const banner = errorText.closest(".bg-destructive-soft")!;
     expect(banner).not.toBeNull();
     expect(banner).toHaveClass("rounded-lg", "p-3");
     expect(banner.className).not.toMatch(/\bborder\b/);
     expect(banner.querySelector("svg")).not.toBeNull();
-    expect(errorText).toHaveClass("text-red-600");
+    expect(errorText).toHaveClass("text-destructive");
   });
 
   it("shows a clear rate-limit message on a 429 instead of a raw error", async () => {

@@ -186,8 +186,8 @@ export function LoginScreen() {
                   type="button"
                   aria-pressed={isStaged}
                   onClick={() => handlePickUser(entry)}
-                  className={`bg-card bg-white flex flex-col items-center gap-3 rounded-2xl border-2 p-4 transition-all ${
-                    isStaged ? "border-primary shadow-xs" : "border-slate-200/60"
+                  className={`bg-card flex flex-col items-center gap-3 rounded-2xl border-2 p-4 transition-all ${
+                    isStaged ? "border-primary shadow-xs" : "border-border/60"
                   }`}
                 >
                   <div className="relative">
@@ -206,14 +206,14 @@ export function LoginScreen() {
                       </span>
                     )}
                   </div>
-                  <span className="text-sm font-semibold text-slate-800">{entry.name}</span>
+                  <span className="text-sm font-semibold text-foreground">{entry.name}</span>
                 </button>
               );
               })}
             </div>
           </div>
 
-          <div className="fixed bottom-0 left-0 right-0 z-30 flex justify-center border-t border-slate-200 bg-slate-50 p-6 shadow-xs">
+          <div className="fixed bottom-0 left-0 right-0 z-30 flex justify-center border-t border-border bg-muted p-6 shadow-xs">
             <Button
               type="button"
               size="lg"
@@ -247,7 +247,7 @@ export function LoginScreen() {
             </button>
 
             <div className="flex flex-col items-center gap-3 text-center">
-              <div className="rounded-full border-2 border-slate-200 bg-white p-0.5 overflow-hidden">
+              <div className="rounded-full border-2 border-border bg-card p-0.5 overflow-hidden">
                 <UserAvatar
                   name={selectedUser.name}
                   avatarUrl={loginDirectoryAvatarUrl(selectedUser)}
@@ -294,17 +294,17 @@ export function LoginScreen() {
             </div>
 
             {loginError && (
-              <div className="flex items-start gap-2 rounded-lg bg-red-100 p-3 text-sm">
+              <div className="flex items-start gap-2 rounded-lg bg-destructive-soft p-3 text-sm">
                 <AlertTriangle
                   aria-hidden="true"
-                  className="mt-0.5 size-4 shrink-0 text-red-600"
+                  className="mt-0.5 size-4 shrink-0 text-destructive"
                 />
-                <p className="text-red-600">{loginError}</p>
+                <p className="text-destructive">{loginError}</p>
               </div>
             )}
           </div>
 
-          <div className="fixed bottom-0 left-0 right-0 z-30 flex justify-center border-t border-slate-200 bg-slate-50 p-6 shadow-xs">
+          <div className="fixed bottom-0 left-0 right-0 z-30 flex justify-center border-t border-border bg-muted p-6 shadow-xs">
             <Button
               type="submit"
               size="lg"

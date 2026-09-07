@@ -32,7 +32,7 @@ import {
  *
  * Nesting pattern (design B3): callers render this as a JSX SIBLING of
  * their parent `Dialog`/`Sheet`, never inside its `DialogContent` — see
- * `overlayClassName="bg-black/30 backdrop-blur-none"` below, which exists
+ * `overlayClassName="bg-scrim/60 backdrop-blur-none"` below, which exists
  * specifically so two stacked Radix overlays don't compound to near-black.
  *
  * Scoped correction (RESILIENCE-001, frozen findings ledger obs #2230):
@@ -108,7 +108,7 @@ export function ConfirmDialog({
       <DialogContent
         showCloseButton={false}
         className="max-w-[330px]"
-        overlayClassName="bg-black/30 backdrop-blur-none"
+        overlayClassName="bg-scrim/60 backdrop-blur-none"
         onEscapeKeyDown={(event) => {
           if (isBlocked) event.preventDefault();
         }}
@@ -172,7 +172,11 @@ export function ConfirmDialog({
             <Button
               type="button"
               size="lg"
-              className="w-full bg-neutral-900 text-white hover:bg-neutral-800"
+              // Dark-mode audit: a literal near-black button would nearly
+              // vanish against the dark theme's own near-black --card/
+              // --background — inverted to near-white in dark mode, same
+              // "deliberately neutral, not brand-blue" intent per theme.
+              className="w-full bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300"
               onClick={onDismissSuccess ?? (() => onOpenChange(false))}
             >
               <Check aria-hidden="true" />
@@ -198,7 +202,7 @@ export function ConfirmDialog({
               className={
                 tone === "destructive"
                   ? "flex-1"
-                  : "flex-1 bg-neutral-900 text-white hover:bg-neutral-800"
+                  : "flex-1 bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300"
               }
               disabled={isBlocked}
               onClick={() => void onConfirm()}

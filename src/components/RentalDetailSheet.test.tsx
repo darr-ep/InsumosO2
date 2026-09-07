@@ -220,8 +220,8 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
       .getByText("Pago")
       .closest("li")!;
 
-    expect(depositRow.querySelector(".bg-blue-50")).not.toBeNull();
-    expect(rentRow.querySelector(".bg-emerald-50")).not.toBeNull();
+    expect(depositRow.querySelector(".bg-primary-soft")).not.toBeNull();
+    expect(rentRow.querySelector(".bg-success-soft")).not.toBeNull();
   });
 
   it("keeps 'Registró: {name}' visible under Concepto/Fecha after the Fix 5 restyle (owner-approved app-only feature, NOT removed)", async () => {

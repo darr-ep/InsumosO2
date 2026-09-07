@@ -17,6 +17,7 @@ import { RentalNewScreen } from "@/screens/rental-new/RentalNewScreen";
 import { ClientesScreen } from "@/screens/clientes/ClientesScreen";
 import { ProfileScreen } from "@/screens/profile/ProfileScreen";
 import { webBluetoothPrinter } from "@/printing/WebBluetoothPrinter";
+import { useApplyTheme } from "@/lib/theme";
 
 /**
  * SDD.md §14 — Gap-fill fix (found post-Phase-5): `App.tsx` had zero auth
@@ -155,6 +156,7 @@ export const appRoutes: RouteObject[] = [
  * has already happened.
  */
 export function App() {
+  useApplyTheme();
   const [router] = useState(() => createBrowserRouter(appRoutes));
 
   return (

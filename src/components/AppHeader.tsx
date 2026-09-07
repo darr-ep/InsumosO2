@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { AccountMenu } from "@/components/AccountMenu";
 import { PrinterMenu } from "@/components/PrinterMenu";
+import { ThemeMenu } from "@/components/ThemeMenu";
 import { cn } from "@/lib/utils";
 
 /**
@@ -94,6 +95,7 @@ export function AppHeader({
         {title}
       </h1>
       <div className="flex items-center gap-1">
+        <ThemeMenu />
         <PrinterMenu />
         <AccountMenu />
       </div>

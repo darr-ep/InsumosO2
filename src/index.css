@@ -36,7 +36,10 @@
   --muted: oklch(0.97 0 0);
   /* design-fidelity (#2224 A1/A2): darkened from 0.556 so this clears 4.5:1
      against the new, darker --background above (design's own #6B7280 was
-     verified to fail AA at 4.39:1 here — do not copy it verbatim). */
+     verified to fail AA at 4.39:1 here — do not copy it verbatim). Dark-mode
+     build: the Pencil "text-secondary" row is this same token's dark-mode
+     counterpart — its light-mode hex (#6B7280) is this exact already-failing
+     value, so intentionally NOT copied here either; kept as-is. */
   --muted-foreground: oklch(0.54 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
@@ -65,34 +68,65 @@
   --border: oklch(0.931 0.003 265);
   --input: oklch(0.931 0.003 265);
   --ring: oklch(0.708 0 0);
+  /* Dark-mode build (Pencil MCP "Sistema de tokens · modo oscuro" sheet) —
+     new tokens with no prior light-mode equivalent. --foreground-disabled is
+     the design's "text-muted / Deshabilitado" tier: intentionally NOT
+     verified against 4.5:1 AA below like every other pair in this file —
+     WCAG 1.4.3 explicitly exempts text that is part of an inactive/disabled
+     UI component, which is this token's only intended use. */
+  --card-soft: #e8eaed;
+  --warning-soft: #fef3c7;
+  --destructive-soft: #fee2e2;
+  --scrim: #0b1220aa;
+  --foreground-disabled: #9aa1ab;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  /* Lighter/desaturated blue for dark surfaces, dark text foreground
-     (contrast ~5.8:1, AA) — same lighten-and-desaturate pattern already
-     used below for --destructive. */
-  --primary: oklch(0.66 0.13 254);
-  --primary-foreground: oklch(0.205 0 0);
+  /* Dark-mode build (Pencil MCP "Sistema de tokens · modo oscuro" sheet).
+     Every pair below is verified in src/index.css.contrast.test.ts via
+     src/lib/colorContrast.ts, same rigor as the light theme above — not
+     eyeballed from the design image. */
+  --background: #0f1115;
+  --foreground: #f2f4f8;
+  --card: #1a1023;
+  --card-foreground: #f2f4f8;
+  --popover: #1a1023;
+  --popover-foreground: #f2f4f8;
+  --primary: #4d88ff;
+  --primary-foreground: #0b1220;
+  /* Design's literal dark primary-soft (#1D2A4F) only clears 4.198:1 against
+     --primary — BELOW AA. Darkened (same navy hue family) to #17223F,
+     ~4.70:1, mirroring how --primary-soft above deviates from its own
+     design hex for the identical reason. */
+  --primary-soft: #17223f;
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
+  /* Design's dark "text-secondary" (#A0A6B0) — passes AA comfortably here
+     (~7.7:1 on --background), unlike its light-mode counterpart below. */
+  --muted-foreground: #a0a6b0;
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --success: oklch(0.66 0.11 149);
-  --success-foreground: oklch(0.205 0 0);
-  --warning: oklch(0.84 0.12 75);
+  --destructive: #f04438;
+  --success: #22c55e;
+  /* White-on-success is only ~2.3:1 here (design doesn't specify a
+     foreground for this row) — near-black (matching --primary-foreground's
+     own tone) clears ~8.2:1 instead. */
+  --success-foreground: #0b1220;
+  --success-soft: #16281e;
+  --warning: #f59e0b;
+  /* Design doesn't specify a foreground for this row either. Amber stays
+     high-luminance in dark mode too, so the existing light-mode dark-text
+     value already clears AA here (~6.6:1) — reused as-is. */
   --warning-foreground: oklch(0.205 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --warning-soft: #2b2012;
+  --destructive-soft: #2a1616;
+  --border: #2c3038;
+  --input: #262a31;
+  --ring: #4d88ff;
+  --card-soft: #262a31;
+  --scrim: #0b1220cc;
+  --foreground-disabled: #717985;
 }
 
 @theme inline {
@@ -117,9 +151,14 @@
   --color-success-soft: var(--success-soft);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
+  --color-warning-soft: var(--warning-soft);
+  --color-destructive-soft: var(--destructive-soft);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-card-soft: var(--card-soft);
+  --color-scrim: var(--scrim);
+  --color-foreground-disabled: var(--foreground-disabled);
   --font-sans:
     "Inter Variable", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
   --radius-sm: calc(var(--radius) - 4px);

@@ -31,9 +31,9 @@ describe("CustomerEditForm (Redesign — UX/UI pass, Ficha de cliente edit)", ()
   });
 
   // design-fidelity post-audit bugfix batch (pencil ground truth): name and
-  // phone inputs must render on a white background, matching every other
+  // phone inputs must render on a --card surface, matching every other
   // input in the redesign — neither had one before this batch.
-  it("renders the name and phone inputs with a white background", () => {
+  it("renders the name and phone inputs on a --card surface", () => {
     render(
       <CustomerEditForm
         initialValues={{ name: "Juan Pérez", phone: "5512345678" }}
@@ -42,8 +42,8 @@ describe("CustomerEditForm (Redesign — UX/UI pass, Ficha de cliente edit)", ()
       />,
     );
 
-    expect(screen.getByLabelText("Nombre")).toHaveClass("bg-white");
-    expect(screen.getByLabelText("Teléfono")).toHaveClass("bg-white");
+    expect(screen.getByLabelText("Nombre")).toHaveClass("bg-card");
+    expect(screen.getByLabelText("Teléfono")).toHaveClass("bg-card");
   });
 
   it("rejects an empty name and never calls onSubmit (customerFormSchema)", async () => {

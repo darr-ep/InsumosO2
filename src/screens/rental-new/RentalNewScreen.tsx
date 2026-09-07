@@ -446,7 +446,7 @@ export function RentalNewScreen() {
             >
               Paso 1
             </button>
-            <ChevronRight className="h-3.5 w-3.5 mx-2 text-slate-400" />
+            <ChevronRight className="h-3.5 w-3.5 mx-2 text-muted-foreground" />
             <span className="text-primary font-medium">Cliente · Nuevo</span>
           </div>
         )}
@@ -478,8 +478,8 @@ export function RentalNewScreen() {
             {/* Step 2 — Qué se renta + montos. */}
             <div hidden={step !== 2} className="flex flex-col gap-6 pt-3">
               <section className="flex flex-col gap-3 pt-1">
-                <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
-                  <Layers aria-hidden="true" className="size-4 text-blue-600" />
+                <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+                  <Layers aria-hidden="true" className="size-4 text-primary" />
                   Qué se renta
                 </h2>
                 <ItemQuantityPicker
@@ -500,8 +500,8 @@ export function RentalNewScreen() {
               </section>
 
               <section className="flex flex-col gap-3">
-                <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
-                  <CircleDollarSign aria-hidden="true" className="size-4 text-blue-600" />
+                <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+                  <CircleDollarSign aria-hidden="true" className="size-4 text-primary" />
                   Montos
                 </h2>
                 <div className="flex flex-col gap-1.5">
@@ -530,8 +530,8 @@ export function RentalNewScreen() {
 
             {/* Step 3 — Confirmar */}
             <div hidden={step !== 3} className="flex flex-col gap-4 pt-3">
-              <div className="flex items-center gap-2 rounded-xl bg-[#ecfdf5] border border-[#15a349] p-3 text-sm text-[#15a349]">
-                <CheckCircle2 className="size-4 text-[#15a349] shrink-0" />
+              <div className="flex items-center gap-2 rounded-xl bg-success-soft border border-success p-3 text-sm text-success">
+                <CheckCircle2 className="size-4 text-success shrink-0" />
                 <span>¡Casi listo! Revisa que los datos sean correctos antes de confirmar.</span>
               </div>
 
@@ -545,7 +545,7 @@ export function RentalNewScreen() {
                 </div>
                 {((selectedCustomer && isCredentialPending(selectedCustomer.credential_photo)) ||
                   (pendingNewCustomer && !pendingNewCustomer.credentialPhoto)) && (
-                  <span className="bg-amber-100 text-amber-800 border border-amber-300 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0">
+                  <span className="bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0">
                     Credencial pendiente
                   </span>
                 )}
@@ -582,8 +582,8 @@ export function RentalNewScreen() {
                     {formatCurrencyMXN(totalACobrar)}
                   </span>
                 </div>
-                <div className="flex size-11 items-center justify-center rounded-full bg-blue-50">
-                  <Wallet className="size-5 text-blue-600" />
+                <div className="flex size-11 items-center justify-center rounded-full bg-primary-soft">
+                  <Wallet className="size-5 text-primary" />
                 </div>
               </div>
             </div>
@@ -605,8 +605,8 @@ export function RentalNewScreen() {
 
             {step === 2 && (
               <div className="flex items-center justify-between py-1">
-                <span className="text-sm font-semibold text-slate-900">Total a cobrar</span>
-                <span className="text-blue-600 font-bold text-base">
+                <span className="text-sm font-semibold text-foreground">Total a cobrar</span>
+                <span className="text-primary font-bold text-base">
                   {formatCurrencyMXN(totalACobrar)}
                 </span>
               </div>

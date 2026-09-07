@@ -188,7 +188,7 @@ export function CustomerPicker({
         <div className="flex flex-col gap-3 pt-3">
           <div className="flex items-center gap-2 pb-1">
             <UserPlus className="size-4 text-primary" />
-            <h3 className="text-base font-semibold text-slate-900">
+            <h3 className="text-base font-semibold text-foreground">
               Crear cliente nuevo
             </h3>
           </div>
@@ -254,7 +254,7 @@ export function CustomerPicker({
       )}
 
       <div className="flex flex-col gap-2">
-        <h3 className="text-sm font-semibold text-slate-900">
+        <h3 className="text-sm font-semibold text-foreground">
           Tus resultados
         </h3>
 
@@ -269,14 +269,14 @@ export function CustomerPicker({
                   onClick={() => onSelect(customer)}
                   className={
                     isSelected
-                      ? "border-2 border-blue-600 bg-blue-50"
+                      ? "border-2 border-primary bg-primary-soft"
                       : undefined
                   }
                   avatarTone={isSelected ? "solid" : "soft"}
                   trailing={
                     isSelected ? (
                       <div className="flex items-center gap-1.5 shrink-0 pl-2">
-                        <Check className="size-5 text-blue-600 shrink-0" />
+                        <Check className="size-5 text-primary shrink-0" />
                       </div>
                     ) : undefined
                   }
@@ -301,7 +301,7 @@ export function CustomerPicker({
         type="button"
         variant="outline"
         onClick={() => setCreatingNew(true)}
-        className="w-full border-2 border-blue-600 text-blue-600 bg-white hover:bg-blue-50 font-semibold py-2.5 flex items-center justify-center gap-2 rounded-xl"
+        className="w-full border-2 border-primary text-primary bg-card hover:bg-primary-soft font-semibold py-2.5 flex items-center justify-center gap-2 rounded-xl"
       >
         <UserPlus className="size-4" />
         ¿No lo encuentras? Crear cliente nuevo

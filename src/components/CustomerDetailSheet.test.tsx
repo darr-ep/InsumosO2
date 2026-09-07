@@ -241,16 +241,16 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
 
   // design-fidelity post-audit bugfix batch (pencil ground truth): the
   // phone row, the credential card, and every rental row (active +
-  // historial) must sit on a white card, matching the rest of the
+  // historial) must sit on a --card surface, matching the rest of the
   // redesigned sheet — none of these had a background before this batch.
-  it("renders the phone row as a white card", async () => {
+  it("renders the phone row on a --card surface", async () => {
     getCustomer.mockResolvedValue(customerWithPhoto);
     listRentalsForCustomer.mockResolvedValue([]);
 
     renderSheet();
 
     const telLink = await screen.findByRole("link", { name: /551\s*234\s*5678/ });
-    expect(telLink.closest(".bg-white")).not.toBeNull();
+    expect(telLink.closest(".bg-card")).not.toBeNull();
   });
 
   it("opens the rental's detail sheet when an active rental row is tapped (Redesign Round 3, punto E)", async () => {
@@ -280,7 +280,7 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders an active rental row as a white card", async () => {
+  it("renders an active rental row on a --card surface", async () => {
     getCustomer.mockResolvedValue(customerWithPhoto);
     listRentalsForCustomer.mockResolvedValue([
       { id: "r1", folio: "R-000004", status: "ACTIVE", initial_rent_amount: 2800 },
@@ -289,7 +289,7 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
     renderSheet();
 
     const row = (await screen.findByText("R-000004")).closest("button")!;
-    expect(row).toHaveClass("bg-white");
+    expect(row).toHaveClass("bg-card");
   });
 
   it("fetches the credential eagerly when the sheet opens (no button tap needed) and shows a blurred ID-card preview with a 'Ver credencial' reveal button (CU7)", async () => {
@@ -503,7 +503,7 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
       "Sin credencial registrada",
     );
     expect(pendingText).toBeInTheDocument();
-    expect(pendingText.closest(".bg-white")).not.toBeNull();
+    expect(pendingText.closest(".bg-card")).not.toBeNull();
     // No "Ver credencial" and no eager fetch while pending — there's
     // nothing to view yet.
     expect(

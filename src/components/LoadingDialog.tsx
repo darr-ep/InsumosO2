@@ -45,7 +45,7 @@ export function LoadingDialog({
       <DialogContent
         showCloseButton={false}
         className="max-w-[330px]"
-        overlayClassName="bg-black/30 backdrop-blur-none"
+        overlayClassName="bg-scrim/60 backdrop-blur-none"
         onEscapeKeyDown={(event) => event.preventDefault()}
         onPointerDownOutside={(event) => event.preventDefault()}
         onInteractOutside={(event) => event.preventDefault()}

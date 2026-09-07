@@ -136,7 +136,7 @@ export function ReturnCreatedSummary({
             </dl>
 
             {printStatus === "failed" && (
-              <div className="flex items-start gap-2 rounded-lg bg-amber-100 p-3 text-sm text-amber-700">
+              <div className="flex items-start gap-2 rounded-lg bg-amber-100 p-3 text-sm text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
                 <TriangleAlert
                   aria-hidden="true"
                   className="mt-0.5 size-4 shrink-0"

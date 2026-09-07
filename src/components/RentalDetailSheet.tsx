@@ -313,15 +313,15 @@ export function RentalDetailSheet({
                       const isDeposit = payment.payment_type === "deposit";
                       const isAdjustment = payment.payment_type === "adjustment";
                       const badgeClass = isDeposit
-                        ? "bg-blue-50 text-blue-600"
+                        ? "bg-primary-soft text-primary"
                         : isAdjustment
-                          ? "bg-amber-50 text-amber-600"
-                          : "bg-emerald-50 text-emerald-600";
+                          ? "bg-amber-50 text-amber-600 dark:bg-amber-950/40"
+                          : "bg-success-soft text-success";
                       const iconColorClass = isDeposit
-                        ? "text-blue-600"
+                        ? "text-primary"
                         : isAdjustment
                           ? "text-amber-600"
-                          : "text-emerald-600";
+                          : "text-success";
 
                       return (
                         <li
@@ -405,7 +405,7 @@ export function RentalDetailSheet({
                 onClick={() => {
                   setReturnDialogOpen(true);
                 }}
-                className="flex-1 bg-white hover:bg-slate-50 border border-slate-200 shadow-xs"
+                className="flex-1 bg-card hover:bg-muted border border-border shadow-xs"
               >
                 Devolver
               </Button>

@@ -265,7 +265,7 @@ export function CustomerDetailSheet({
                 <Skeleton className="h-7 w-44 rounded-md" />
                 <Skeleton className="size-8 rounded-full" />
               </div>
-              <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+              <div className="flex items-center justify-between rounded-2xl border border-border bg-card p-4 shadow-xs">
                 <div className="flex flex-col gap-2">
                   <Skeleton className="h-3 w-16" />
                   <Skeleton className="h-5 w-32" />
@@ -334,12 +334,12 @@ export function CustomerDetailSheet({
                     </div>
                   </SheetHeader>
 
-                  <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-3 shadow-xs">
+                  <div className="flex items-center justify-between rounded-2xl border border-border bg-card p-3 shadow-xs">
                     <div className="flex flex-col">
-                      <span className="text-xs font-medium text-slate-500">Teléfono</span>
+                      <span className="text-xs font-medium text-muted-foreground">Teléfono</span>
                         <a
                           href={`tel:${customer.phone}`}
-                          className="text-base font-semibold text-slate-900 hover:underline"
+                          className="text-base font-semibold text-foreground hover:underline"
                         >
                           {formatPhoneDisplay(customer.phone)}
                         </a>
@@ -360,12 +360,12 @@ export function CustomerDetailSheet({
                     </h2>
 
                     {pending ? (
-                      <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-xs">
-                        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+                      <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3.5 shadow-xs">
+                        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
                           <IdCard className="size-4" />
                         </div>
                         <div className="flex flex-col min-w-0">
-                          <p className="text-sm font-semibold text-slate-900 leading-tight">
+                          <p className="text-sm font-semibold text-foreground leading-tight">
                             Sin credencial registrada
                           </p>
                           <p className="text-xs text-muted-foreground leading-tight mt-0.5">
@@ -391,7 +391,7 @@ export function CustomerDetailSheet({
                             <Button
                               type="button"
                               variant="secondary"
-                              className="rounded-full bg-white text-slate-900 hover:bg-slate-100 font-medium px-4 shadow-md flex items-center gap-2"
+                              className="rounded-full bg-card text-foreground hover:bg-muted font-medium px-4 shadow-md flex items-center gap-2"
                               onClick={() => setRevealed(true)}
                             >
                               <Lock aria-hidden="true" className="size-4" />
@@ -429,11 +429,11 @@ export function CustomerDetailSheet({
                     {rentalSegment === "activas" ? (
                       activeRentals.length === 0 ? (
                         <div className="flex flex-col gap-3">
-                          <div className="rounded-2xl border bg-white p-6 text-center flex flex-col items-center gap-2 shadow-xs">
+                          <div className="rounded-2xl border bg-card p-6 text-center flex flex-col items-center gap-2 shadow-xs">
                             <div className="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
                               <PackageOpen className="size-5" />
                             </div>
-                            <p className="text-sm font-semibold text-slate-900">Sin rentas activas</p>
+                            <p className="text-sm font-semibold text-foreground">Sin rentas activas</p>
                             <p className="text-xs text-muted-foreground">Este cliente no tiene rentas en curso actualmente.</p>
                           </div>
                           <Button
@@ -471,11 +471,11 @@ export function CustomerDetailSheet({
                         </>
                       )
                     ) : historialRentals.length === 0 ? (
-                      <div className="rounded-2xl border bg-white p-6 text-center flex flex-col items-center gap-2 shadow-xs">
+                      <div className="rounded-2xl border bg-card p-6 text-center flex flex-col items-center gap-2 shadow-xs">
                         <div className="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
                           <PackageOpen className="size-5" />
                         </div>
-                        <p className="text-sm font-semibold text-slate-900">Sin historial</p>
+                        <p className="text-sm font-semibold text-foreground">Sin historial</p>
                         <p className="text-xs text-muted-foreground">No hay rentas finalizadas anteriores.</p>
                       </div>
                     ) : (
@@ -547,7 +547,7 @@ function RentalRow({
       <button
         type="button"
         onClick={onClick}
-        className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-white p-3.5 text-left transition-colors hover:bg-slate-50 shadow-xs"
+        className="flex w-full items-center justify-between rounded-2xl border border-border bg-card p-3.5 text-left transition-colors hover:bg-muted shadow-xs"
       >
         <div className="flex flex-col gap-0.5">
           <p className={`font-semibold ${isHistory ? "text-muted-foreground" : "text-foreground"}`}>

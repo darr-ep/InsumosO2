@@ -98,7 +98,7 @@ export function AnimatedSwitch<T extends string>({
       aria-label={ariaLabel}
       onKeyDown={handleKeyDown}
       className={cn(
-        "relative inline-flex items-center rounded-full border border-slate-200 bg-white p-1 shrink-0 shadow-2xs",
+        "relative inline-flex items-center rounded-full border border-border bg-card p-1 shrink-0 shadow-2xs",
         className,
       )}
     >

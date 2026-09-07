@@ -199,6 +199,12 @@ export function PrinterMenu() {
             <span
               aria-hidden="true"
               className={cn(
+                // Dark-mode audit: deliberately NOT `bg-card` — a switch
+                // knob needs to read as a light floating disc against both
+                // `bg-primary` (on) and `bg-muted` (off) regardless of
+                // theme, the same way native/Radix switches keep a white
+                // thumb in dark mode. `--card` would blend into the
+                // similarly-dark `bg-muted` off-state track in dark mode.
                 "inline-block size-5 translate-x-0.5 rounded-full bg-white shadow transition-transform",
                 autoPrint && "translate-x-5",
               )}

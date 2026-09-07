@@ -145,7 +145,7 @@ export function ProfileScreen() {
       <main className="flex flex-1 flex-col overflow-y-auto">
         <div className="flex flex-1 flex-col gap-6 px-4 pt-2 pb-8">
           <section className="flex flex-col items-center gap-2">
-            <div className="rounded-full border-2 border-slate-200 bg-white p-0.5 overflow-hidden">
+            <div className="rounded-full border-2 border-border bg-card p-0.5 overflow-hidden">
               <UserAvatar
                 name={user.name}
                 avatarUrl={ownAvatarUrl(user)}
@@ -155,8 +155,8 @@ export function ProfileScreen() {
           </section>
 
           <section className="flex flex-col gap-3 pt-4">
-            <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
-              <User aria-hidden="true" className="size-4 text-slate-900" />
+            <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+              <User aria-hidden="true" className="size-4 text-foreground" />
               Datos personales
             </h2>
             <form
@@ -211,8 +211,8 @@ export function ProfileScreen() {
           </section>
 
           <section className="flex flex-col gap-3 border-t pt-4">
-            <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
-              <Lock aria-hidden="true" className="size-4 text-slate-900" />
+            <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+              <Lock aria-hidden="true" className="size-4 text-foreground" />
               Cambiar contraseña
             </h2>
             <form

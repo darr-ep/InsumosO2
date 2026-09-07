@@ -42,7 +42,7 @@ export function RentalStatusBadge({
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full px-[9px] py-[6px] text-[11px] font-medium",
         isActive
-          ? cn("bg-success-soft text-success", bordered && "border border-emerald-300")
+          ? cn("bg-success-soft text-success", bordered && "border border-emerald-300 dark:border-emerald-800")
           : "bg-muted text-muted-foreground",
         className,
       )}

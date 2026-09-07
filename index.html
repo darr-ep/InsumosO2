@@ -6,6 +6,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0c68c2" />
     <title>Insumos O2</title>
+    <script>
+      // Mirrors src/lib/theme.ts's readStoredPreference/systemPrefersDark —
+      // runs synchronously before any React code loads so the correct theme
+      // is set pre-paint (no flash of the wrong theme). Keep both in sync if
+      // the storage key or fallback logic ever changes.
+      (function () {
+        try {
+          var stored = localStorage.getItem("insumoso2-theme");
+          var isDark =
+            stored === "dark" ||
+            (stored !== "light" &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (isDark) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {
+          // Storage/matchMedia unavailable — default to light, same as the
+          // module's own fallback.
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

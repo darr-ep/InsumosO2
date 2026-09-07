@@ -112,7 +112,7 @@ export function CustomerEditForm({
               autoComplete="name"
               placeholder="Ej. Juan Pérez"
               aria-invalid={!!errors.name}
-              className="pl-9 bg-white border-slate-200 shadow-xs"
+              className="pl-9 bg-card border-border shadow-xs"
               {...register("name", {
                 onChange: (e) => {
                   if (e.target.value.trim().length >= 2) {
@@ -144,7 +144,7 @@ export function CustomerEditForm({
               maxLength={12}
               placeholder="775 123 4567"
               aria-invalid={!!errors.phone}
-              className="pl-9 bg-white border-slate-200 shadow-xs"
+              className="pl-9 bg-card border-border shadow-xs"
               value={formatPhoneDisplay(watchedPhone || "")}
               onChange={(e) => {
                 const digits = cleanPhoneDigits(e.target.value);
@@ -182,7 +182,7 @@ export function CustomerEditForm({
                 variant="outline"
                 size="sm"
                 onClick={() => setIsCapturingNewPhoto(true)}
-                className="w-full bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-xs"
+                className="w-full bg-card hover:bg-muted border border-border rounded-xl shadow-xs"
               >
                 Cambiar foto
               </Button>
@@ -205,7 +205,7 @@ export function CustomerEditForm({
               size="lg"
               disabled={isSubmitting}
               onClick={handleCancelClick}
-              className="flex-1 bg-white hover:bg-slate-50 border border-slate-200 shadow-xs"
+              className="flex-1 bg-card hover:bg-muted border border-border shadow-xs"
             >
               Cancelar
             </Button>

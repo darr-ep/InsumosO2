@@ -185,7 +185,7 @@ export function PaymentDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent>
           <DialogHeader className="border-b-0 pl-4 pr-12 text-left items-start justify-start">
-            <DialogTitle className="text-left text-lg font-semibold text-slate-900">
+            <DialogTitle className="text-left text-lg font-semibold text-foreground">
               Registrar pago
             </DialogTitle>
           </DialogHeader>
