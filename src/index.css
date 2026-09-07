@@ -79,6 +79,13 @@
   --destructive-soft: #fee2e2;
   --scrim: #0b1220aa;
   --foreground-disabled: #9aa1ab;
+  /* Text-on-warning-soft (amber banners/badges): --warning itself only
+     clears 1.90:1 here — it was tuned as a high-luminance BACKGROUND color
+     (see its own comment above: "pairs with dark text, not white"), not as
+     foreground text. This is Tailwind's amber-700, the value this app's
+     amber banners already used before being tokenized — 4.51:1, clears
+     normal-text AA (not just the 3:1 UI-badge floor). */
+  --warning-soft-foreground: #b45309;
 }
 
 .dark {
@@ -88,7 +95,7 @@
      eyeballed from the design image. */
   --background: #0f1115;
   --foreground: #f2f4f8;
-  --card: #1a1023;
+  --card: #1a1d23;
   --card-foreground: #f2f4f8;
   /* Design's "Menús y overlays" row (#262A31) — same value as --card-soft,
      NOT --card. A prior pass here incorrectly copied --card's value;
@@ -131,6 +138,9 @@
   --card-soft: #262a31;
   --scrim: #0b1220cc;
   --foreground-disabled: #717985;
+  /* Tailwind's amber-400 — the value this app's amber banners already used
+     for dark mode before being tokenized. 9.54:1 against --warning-soft. */
+  --warning-soft-foreground: #fbbf24;
 }
 
 @theme inline {
@@ -156,6 +166,7 @@
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-warning-soft: var(--warning-soft);
+  --color-warning-soft-foreground: var(--warning-soft-foreground);
   --color-destructive-soft: var(--destructive-soft);
   --color-border: var(--border);
   --color-input: var(--input);

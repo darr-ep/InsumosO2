@@ -164,9 +164,9 @@ describe("RentalCreatedSummary print/share footer (design-fidelity Slice C, RELI
       );
       expect(message.textContent).not.toContain("correctamente");
 
-      const banner = message.closest(".bg-amber-100");
+      const banner = message.closest(".bg-warning-soft");
       expect(banner).not.toBeNull();
-      expect(banner).toHaveClass("text-amber-700");
+      expect(banner).toHaveClass("text-warning-soft-foreground");
       expect(banner?.querySelector("svg")).not.toBeNull();
     });
 

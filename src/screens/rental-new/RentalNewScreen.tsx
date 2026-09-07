@@ -545,7 +545,7 @@ export function RentalNewScreen() {
                 </div>
                 {((selectedCustomer && isCredentialPending(selectedCustomer.credential_photo)) ||
                   (pendingNewCustomer && !pendingNewCustomer.credentialPhoto)) && (
-                  <span className="bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0">
+                  <span className="bg-warning-soft text-warning-soft-foreground border border-amber-300 dark:border-amber-800 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0">
                     Credencial pendiente
                   </span>
                 )}

@@ -27,7 +27,7 @@ describe("ThemeMenu (3-state Claro/Oscuro/Sistema switch)", () => {
 
     await user.click(screen.getByRole("button", { name: "Tema" }));
 
-    const items = screen.getAllByRole("menuitem");
+    const items = screen.getAllByRole("menuitemradio");
     expect(items).toHaveLength(3);
     expect(items[0]).toHaveTextContent("Claro");
     expect(items[1]).toHaveTextContent("Oscuro");
@@ -39,7 +39,7 @@ describe("ThemeMenu (3-state Claro/Oscuro/Sistema switch)", () => {
     render(<ThemeMenu />);
 
     await user.click(screen.getByRole("button", { name: "Tema" }));
-    await user.click(screen.getByRole("menuitem", { name: "Oscuro" }));
+    await user.click(screen.getByRole("menuitemradio", { name: "Oscuro" }));
 
     expect(getThemePreference()).toBe("dark");
     expect(document.documentElement.classList.contains("dark")).toBe(true);
@@ -50,23 +50,25 @@ describe("ThemeMenu (3-state Claro/Oscuro/Sistema switch)", () => {
     render(<ThemeMenu />);
 
     await user.click(screen.getByRole("button", { name: "Tema" }));
-    await user.click(screen.getByRole("menuitem", { name: "Oscuro" }));
+    await user.click(screen.getByRole("menuitemradio", { name: "Oscuro" }));
     await user.click(screen.getByRole("button", { name: "Tema" }));
-    await user.click(screen.getByRole("menuitem", { name: "Claro" }));
+    await user.click(screen.getByRole("menuitemradio", { name: "Claro" }));
 
     expect(getThemePreference()).toBe("light");
     expect(document.documentElement.classList.contains("dark")).toBe(false);
   });
 
-  it("shows a check mark next to the currently selected preference", async () => {
+  it("exposes the currently selected preference to assistive tech via aria-checked", async () => {
     const user = userEvent.setup();
     render(<ThemeMenu />);
 
     await user.click(screen.getByRole("button", { name: "Tema" }));
-    const sistemaItem = screen.getByRole("menuitem", { name: /Sistema/ });
+    const sistemaItem = screen.getByRole("menuitemradio", { name: /Sistema/ });
+    expect(sistemaItem).toHaveAttribute("aria-checked", "true");
     expect(sistemaItem.querySelector("svg.lucide-check")).not.toBeNull();
 
-    const claroItem = screen.getByRole("menuitem", { name: /Claro/ });
+    const claroItem = screen.getByRole("menuitemradio", { name: /Claro/ });
+    expect(claroItem).toHaveAttribute("aria-checked", "false");
     expect(claroItem.querySelector("svg.lucide-check")).toBeNull();
   });
 });

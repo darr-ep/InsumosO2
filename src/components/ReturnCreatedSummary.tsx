@@ -44,8 +44,8 @@ import { useReceiptActions } from "@/printing/useReceiptActions";
  * neutral-dark "Devolución registrada" with a SEPARATE circular
  * `bg-success-soft` check badge above it (not inline "✓" text), the
  * summary rows moved from a bare `dl` into a `bg-muted` gray card, the
- * print-failure message is an amber `bg-amber-100`/`text-amber-700` banner
- * with a `TriangleAlert` icon (copy corrected to remove "correctamente" —
+ * print-failure message is an amber `bg-warning-soft`/`text-warning-soft-foreground`
+ * banner with a `TriangleAlert` icon (copy corrected to remove "correctamente" —
  * same reasoning as `RentalCreatedSummary`: never imply anything printed
  * successfully in a message about it failing to print), "Compartir
  * comprobante" is shortened to "Compartir", and Compartir is now
@@ -136,7 +136,7 @@ export function ReturnCreatedSummary({
             </dl>
 
             {printStatus === "failed" && (
-              <div className="flex items-start gap-2 rounded-lg bg-amber-100 p-3 text-sm text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+              <div className="flex items-start gap-2 rounded-lg bg-warning-soft p-3 text-sm text-warning-soft-foreground">
                 <TriangleAlert
                   aria-hidden="true"
                   className="mt-0.5 size-4 shrink-0"

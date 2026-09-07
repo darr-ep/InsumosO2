@@ -39,15 +39,27 @@ export function ThemeMenu() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        {OPTIONS.map(({ value, label, Icon }) => (
-          <DropdownMenuItem key={value} onSelect={() => setPreference(value)}>
-            <Icon aria-hidden="true" />
-            {label}
-            {preference === value && (
-              <Check aria-hidden="true" className="ml-auto" />
-            )}
-          </DropdownMenuItem>
-        ))}
+        {OPTIONS.map(({ value, label, Icon }) => {
+          const isSelected = preference === value;
+          return (
+            // Radix's shared DropdownMenuItem wrapper was deliberately
+            // trimmed to skip Radio/Checkbox variants (no prior use case) —
+            // rather than restructure that shared primitive for this one
+            // caller, override the a11y role/state directly so a
+            // screen-reader user can tell which of the 3 modes is active,
+            // same information the visual checkmark already conveys.
+            <DropdownMenuItem
+              key={value}
+              role="menuitemradio"
+              aria-checked={isSelected}
+              onSelect={() => setPreference(value)}
+            >
+              <Icon aria-hidden="true" />
+              {label}
+              {isSelected && <Check aria-hidden="true" className="ml-auto" />}
+            </DropdownMenuItem>
+          );
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
   );

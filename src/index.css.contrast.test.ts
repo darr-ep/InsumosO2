@@ -61,6 +61,17 @@ describe("src/index.css light-theme contrast (design #2224 A1/A2)", () => {
     expect(ratio).toBeGreaterThanOrEqual(3.0);
   });
 
+  it("keeps --warning-soft-foreground on --warning-soft at or above WCAG AA (4.5:1)", () => {
+    // --warning itself only clears 1.90:1 here (it's tuned as a background
+    // color, not foreground text) — --warning-soft-foreground is the
+    // dedicated text token for this pairing instead.
+    const ratio = oklchContrastRatio(
+      extractToken(root, "warning-soft-foreground"),
+      extractToken(root, "warning-soft"),
+    );
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+  });
+
 });
 
 describe("src/index.css dark-theme contrast (Pencil MCP 'Sistema de tokens · modo oscuro')", () => {
@@ -121,6 +132,14 @@ describe("src/index.css dark-theme contrast (Pencil MCP 'Sistema de tokens · mo
   it("keeps --warning text on --warning-soft at or above UI badge threshold (3.0:1)", () => {
     const ratio = oklchContrastRatio(extractToken(dark, "warning"), extractToken(dark, "warning-soft"));
     expect(ratio).toBeGreaterThanOrEqual(3.0);
+  });
+
+  it("keeps --warning-soft-foreground on --warning-soft at or above WCAG AA (4.5:1)", () => {
+    const ratio = oklchContrastRatio(
+      extractToken(dark, "warning-soft-foreground"),
+      extractToken(dark, "warning-soft"),
+    );
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
   });
 
   it("keeps --destructive text on --destructive-soft at or above WCAG AA (4.5:1)", () => {

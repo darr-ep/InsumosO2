@@ -150,7 +150,7 @@ export function RentalCreatedSummary({
             </dl>
 
             {printStatus === "failed" && (
-              <div className="flex items-start gap-2 rounded-lg bg-amber-100 p-3 text-sm text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+              <div className="flex items-start gap-2 rounded-lg bg-warning-soft p-3 text-sm text-warning-soft-foreground">
                 <TriangleAlert
                   aria-hidden="true"
                   className="mt-0.5 size-4 shrink-0"

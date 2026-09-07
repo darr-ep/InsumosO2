@@ -165,9 +165,9 @@ describe("PaymentCreatedSummary (design-fidelity: Éxito · Pago/Ajuste registra
     const message = await screen.findByText(
       "El ajuste se guardó, pero no se pudo imprimir el comprobante.",
     );
-    const banner = message.closest(".bg-amber-100");
+    const banner = message.closest(".bg-warning-soft");
     expect(banner).not.toBeNull();
-    expect(banner).toHaveClass("text-amber-700");
+    expect(banner).toHaveClass("text-warning-soft-foreground");
     expect(banner?.querySelector("svg")).not.toBeNull();
   });
 
