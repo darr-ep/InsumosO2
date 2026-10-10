@@ -27,7 +27,9 @@ migrate(
     const collection = new Collection({
       name: "rental_folio_counter",
       type: "base",
-      fields: [{ name: "value", type: "number", required: true, min: 0 }],
+      fields: [
+        { name: "value", type: "number", required: false, min: 0, onlyInt: true },
+      ],
       listRule: null,
       viewRule: null,
       createRule: null,

@@ -88,7 +88,7 @@ describe("CustomerPicker (§7.1)", () => {
     );
 
     expect(screen.getByText("Juan Pérez")).toBeInTheDocument();
-    expect(screen.getByText("551 234 5678")).toBeInTheDocument();
+    expect(screen.getByText("55 1234 5678")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Ver ficha" }),
     ).not.toBeInTheDocument();

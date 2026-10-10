@@ -26,7 +26,7 @@ export interface SearchBarProps {
 export function SearchBar({
   value,
   onChange,
-  placeholder = "Folio, nombre o teléfono",
+  placeholder = "Buscar por folio, nombre o teléfono",
   ariaLabel = "Buscar por folio, nombre o teléfono",
 }: SearchBarProps) {
   return (

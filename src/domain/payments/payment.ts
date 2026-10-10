@@ -8,12 +8,12 @@ import { z } from "zod";
  * part of "Nueva renta" (task 1.4/1.5, §7.1), never from this dialog.
  */
 
-export const PAYMENT_DIALOG_TYPES = ["rent", "adjustment"] as const;
+export const PAYMENT_DIALOG_TYPES = ["rent"] as const;
 export type PaymentDialogType = (typeof PAYMENT_DIALOG_TYPES)[number];
 
 // Redesign Round 3 (Detalle de renta — historial de pagos): display label
 // for a payment's `payment_type`, independent of `PaymentDialog`'s own
-// "Pago"/"Ajuste" button copy — the history timeline names the actual kind
+// "Pago" button copy — the history timeline names the actual kind
 // of payment (a `deposit` is never created from `PaymentDialog`, only
 // alongside the rental itself, §7.1).
 // Redesign — UX/UI pass (business-owner finding, post-launch audit):
@@ -34,43 +34,11 @@ export function paymentTypeLabel(
   return PAYMENT_TYPE_LABELS[paymentType];
 }
 
-export const paymentFormSchema = z
-  .object({
-    payment_type: z.enum(PAYMENT_DIALOG_TYPES),
-    amount: z.number(),
-    note: z.string().trim().optional(),
-  })
-  .superRefine((data, ctx) => {
-    if (data.payment_type === "adjustment") {
-      // §11.2/§20/CU5: an adjustment's note is mandatory (also enforced
-      // server-side by pb_hooks/payments_validate.pb.js, task 2.2) — this
-      // is the client-side immediate-feedback layer, not the last line of
-      // defense.
-      if (!data.note || data.note.trim().length === 0) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["note"],
-          message: "La nota es obligatoria para un ajuste.",
-        });
-      }
-
-      if (data.amount === 0) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["amount"],
-          message: "El monto del ajuste no puede ser cero.",
-        });
-      }
-    } else if (data.amount <= 0) {
-      // §20: "payment.amount: requerido, numérico, > 0 (negativo permitido
-      // solo si payment_type = 'adjustment')".
-      ctx.addIssue({
-        code: "custom",
-        path: ["amount"],
-        message: "El monto debe ser mayor a 0.",
-      });
-    }
-  });
+export const paymentFormSchema = z.object({
+  payment_type: z.enum(PAYMENT_DIALOG_TYPES).default("rent"),
+  amount: z.number().gt(0, "El monto debe ser mayor a 0."),
+  note: z.string().trim().optional(),
+});
 
 export type PaymentFormValues = z.infer<typeof paymentFormSchema>;
 

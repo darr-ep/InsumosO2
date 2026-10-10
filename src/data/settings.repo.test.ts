@@ -40,7 +40,10 @@ describe("getBusinessSettings", () => {
     const settings = await getBusinessSettings();
 
     expect(collection).toHaveBeenCalledWith("business_settings");
-    expect(getFirstListItem).toHaveBeenCalledWith("");
+    expect(getFirstListItem).toHaveBeenCalledWith(
+      "",
+      expect.objectContaining({ requestKey: null }),
+    );
     expect(settings).toEqual({
       id: "s1",
       total_concentradores: 5,

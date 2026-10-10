@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const create = vi.fn();
+const update = vi.fn();
+const del = vi.fn();
 const getList = vi.fn();
+const getFullList = vi.fn().mockResolvedValue([]);
 const getOne = vi.fn();
 const send = vi.fn();
-const collection = vi.fn(() => ({ create, getList, getOne }));
+const collection = vi.fn(() => ({ create, update, delete: del, getList, getFullList, getOne }));
 const filter = vi.fn(
   (raw: string, params: Record<string, unknown>) =>
     `${raw}::${JSON.stringify(params)}`,
@@ -16,6 +19,9 @@ vi.mock("@/data/pocketbaseClient", () => ({
 
 const {
   createRental,
+  updateRental,
+  updateReturnDetails,
+  deleteRental,
   getRental,
   listActiveRentals,
   listItemsForRental,
@@ -242,7 +248,10 @@ describe("getRental (§16.10, CU6/CU7, task 3.3)", () => {
     const result = await getRental("r1");
 
     expect(collection).toHaveBeenCalledWith("rentals");
-    expect(getOne).toHaveBeenCalledWith("r1", { expand: "customer_id" });
+    expect(getOne).toHaveBeenCalledWith("r1", {
+      expand: "customer_id,returned_by,created_by,updated_by",
+      requestKey: null,
+    });
     expect(result).toEqual({ id: "r1", status: "ACTIVE" });
   });
 });
@@ -373,5 +382,189 @@ describe("searchRentals (§7.4, §16.9, CU3)", () => {
       expect.objectContaining({ expand: "customer_id" }),
     );
     expect(result).toEqual([{ id: "r1", folio: "R-000184" }]);
+  });
+});
+
+describe("deleteRental", () => {
+  beforeEach(() => {
+    del.mockReset();
+    getFullList.mockReset().mockResolvedValue([]);
+    collection.mockClear();
+  });
+
+  it("deletes the rental by id and cleans up associated items and payments", async () => {
+    del.mockResolvedValue(true);
+
+    await deleteRental("r1");
+
+    expect(collection).toHaveBeenCalledWith("rentals");
+    expect(del).toHaveBeenCalledWith("r1", { requestKey: null });
+  });
+});
+
+describe("updateRental", () => {
+  beforeEach(() => {
+    update.mockReset();
+    create.mockReset();
+    del.mockReset();
+    getList.mockReset();
+    collection.mockClear();
+    filter.mockClear();
+  });
+
+  it("updates rental fields, syncs item quantities (updates existing, creates new, deletes removed), and syncs deposit payment", async () => {
+    update.mockResolvedValueOnce({
+      id: "r1",
+      initial_rent_amount: 3200,
+      deposit_amount: 1500,
+    });
+    // existing items
+    getList
+      .mockResolvedValueOnce({
+        items: [
+          { id: "item1", rental_id: "r1", item_type: "concentrator", quantity: 1 },
+          { id: "item2", rental_id: "r1", item_type: "tank", quantity: 1 },
+        ],
+      })
+      // existing payments
+      .mockResolvedValueOnce({
+        items: [
+          { id: "pay_dep", rental_id: "r1", amount: 1000, payment_type: "deposit" },
+        ],
+      });
+
+    await updateRental("r1", {
+      initialRentAmount: 3200,
+      depositAmount: 1500,
+      items: [
+        { itemType: "concentrator", quantity: 2 }, // modified
+        // tank removed
+      ],
+    });
+
+    // 1. rental updated
+    expect(update).toHaveBeenCalledWith(
+      "r1",
+      {
+        initial_rent_amount: 3200,
+        deposit_amount: 1500,
+      },
+      { requestKey: null },
+    );
+
+    // 2. item1 quantity updated to 2
+    expect(update).toHaveBeenCalledWith("item1", { quantity: 2 }, { requestKey: null });
+
+    // 3. item2 deleted because it's no longer in items
+    expect(del).toHaveBeenCalledWith("item2", { requestKey: null });
+
+    // 4. deposit payment updated to 1500
+    expect(update).toHaveBeenCalledWith("pay_dep", { amount: 1500 }, { requestKey: null });
+  });
+
+  it("creates deposit payment if deposit changed from 0 to > 0", async () => {
+    update.mockResolvedValueOnce({
+      id: "r1",
+      initial_rent_amount: 2800,
+      deposit_amount: 1000,
+    });
+    getList
+      .mockResolvedValueOnce({
+        items: [{ id: "item1", rental_id: "r1", item_type: "concentrator", quantity: 1 }],
+      })
+      .mockResolvedValueOnce({ items: [] }); // no existing deposit payment
+    create.mockResolvedValueOnce({ id: "pay_dep_new" });
+
+    await updateRental("r1", {
+      initialRentAmount: 2800,
+      depositAmount: 1000,
+      items: [{ itemType: "concentrator", quantity: 1 }],
+    });
+
+    expect(create).toHaveBeenCalledWith(
+      { rental_id: "r1", amount: 1000, payment_type: "deposit" },
+      { requestKey: null },
+    );
+  });
+
+  it("deletes deposit payment if deposit changed from > 0 to 0", async () => {
+    update.mockResolvedValueOnce({
+      id: "r1",
+      initial_rent_amount: 2800,
+      deposit_amount: 0,
+    });
+    getList
+      .mockResolvedValueOnce({
+        items: [{ id: "item1", rental_id: "r1", item_type: "concentrator", quantity: 1 }],
+      })
+      .mockResolvedValueOnce({
+        items: [{ id: "pay_dep", rental_id: "r1", amount: 1000, payment_type: "deposit" }],
+      });
+
+    await updateRental("r1", {
+      initialRentAmount: 2800,
+      depositAmount: 0,
+      items: [{ itemType: "concentrator", quantity: 1 }],
+    });
+
+    expect(del).toHaveBeenCalledWith("pay_dep", { requestKey: null });
+  });
+});
+
+describe("updateReturnDetails", () => {
+  beforeEach(() => {
+    send.mockReset();
+  });
+
+  it("POSTs to the custom update-return endpoint with deposit_returned_amount, never a direct collection update", async () => {
+    send.mockResolvedValueOnce({
+      id: "rental1",
+      status: "RETURNED",
+      deposit_returned_amount: 800,
+    });
+
+    const result = await updateReturnDetails("rental1", {
+      depositReturnedAmount: 800,
+    });
+
+    expect(send).toHaveBeenCalledWith("/api/rentals/rental1/update-return", {
+      method: "POST",
+      body: { deposit_returned_amount: 800 },
+    });
+    expect(result).toEqual({
+      id: "rental1",
+      status: "RETURNED",
+      deposit_returned_amount: 800,
+    });
+  });
+
+  it("includes an optional note when provided", async () => {
+    send.mockResolvedValueOnce({
+      id: "rental1",
+      status: "RETURNED",
+      deposit_returned_amount: 0,
+    });
+
+    await updateReturnDetails("rental1", {
+      depositReturnedAmount: 0,
+      note: "el cliente no dejó depósito",
+    });
+
+    expect(send).toHaveBeenCalledWith("/api/rentals/rental1/update-return", {
+      method: "POST",
+      body: {
+        deposit_returned_amount: 0,
+        note: "el cliente no dejó depósito",
+      },
+    });
+  });
+
+  it("omits note from body when note is undefined", async () => {
+    send.mockResolvedValueOnce({ id: "rental1", status: "RETURNED" });
+
+    await updateReturnDetails("rental1", { depositReturnedAmount: 500 });
+
+    const callBody = send.mock.calls[0][1].body as Record<string, unknown>;
+    expect(callBody).not.toHaveProperty("note");
   });
 });

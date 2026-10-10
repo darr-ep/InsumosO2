@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Printer, RefreshCw, Unplug, FileText } from "lucide-react";
+import { Printer, RefreshCw, Unplug, FileText, Image } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,13 +21,11 @@ export function PrinterMenu() {
   const [connectionStatus, setConnectionStatus] = useState(webBluetoothPrinter.connectionStatus);
   const [deviceName, setDeviceName] = useState<string | null>(webBluetoothPrinter.deviceName);
   // "Carga · Conectando impresora" (pencil ground truth) only applies to the
-  // Connect action, never to "Imprimir prueba" — both shared the same plain
-  // `isLoading` boolean before, which would have popped up the wrong copy
-  // ("Conectando impresora...") during a test print. Tracking which action
-  // is in flight keeps `isLoading`'s existing disable-the-menu-items
-  // behavior for both, while only gating the loading popup on Connect.
+  // Connect action, never to "Imprimir prueba" or "Imprimir logo" — tracking
+  // which action is in flight keeps `isLoading`'s existing disable-the-menu-items
+  // behavior, while only gating the loading popup on Connect.
   const [activeAction, setActiveAction] = useState<
-    "connect" | "test-print" | null
+    "connect" | "test-print" | "logo-print" | null
   >(null);
   const isLoading = activeAction !== null;
   const [autoPrint, setAutoPrint] = useState(() => isAutoPrintEnabled());
@@ -52,10 +50,11 @@ export function PrinterMenu() {
     setActiveAction("connect");
     try {
       await webBluetoothPrinter.connect();
-      toast.success("Impresora conectada correctamente");
+      toast.success("Impresora vinculada correctamente");
+      await webBluetoothPrinter.disconnect();
     } catch (error) {
       toast.error(
-        "No se pudo conectar la impresora: " +
+        "No se pudo vincular la impresora: " +
           (error instanceof Error ? error.message : String(error)),
       );
     } finally {
@@ -64,11 +63,6 @@ export function PrinterMenu() {
   }
 
   function handleToggleAutoPrint(event: Event) {
-    // Bugfix (real-device finding, 2026-09-05): `DropdownMenuItem`'s
-    // `onSelect` closes the menu by default (Radix). "Auto-imprimir" is a
-    // persistent setting the user may want to watch flip state, not a
-    // one-shot action — `preventDefault()` is the standard Radix pattern
-    // for keeping a dropdown open across an item interaction.
     event.preventDefault();
     const next = !autoPrint;
     setAutoPrintEnabled(next);
@@ -80,9 +74,9 @@ export function PrinterMenu() {
     );
   }
 
-  async function handleDisconnect() {
-    await webBluetoothPrinter.disconnect();
-    toast.info("Impresora desconectada");
+  async function handleForget() {
+    await webBluetoothPrinter.forgetDevice();
+    toast.info("Impresora desvinculada de este teléfono");
   }
 
   async function handleTestPrint() {
@@ -101,11 +95,32 @@ export function PrinterMenu() {
         depositAmount: 0,
         total: 100,
       };
+      await webBluetoothPrinter.connect();
       await webBluetoothPrinter.print(testReceipt);
+      await new Promise((r) => setTimeout(r, 400));
+      await webBluetoothPrinter.disconnect();
       toast.success("Ticket de prueba impreso");
     } catch (error) {
       toast.error(
         "Error al imprimir prueba: " +
+          (error instanceof Error ? error.message : String(error)),
+      );
+    } finally {
+      setActiveAction(null);
+    }
+  }
+
+  async function handleLogoPrint() {
+    setActiveAction("logo-print");
+    try {
+      await webBluetoothPrinter.connect();
+      await webBluetoothPrinter.printLogo();
+      await new Promise((r) => setTimeout(r, 400));
+      await webBluetoothPrinter.disconnect();
+      toast.success("Logo impreso");
+    } catch (error) {
+      toast.error(
+        "Error al imprimir logo: " +
           (error instanceof Error ? error.message : String(error)),
       );
     } finally {
@@ -134,42 +149,33 @@ export function PrinterMenu() {
           ) : (
             <Printer aria-hidden="true" className="!size-[24px]" />
           )}
-          <span
-            className={
-              "absolute top-2.5 right-2.5 size-2 rounded-full ring-2 ring-background " +
-              (isConnected
-                ? "bg-emerald-500"
-                : isConnecting
-                  ? "bg-amber-500"
-                  : "bg-destructive/80")
-            }
-            aria-hidden="true"
-          />
+          {deviceName && !isConnecting && (
+            <span
+              className="absolute top-2.5 right-2.5 size-2 rounded-full ring-2 ring-background bg-emerald-500"
+              aria-hidden="true"
+            />
+          )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-60">
+      <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuLabel className="flex flex-col gap-0.5">
           <div className="flex items-center gap-1.5 font-medium">
             <span
-              className={
-                "size-2 rounded-full " +
-                (isConnected
-                  ? "bg-emerald-500"
-                  : isConnecting
-                    ? "bg-amber-500"
-                    : "bg-destructive")
-              }
+              className={cn(
+                "size-2 rounded-full",
+                deviceName ? "bg-emerald-500" : "bg-muted-foreground/50",
+              )}
             />
             <span>
-              {isConnected
-                ? "Impresora lista"
-                : isConnecting
-                  ? "Conectando…"
-                  : "Impresora no conectada"}
+              {deviceName
+                ? "Impresora vinculada"
+                : "Sin impresora vinculada"}
             </span>
           </div>
-          {deviceName && (
-            <span className="text-muted-foreground text-xs">{deviceName}</span>
+          {deviceName ? (
+            <span className="text-muted-foreground text-xs">{deviceName} (conexión al imprimir)</span>
+          ) : (
+            <span className="text-muted-foreground text-xs">Se conectará automáticamente al imprimir</span>
           )}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
@@ -178,15 +184,7 @@ export function PrinterMenu() {
           onSelect={handleToggleAutoPrint}
           className="flex items-center justify-between gap-2"
         >
-          <span>Auto-imprimir</span>
-          {/*
-            design-fidelity post-audit bugfix batch (Fix 4, pencil frame
-            `MenúImpresora`): hand-rolled switch — no
-            `@radix-ui/react-switch` dependency (explicitly rejected, design
-            obs #2224 §C6). The whole menu item stays the click target (same
-            behavior as before this fix); this is purely a visual upgrade
-            over the old icon+trailing-text representation.
-          */}
+          <span>Auto-imprimir al guardar</span>
           <span
             role="switch"
             aria-checked={autoPrint}
@@ -199,12 +197,6 @@ export function PrinterMenu() {
             <span
               aria-hidden="true"
               className={cn(
-                // Dark-mode audit: deliberately NOT `bg-card` — a switch
-                // knob needs to read as a light floating disc against both
-                // `bg-primary` (on) and `bg-muted` (off) regardless of
-                // theme, the same way native/Radix switches keep a white
-                // thumb in dark mode. `--card` would blend into the
-                // similarly-dark `bg-muted` off-state track in dark mode.
                 "inline-block size-5 translate-x-0.5 rounded-full bg-white shadow transition-transform",
                 autoPrint && "translate-x-5",
               )}
@@ -213,30 +205,33 @@ export function PrinterMenu() {
         </DropdownMenuItem>
         <DropdownMenuSeparator />
 
-        {!isConnected ? (
+        <DropdownMenuItem onSelect={() => void handleTestPrint()} disabled={isLoading}>
+          <FileText aria-hidden="true" className="mr-2 size-4" />
+          Imprimir prueba
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => void handleLogoPrint()} disabled={isLoading}>
+          <Image aria-hidden="true" className="mr-2 size-4" />
+          Impresión de logo
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+
+        {!deviceName ? (
           <DropdownMenuItem onSelect={() => void handleConnect()} disabled={isLoading}>
             <RefreshCw aria-hidden="true" className="mr-2 size-4" />
-            Conectar impresora
+            Vincular impresora
           </DropdownMenuItem>
         ) : (
-          <>
-            <DropdownMenuItem onSelect={() => void handleTestPrint()} disabled={isLoading}>
-              <FileText aria-hidden="true" className="mr-2 size-4" />
-              Imprimir prueba
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => void handleDisconnect()} disabled={isLoading}>
-              <Unplug aria-hidden="true" className="mr-2 size-4" />
-              Desconectar
-            </DropdownMenuItem>
-          </>
+          <DropdownMenuItem onSelect={() => void handleForget()} disabled={isLoading} className="text-destructive focus:text-destructive">
+            <Unplug aria-hidden="true" className="mr-2 size-4" />
+            Desvincular impresora
+          </DropdownMenuItem>
         )}
       </DropdownMenuContent>
 
       <LoadingDialog
         open={activeAction === "connect"}
-        title="Conectando impresora..."
-        description="Buscamos tu impresora y configuramos la conexión."
+        title="Vinculando impresora..."
+        description="Buscamos tu impresora para guardarla en este dispositivo."
       />
     </DropdownMenu>
   );

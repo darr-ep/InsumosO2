@@ -7,19 +7,27 @@ import { RentalDetailSheet } from "@/components/RentalDetailSheet";
 const getRental = vi.fn();
 const listItemsForRental = vi.fn();
 const returnRental = vi.fn();
+const deleteRental = vi.fn();
+const updateRental = vi.fn();
 const listPaymentsForRental = vi.fn();
 const createPayment = vi.fn();
+const updatePayment = vi.fn();
+const deletePayment = vi.fn();
 const navigate = vi.fn();
 
 vi.mock("@/data/rentals.repo", () => ({
   getRental: (...args: unknown[]) => getRental(...args),
   listItemsForRental: (...args: unknown[]) => listItemsForRental(...args),
   returnRental: (...args: unknown[]) => returnRental(...args),
+  deleteRental: (...args: unknown[]) => deleteRental(...args),
+  updateRental: (...args: unknown[]) => updateRental(...args),
 }));
 
 vi.mock("@/data/payments.repo", () => ({
   listPaymentsForRental: (...args: unknown[]) => listPaymentsForRental(...args),
   createPayment: (...args: unknown[]) => createPayment(...args),
+  updatePayment: (...args: unknown[]) => updatePayment(...args),
+  deletePayment: (...args: unknown[]) => deletePayment(...args),
 }));
 
 vi.mock("react-router", async () => {
@@ -97,12 +105,12 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
 
     expect(await screen.findByText("Renta R-000001")).toBeInTheDocument();
     expect(screen.getByText("Juan Pérez")).toBeInTheDocument();
-    expect(screen.getByText("551 234 5678")).toBeInTheDocument();
+    expect(screen.getByText("55 1234 5678")).toBeInTheDocument();
     expect(screen.getByText("Concentrador")).toBeInTheDocument();
     expect(screen.getByText("x2")).toBeInTheDocument();
     expect(screen.getByText("$2,800.00")).toBeInTheDocument(); // renta
-    // Total pagado ($4,000 = 3000+1000) — only appears once, in Resumen.
-    expect(screen.getByText("$4,000.00")).toBeInTheDocument();
+    // Total pagado ($6,800 = 2800 initial rent + 3000 rent payment + 1000 deposit) — only appears once, in Resumen.
+    expect(screen.getByText("$6,800.00")).toBeInTheDocument();
     expect(screen.getByText("Activa")).toBeInTheDocument();
   });
 
@@ -178,6 +186,43 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
       .map((el) => el.textContent);
 
     expect(labels).toEqual(["Depósito inicial", "Pago"]);
+  });
+
+  it("shows Devolución de depósito at the bottom of the payments list when the rental is returned", async () => {
+    getRental.mockResolvedValue({
+      ...returnedRental,
+      deposit_returned_amount: 500,
+      returned_at: "2026-08-30T10:00:00.000Z",
+      expand: {
+        customer_id: { id: "c1", name: "Juan Pérez", phone: "5512345678" },
+        returned_by: { name: "Astrid" },
+      },
+    });
+    listItemsForRental.mockResolvedValue([]);
+    listPaymentsForRental.mockResolvedValue([
+      {
+        id: "p1",
+        amount: 1000,
+        payment_type: "deposit",
+        created: "2026-08-01T10:00:00.000Z",
+        note: "",
+        expand: { created_by: { name: "Juan" } },
+      },
+    ]);
+
+    renderSheet();
+
+    const historySection = (
+      await screen.findByText("Historial de pagos")
+    ).closest("section")!;
+
+    expect(
+      within(historySection).getByText("Devolución de depósito"),
+    ).toBeInTheDocument();
+    expect(within(historySection).getByText("-$500.00")).toBeInTheDocument();
+    expect(
+      within(historySection).getByText(/Registró:\s+Astrid/),
+    ).toBeInTheDocument();
   });
 
   it("renders payment-history rows with colored circular icon badges (blue-soft for deposit, green-soft for mensualidad/ajuste) and no left-border rule (design-fidelity bugfix batch, Fix 5)", async () => {
@@ -483,7 +528,7 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("uses a gray sheet background, no divider under the title, and no corner close button (design-fidelity pencil-fidelity batch)", async () => {
+  it("uses a consistent sheet background, no divider under the title, and no corner close button (design-fidelity pencil-fidelity batch)", async () => {
     getRental.mockResolvedValue(activeRental);
     listItemsForRental.mockResolvedValue([]);
     listPaymentsForRental.mockResolvedValue([]);
@@ -493,7 +538,7 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
     await screen.findByText("Renta R-000001");
 
     const sheetContent = document.querySelector('[data-slot="sheet-content"]');
-    expect(sheetContent).toHaveClass("bg-muted");
+    expect(sheetContent).toHaveClass("bg-background");
 
     const sheetHeader = document.querySelector('[data-slot="sheet-header"]');
     expect(sheetHeader).not.toHaveClass("border-b");
@@ -619,6 +664,104 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
       await screen.findByText(
         "No se pudo actualizar la renta. Verifica tu conexión e intenta de nuevo.",
       ),
+    ).toBeInTheDocument();
+  });
+
+  it("confirms and deletes a rental when Eliminar renta is clicked in edit mode", async () => {
+    getRental.mockResolvedValue(activeRental);
+    listItemsForRental.mockResolvedValue([]);
+    listPaymentsForRental.mockResolvedValue([]);
+    deleteRental.mockResolvedValue(undefined);
+    const onOpenChange = vi.fn();
+    const onRentalChanged = vi.fn();
+    const user = userEvent.setup();
+
+    renderSheet({ onOpenChange, onRentalChanged });
+
+    const editBtn = await screen.findByRole("button", {
+      name: "Editar renta R-000001",
+    });
+    await user.click(editBtn);
+
+    const deleteBtn = await screen.findByRole("button", {
+      name: /Eliminar renta/i,
+    });
+    await user.click(deleteBtn);
+
+    expect(
+      await screen.findByRole("heading", { name: "¿Eliminar esta renta?" }),
+    ).toBeInTheDocument();
+
+    const confirmBtn = screen.getByRole("button", {
+      name: "Sí, eliminar renta",
+    });
+    await user.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(deleteRental).toHaveBeenCalledWith("r1");
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+      expect(onRentalChanged).toHaveBeenCalled();
+    });
+  });
+
+  it("edits a rental in edit mode and saves changes", async () => {
+    getRental.mockResolvedValue(activeRental);
+    listItemsForRental.mockResolvedValue([
+      { id: "i1", item_type: "concentrator", quantity: 1 },
+    ]);
+    listPaymentsForRental.mockResolvedValue([]);
+    updateRental.mockResolvedValue({
+      ...activeRental,
+      initial_rent_amount: 3200,
+    });
+    const user = userEvent.setup();
+
+    renderSheet();
+
+    const editBtn = await screen.findByRole("button", {
+      name: "Editar renta R-000001",
+    });
+    await user.click(editBtn);
+
+    const rentInput = screen.getByLabelText("Renta inicial");
+    await user.clear(rentInput);
+    await user.type(rentInput, "3200");
+
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await waitFor(() => {
+      expect(updateRental).toHaveBeenCalledWith("r1", {
+        initialRentAmount: 3200,
+        depositAmount: 1000,
+        items: [{ itemType: "concentrator", quantity: 1 }],
+      });
+    });
+  });
+
+  it("opens PaymentEditDialog when clicking the edit pencil on a payment row", async () => {
+    getRental.mockResolvedValue(activeRental);
+    listItemsForRental.mockResolvedValue([]);
+    listPaymentsForRental.mockResolvedValue([
+      {
+        id: "p1",
+        amount: 3000,
+        payment_type: "rent",
+        created: "2026-08-29T10:00:00.000Z",
+        note: "Pago 1",
+        expand: { created_by: { name: "Juan" } },
+      },
+    ]);
+    const user = userEvent.setup();
+
+    renderSheet();
+
+    const editPaymentBtn = await screen.findByRole("button", {
+      name: "Editar pago",
+    });
+    await user.click(editPaymentBtn);
+
+    expect(
+      await screen.findByRole("heading", { name: "Editar pago" }),
     ).toBeInTheDocument();
   });
 });

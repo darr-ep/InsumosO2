@@ -119,7 +119,7 @@ describe("buildTicket (§22/§23.1)", () => {
       ...INIT,
       ...selectCodepage(16),
       ...latin1Bytes("Hola\n"),
-      ...FEED_LINES(3),
+      ...FEED_LINES(6),
       ...CUT,
     ]);
   });
@@ -132,22 +132,22 @@ describe("buildTicket (§22/§23.1)", () => {
       ...selectCodepage(16),
       ...latin1Bytes("Folio: R-000001\n"),
       ...latin1Bytes("Cliente: Ñoño Pérez\n"),
-      ...FEED_LINES(3),
+      ...FEED_LINES(6),
       ...CUT,
     ]);
   });
 });
 
-describe("formatRow (32 columns thermal width)", () => {
-  it("formats key and value with exact spacing to fit 32 chars", () => {
-    const row = formatRow("Renta:", "$2,800.00", 32);
-    expect(row).toBe("Renta:                 $2,800.00");
-    expect(row.length).toBe(32);
+describe("formatRow (thermal width for 80mm Font A — 48 columns)", () => {
+  it("formats key and value with exact spacing to fit line width", () => {
+    const row = formatRow("Renta:", "$2,800.00");
+    expect(row).toBe("Renta:                                 $2,800.00");
+    expect(row.length).toBe(48);
   });
 
   it("truncates or ensures at least one space when string exceeds width (triangulation)", () => {
-    const row = formatRow("Concentrador de Oxigeno Portatil 5 Litros", "$2,800.00", 32);
-    expect(row.length).toBeLessThanOrEqual(32);
+    const row = formatRow("Concentrador de Oxígeno Portátil 5 Litros Grado Médico Uso Continuo", "$2,800.00", 48);
+    expect(row.length).toBeLessThanOrEqual(48);
     expect(row).toContain("$2,800.00");
   });
 });
@@ -188,12 +188,13 @@ describe("buildStructuredTicket (high polish formatted receipt)", () => {
     expect(text).toContain("Insumos Médicos & Oxígeno");
     expect(text).toContain("COMPROBANTE DE RENTA");
     expect(text).toContain("Folio: R-000001");
-    expect(text).toContain("Hora:");
-    expect(text).toContain("Cliente: Juan");
+    expect(text).toContain("Fecha:");
+    expect(text).toContain("Cliente: Juan Pérez");
     expect(text).toContain("DEPÓSITO GARANTÍA:");
     expect(text).toContain("TOTAL PAGADO:");
     expect(text).toContain("$3,800.00");
     expect(text).toContain("Conserve este comprobante");
+    expect(text).toContain("No se aceptan cambios,\ndevoluciones ni reembolsos");
   });
 
   it("builds structured return ticket with return breakdown", () => {

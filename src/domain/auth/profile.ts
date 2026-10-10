@@ -32,7 +32,10 @@ export const profileFormSchema = z.object({
   phone: z
     .string()
     .trim()
-    .regex(PROFILE_PHONE_PATTERN, "El teléfono debe tener 10 dígitos."),
+    .refine(
+      (val) => val === "" || PROFILE_PHONE_PATTERN.test(val),
+      "El teléfono debe tener 10 dígitos.",
+    ),
 });
 
 export type ProfileFormValues = z.infer<typeof profileFormSchema>;

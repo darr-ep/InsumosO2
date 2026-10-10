@@ -397,6 +397,46 @@ describe("ConfirmDialog (design-fidelity, shared component)", () => {
     expect(successIcon).not.toBe(loadingIcon);
   });
 
+  it("renders with tone='info' displaying the info styling", () => {
+    render(
+      <ConfirmDialog
+        open
+        onOpenChange={() => {}}
+        title="No se puede eliminar el cliente"
+        description="Tiene rentas activas."
+        confirmLabel="Entendido"
+        tone="info"
+        onConfirm={() => {}}
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "No se puede eliminar el cliente" }),
+    ).toBeInTheDocument();
+    const infoIconWrapper = document.body.querySelector(".bg-primary-soft");
+    expect(infoIconWrapper).toBeInTheDocument();
+  });
+
+  it("renders only confirm button when showCancel is false", () => {
+    render(
+      <ConfirmDialog
+        open
+        onOpenChange={() => {}}
+        title="No se puede eliminar el cliente"
+        description="Tiene rentas activas."
+        confirmLabel="Entendido"
+        showCancel={false}
+        tone="info"
+        onConfirm={() => {}}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Cancelar" })).not.toBeInTheDocument();
+    const confirmButton = screen.getByRole("button", { name: "Entendido" });
+    expect(confirmButton).toBeInTheDocument();
+    expect(confirmButton).toHaveClass("w-full");
+  });
+
   it("does not render when open is false", () => {
     render(
       <ConfirmDialog

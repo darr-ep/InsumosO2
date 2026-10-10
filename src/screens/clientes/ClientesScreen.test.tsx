@@ -12,6 +12,7 @@ const getCredentialPhotoUrl = vi.fn();
 const updateCustomerCredentialPhoto = vi.fn();
 const listRentalsForCustomer = vi.fn();
 const listActiveRentals = vi.fn();
+const listReturnedRentals = vi.fn();
 const listActiveRentalItems = vi.fn();
 const getBusinessSettings = vi.fn();
 
@@ -31,6 +32,7 @@ vi.mock("@/data/customers.repo", () => ({
 vi.mock("@/data/rentals.repo", () => ({
   listRentalsForCustomer: (...args: unknown[]) => listRentalsForCustomer(...args),
   listActiveRentals: (...args: unknown[]) => listActiveRentals(...args),
+  listReturnedRentals: (...args: unknown[]) => listReturnedRentals(...args),
   listActiveRentalItems: (...args: unknown[]) => listActiveRentalItems(...args),
 }));
 
@@ -88,12 +90,14 @@ describe("ClientesScreen (Redesign Round 2, Batch 2 — Clientes screen)", () =>
     updateCustomerCredentialPhoto.mockReset();
     listRentalsForCustomer.mockReset();
     listActiveRentals.mockReset();
+    listReturnedRentals.mockReset();
     listActiveRentalItems.mockReset();
     getBusinessSettings.mockReset();
     // Redesign — UX/UI pass (active-rental-count badge): safe default so
     // every pre-existing test in this file (which doesn't care about the
     // badge) doesn't have to know about this new fetch.
     listActiveRentals.mockResolvedValue([]);
+    listReturnedRentals.mockResolvedValue([]);
     listActiveRentalItems.mockResolvedValue([]);
     getBusinessSettings.mockResolvedValue({
       id: "s1",
@@ -121,9 +125,9 @@ describe("ClientesScreen (Redesign Round 2, Batch 2 — Clientes screen)", () =>
     renderScreen();
 
     expect(await screen.findByText("Juan Pérez")).toBeInTheDocument();
-    expect(screen.getByText("551 234 5678")).toBeInTheDocument();
+    expect(screen.getByText("55 1234 5678")).toBeInTheDocument();
     expect(screen.getByText("Ana Ruiz")).toBeInTheDocument();
-    expect(screen.getByText("552 222 3333")).toBeInTheDocument();
+    expect(screen.getByText("55 2222 3333")).toBeInTheDocument();
   });
 
   it("shows an active-rental-count badge per customer, singular/plural, and hides it at zero (Redesign — UX/UI pass, business-owner request)", async () => {
@@ -199,7 +203,7 @@ describe("ClientesScreen (Redesign Round 2, Batch 2 — Clientes screen)", () =>
 
     setQuery("zzz");
 
-    expect(await screen.findByText("Sin resultados.")).toBeInTheDocument();
+    expect(await screen.findByText(/sin resultados/i)).toBeInTheDocument();
   });
 
   it("shows a search error and does not crash when the search fails", async () => {

@@ -1,16 +1,60 @@
 import { describe, expect, it } from "vitest";
 import {
   customerFormSchema,
+  formatCustomerName,
   isAcceptedCredentialPhotoType,
   isCredentialPending,
   isCredentialPhotoWithinSizeLimit,
 } from "@/domain/customers/customer";
 
+describe("formatCustomerName", () => {
+  it("formats all-lowercase name to Title Case", () => {
+    expect(formatCustomerName("juan pérez")).toBe("Juan Pérez");
+  });
+
+  it("formats all-caps name to Title Case", () => {
+    expect(formatCustomerName("JUAN PÉREZ")).toBe("Juan Pérez");
+  });
+
+  it("formats mixed case name to Title Case", () => {
+    expect(formatCustomerName("jUaN pÉrEz")).toBe("Juan Pérez");
+  });
+
+  it("handles multiple spaces between words and trims edges", () => {
+    expect(formatCustomerName("   juan    carlos   pérez   gómez   ")).toBe(
+      "Juan Carlos Pérez Gómez",
+    );
+  });
+
+  it("formats names with accented characters correctly in Spanish", () => {
+    expect(formatCustomerName("ÁNGEL PÉREZ")).toBe("Ángel Pérez");
+    expect(formatCustomerName("óscar ñúñez")).toBe("Óscar Ñúñez");
+    expect(formatCustomerName("ÍTALO ÉDGAR")).toBe("Ítalo Édgar");
+  });
+
+  it("returns empty string for empty or whitespace-only input", () => {
+    expect(formatCustomerName("")).toBe("");
+    expect(formatCustomerName("   ")).toBe("");
+  });
+});
+
 describe("customerFormSchema (§20)", () => {
-  it("accepts a valid name and 10-digit phone", () => {
+  it("accepts a valid name and 10-digit phone and transforms name to Title Case", () => {
+    const result = customerFormSchema.safeParse({
+      name: "JUAN PÉREZ",
+      phone: "5512345678",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.name).toBe("Juan Pérez");
+    }
+  });
+
+  it("accepts an empty phone number when creating or editing a customer", () => {
     const result = customerFormSchema.safeParse({
       name: "Juan Pérez",
-      phone: "5512345678",
+      phone: "",
     });
 
     expect(result.success).toBe(true);

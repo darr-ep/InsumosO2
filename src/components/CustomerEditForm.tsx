@@ -1,16 +1,20 @@
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, Phone, User } from "lucide-react";
+import { ArrowLeft, Phone, Trash2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { LoadingDialog } from "@/components/LoadingDialog";
 import { CredentialCameraCapture } from "@/components/CredentialCameraCapture";
-import { customerFormSchema, type CustomerFormValues } from "@/domain/customers/customer";
+import {
+  customerFormSchema,
+  formatCustomerName,
+  type CustomerFormValues,
+} from "@/domain/customers/customer";
 import { ID_CARD_ASPECT_RATIO } from "@/lib/credentialCameraCrop";
-import { cleanPhoneDigits, formatPhoneDisplay } from "@/lib/phone";
+import { cleanPhoneDigits, formatPhoneDisplay, getCursorPositionAfterFormat } from "@/lib/phone";
 
 export interface CustomerEditFormProps {
   initialValues: CustomerFormValues;
@@ -18,6 +22,7 @@ export interface CustomerEditFormProps {
   onPhotoCaptured?: (file: File) => void;
   onSubmit: (values: CustomerFormValues) => void | Promise<void>;
   onCancel: () => void;
+  onDelete?: () => void;
   isSubmitting?: boolean;
 }
 
@@ -27,6 +32,7 @@ export function CustomerEditForm({
   onPhotoCaptured,
   onSubmit,
   onCancel,
+  onDelete,
   isSubmitting = false,
 }: CustomerEditFormProps) {
   const {
@@ -80,7 +86,7 @@ export function CustomerEditForm({
 
   return (
     <>
-      <div className="sticky -top-1 -mx-4 -mt-1 z-20 flex items-center gap-2 bg-background px-4 pt-1.5 pb-2.5">
+      <div className="sticky -top-1 -mx-4 -mt-1 z-20 flex items-center justify-between bg-background px-4 pt-1.5 pb-2.5">
         <Button
           type="button"
           variant="ghost"
@@ -91,6 +97,18 @@ export function CustomerEditForm({
           <ArrowLeft aria-hidden="true" className="size-5" />
           Editar cliente
         </Button>
+        {onDelete && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8 text-destructive hover:text-destructive/70 transition-colors"
+            aria-label="Eliminar cliente"
+            onClick={onDelete}
+          >
+            <Trash2 aria-hidden="true" className="size-4" />
+          </Button>
+        )}
       </div>
 
       <form
@@ -119,6 +137,12 @@ export function CustomerEditForm({
                     clearErrors("name");
                   }
                 },
+                onBlur: (e) => {
+                  const formatted = formatCustomerName(e.target.value);
+                  if (formatted !== e.target.value) {
+                    setValue("name", formatted, { shouldValidate: true });
+                  }
+                },
               })}
             />
           </div>
@@ -128,7 +152,7 @@ export function CustomerEditForm({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="customer-edit-phone" required>
+          <Label htmlFor="customer-edit-phone">
             Teléfono
           </Label>
           <div className="relative flex items-center">
@@ -147,11 +171,26 @@ export function CustomerEditForm({
               className="pl-9 bg-card border-border shadow-xs"
               value={formatPhoneDisplay(watchedPhone || "")}
               onChange={(e) => {
-                const digits = cleanPhoneDigits(e.target.value);
+                const inputEl = e.target;
+                const selectionStart = inputEl.selectionStart;
+                const rawValue = inputEl.value;
+
+                const digits = cleanPhoneDigits(rawValue);
                 setValue("phone", digits, { shouldValidate: true });
-                if (digits.length === 10) {
+                if (digits.length === 0 || digits.length === 10) {
                   clearErrors("phone");
                 }
+
+                const formatted = formatPhoneDisplay(digits);
+                const newCursor = getCursorPositionAfterFormat(
+                  rawValue,
+                  selectionStart,
+                  formatted,
+                );
+
+                requestAnimationFrame(() => {
+                  inputEl.setSelectionRange(newCursor, newCursor);
+                });
               }}
               onBlur={() => {
                 void trigger("phone");
@@ -189,7 +228,7 @@ export function CustomerEditForm({
             </div>
           ) : (
             <CredentialCameraCapture
-              autoStart={isCapturingNewPhoto}
+              autoStart={false}
               onCapture={handleCapturedFile}
               onCancel={currentCredentialUrl ? () => setIsCapturingNewPhoto(false) : undefined}
             />

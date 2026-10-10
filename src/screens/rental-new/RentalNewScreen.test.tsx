@@ -17,6 +17,7 @@ const getCustomer = vi.fn();
 const createRental = vi.fn();
 const listRentalsForCustomer = vi.fn();
 const listActiveRentals = vi.fn();
+const listReturnedRentals = vi.fn();
 const listActiveRentalItems = vi.fn();
 const getBusinessSettings = vi.fn();
 const clear = vi.fn();
@@ -50,6 +51,7 @@ vi.mock("@/data/rentals.repo", async () => {
     // too — without them mocked here, the background refresh rejects with a
     // real TypeError (undefined mock) instead of the intended no-op.
     listActiveRentals: (...args: unknown[]) => listActiveRentals(...args),
+    listReturnedRentals: (...args: unknown[]) => listReturnedRentals(...args),
     listActiveRentalItems: (...args: unknown[]) =>
       listActiveRentalItems(...args),
   };
@@ -160,6 +162,7 @@ describe("RentalNewScreen (§7.1, §16.7, CU4, design-fidelity D1 wizard)", () =
     createRental.mockReset();
     listRentalsForCustomer.mockReset();
     listActiveRentals.mockReset().mockResolvedValue([]);
+    listReturnedRentals.mockReset().mockResolvedValue([]);
     listActiveRentalItems.mockReset().mockResolvedValue([]);
     getBusinessSettings.mockReset().mockResolvedValue({
       id: "s1",
@@ -323,7 +326,7 @@ describe("RentalNewScreen (§7.1, §16.7, CU4, design-fidelity D1 wizard)", () =
       // Still on the create-customer form (not back to the search field),
       // with the typed values intact.
       expect(screen.getByLabelText("Nombre")).toHaveValue("Juan Pérez");
-      expect(screen.getByLabelText("Teléfono")).toHaveValue("551 234 5678");
+      expect(screen.getByLabelText("Teléfono")).toHaveValue("55 1234 5678");
     });
   });
 

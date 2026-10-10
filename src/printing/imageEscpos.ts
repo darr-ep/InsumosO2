@@ -1,4 +1,4 @@
-import { CUT, FEED_LINES, INIT, concatBytes } from "@/printing/escpos";
+import { ALIGN_CENTER, CUT, FEED_LINES, INIT, concatBytes } from "@/printing/escpos";
 
 /**
  * SDD.md §23.1 (image printing via `GS v 0` + Floyd-Steinberg dithering,
@@ -187,22 +187,22 @@ export function packRaster(img: DitheredImage): Uint8Array {
 }
 
 export function buildImageTicket(img: DitheredImage): Uint8Array {
-  return concatBytes([INIT, packRaster(img), FEED_LINES(3), CUT]);
+  return concatBytes([INIT, ALIGN_CENTER, packRaster(img), FEED_LINES(6), CUT]);
 }
 
 let cachedLogoDithered: DitheredImage | null = null;
 
 /**
  * Loads the ticket business logo (/logo-ticket.png), crops empty margins, and
- * converts it to 1-bit dithered bitmap ready for thermal printing.
+ * converts it to 1-bit dithered bitmap ready for 80mm thermal printing.
  * Results are cached in memory so subsequent prints do not re-dither.
  * Returns null gracefully if loading or canvas is unavailable (e.g. in test envs).
  */
 export async function getLogoDithered(
-  targetWidth = 280,
-  logoUrl = "/logo-ticket-negro.png",
+  targetWidth = 384,
+  logoUrl = "/logo-ticket.png",
 ): Promise<DitheredImage | null> {
-  if (cachedLogoDithered) {
+  if (cachedLogoDithered && cachedLogoDithered.width === targetWidth) {
     return cachedLogoDithered;
   }
 

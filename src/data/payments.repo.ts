@@ -27,12 +27,15 @@ export interface CreatePaymentInput {
 export async function createPayment(
   input: CreatePaymentInput,
 ): Promise<PaymentRecord> {
-  return pb.collection(PAYMENTS_COLLECTION).create<PaymentRecord>({
-    rental_id: input.rentalId,
-    amount: input.amount,
-    payment_type: input.paymentType,
-    ...(input.note ? { note: input.note } : {}),
-  });
+  return pb.collection(PAYMENTS_COLLECTION).create<PaymentRecord>(
+    {
+      rental_id: input.rentalId,
+      amount: input.amount,
+      payment_type: input.paymentType,
+      ...(input.note ? { note: input.note } : {}),
+    },
+    { requestKey: null },
+  );
 }
 
 // §7.2: "Ver 'Último pago: $X'" — history for a single rental, most recent
@@ -50,6 +53,7 @@ export async function listPaymentsForRental(
       filter: pb.filter("rental_id = {:rentalId}", { rentalId }),
       sort: "-created",
       expand: "created_by",
+      requestKey: null,
     });
 
   return result.items;
@@ -72,7 +76,32 @@ export async function getLastRentPayment(
         { rentalId },
       ),
       sort: "-created",
+      requestKey: null,
     });
 
   return result.items[0] ?? null;
 }
+
+export interface UpdatePaymentInput {
+  amount: number;
+  note?: string;
+}
+
+export async function updatePayment(
+  id: string,
+  input: UpdatePaymentInput,
+): Promise<PaymentRecord> {
+  return pb.collection(PAYMENTS_COLLECTION).update<PaymentRecord>(
+    id,
+    {
+      amount: input.amount,
+      note: input.note ?? "",
+    },
+    { requestKey: null },
+  );
+}
+
+export async function deletePayment(id: string): Promise<void> {
+  await pb.collection(PAYMENTS_COLLECTION).delete(id, { requestKey: null });
+}
+

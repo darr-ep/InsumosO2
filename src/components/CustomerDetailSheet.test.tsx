@@ -62,6 +62,9 @@ const getRental = vi.fn();
 const listItemsForRental = vi.fn();
 const listPaymentsForRental = vi.fn();
 
+const deleteCustomer = vi.fn();
+const deleteRental = vi.fn();
+
 vi.mock("@/data/customers.repo", () => ({
   getCustomer: (...args: unknown[]) => getCustomer(...args),
   getCredentialPhotoUrl: (...args: unknown[]) => getCredentialPhotoUrl(...args),
@@ -69,6 +72,7 @@ vi.mock("@/data/customers.repo", () => ({
     updateCustomerCredentialPhoto(...args),
   updateCustomerContactInfo: (...args: unknown[]) =>
     updateCustomerContactInfo(...args),
+  deleteCustomer: (...args: unknown[]) => deleteCustomer(...args),
 }));
 
 // `RentalDetailSheet` (Redesign Round 3, punto E: rentas clickeables) is
@@ -79,6 +83,7 @@ vi.mock("@/data/rentals.repo", () => ({
   listRentalsForCustomer: (...args: unknown[]) => listRentalsForCustomer(...args),
   getRental: (...args: unknown[]) => getRental(...args),
   listItemsForRental: (...args: unknown[]) => listItemsForRental(...args),
+  deleteRental: (...args: unknown[]) => deleteRental(...args),
 }));
 
 vi.mock("@/data/payments.repo", () => ({
@@ -128,6 +133,8 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
     listItemsForRental.mockReset();
     listPaymentsForRental.mockReset();
     navigate.mockReset();
+    deleteCustomer.mockReset();
+    deleteRental.mockReset();
     getCredentialPhotoUrl.mockResolvedValue(
       "http://pb.local/api/files/customers/default/credencial.png?token=default",
     );
@@ -235,7 +242,7 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
 
     renderSheet();
 
-    const telLink = await screen.findByRole("link", { name: /551\s*234\s*5678/ });
+    const telLink = await screen.findByRole("link", { name: /55\s*1234\s*5678/ });
     expect(telLink).toHaveAttribute("href", "tel:5512345678");
   });
 
@@ -249,7 +256,7 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
 
     renderSheet();
 
-    const telLink = await screen.findByRole("link", { name: /551\s*234\s*5678/ });
+    const telLink = await screen.findByRole("link", { name: /55\s*1234\s*5678/ });
     expect(telLink.closest(".bg-card")).not.toBeNull();
   });
 
@@ -399,7 +406,7 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
     expect(
       screen.queryByRole("heading", { name: "¿Descartar los cambios?" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Nombre")).toHaveValue("algo distinto");
+    expect(screen.getByLabelText("Nombre")).toHaveValue("Algo Distinto");
     expect(updateCustomerContactInfo).not.toHaveBeenCalled();
   });
 
@@ -516,8 +523,12 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
       screen.queryByRole("button", { name: "Simular captura" }),
     ).not.toBeInTheDocument();
 
+    // The "Agregar credencial" button is available in the pending card
+    const addCredentialButton = screen.getByRole("button", { name: /agregar credencial/i });
+    expect(addCredentialButton).toBeInTheDocument();
+
     // Entering edit mode makes the camera capture available
-    await user.click(screen.getByRole("button", { name: /editar cliente/i }));
+    await user.click(addCredentialButton);
     expect(
       await screen.findByRole("button", { name: "Simular captura" }),
     ).toBeInTheDocument();
@@ -611,4 +622,77 @@ describe("CustomerDetailSheet (§16.6, §15, §16.13, CU7, task 3.4)", () => {
       await screen.findByText("No se pudo cargar el cliente."),
     ).toBeInTheDocument();
   });
+
+  it("blocks customer deletion when there are active rentals and shows informative alert", async () => {
+    getCustomer.mockResolvedValue(customerWithPhoto);
+    listRentalsForCustomer.mockResolvedValue([
+      {
+        id: "r1",
+        folio: "FOL-001",
+        status: "ACTIVE",
+        initial_rent_amount: 1500,
+        created: "2026-03-01T10:00:00Z",
+      },
+    ]);
+    const user = userEvent.setup();
+
+    renderSheet();
+
+    await user.click(await screen.findByRole("button", { name: "Editar cliente" }));
+    const deleteBtn = await screen.findByRole("button", {
+      name: "Eliminar cliente",
+    });
+    await user.click(deleteBtn);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "No se puede eliminar el cliente",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/tiene 1 renta\(s\) activa\(s\)/i),
+    ).toBeInTheDocument();
+    expect(deleteCustomer).not.toHaveBeenCalled();
+  });
+
+  it("allows customer deletion when there are no active rentals", async () => {
+    getCustomer.mockResolvedValue(customerWithPhoto);
+    listRentalsForCustomer.mockResolvedValue([
+      {
+        id: "r2",
+        folio: "FOL-002",
+        status: "RETURNED",
+        initial_rent_amount: 1500,
+        created: "2026-02-01T10:00:00Z",
+      },
+    ]);
+    deleteCustomer.mockResolvedValue(undefined);
+    const onOpenChange = vi.fn();
+    const onCustomerDeleted = vi.fn();
+    const user = userEvent.setup();
+
+    renderSheet({ onOpenChange, onCustomerDeleted });
+
+    await user.click(await screen.findByRole("button", { name: "Editar cliente" }));
+    const deleteBtn = await screen.findByRole("button", {
+      name: "Eliminar cliente",
+    });
+    await user.click(deleteBtn);
+
+    expect(
+      await screen.findByRole("heading", { name: "¿Eliminar este cliente?" }),
+    ).toBeInTheDocument();
+
+    const confirmBtn = screen.getByRole("button", {
+      name: "Sí, eliminar",
+    });
+    await user.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(deleteCustomer).toHaveBeenCalledWith("c1");
+    });
+    expect(onCustomerDeleted).toHaveBeenCalledWith("c1");
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
 });
+

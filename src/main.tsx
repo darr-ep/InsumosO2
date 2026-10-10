@@ -1,9 +1,29 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { registerSW } from "virtual:pwa-register";
 import { App } from "@/app/App";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import "@fontsource-variable/inter";
 import "@/index.css";
+
+// Registro y auto-actualización del Service Worker de la PWA
+registerSW({
+  immediate: true,
+  onRegisteredSW(_swUrl, registration) {
+    if (registration) {
+      // Revisa si hay nueva versión cada 10 minutos
+      setInterval(() => {
+        registration.update().catch(() => {});
+      }, 10 * 60 * 1000);
+      // Revisa si hay nueva versión cada vez que el usuario regresa a la app
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") {
+          registration.update().catch(() => {});
+        }
+      });
+    }
+  },
+});
 
 /**
  * design-fidelity Slice D3 scoped correction (RESILIENCE-003): the class

@@ -11,6 +11,19 @@ import { z } from "zod";
 export const CUSTOMER_NAME_MIN_LENGTH = 2;
 export const CUSTOMER_PHONE_PATTERN = /^\d{10}$/;
 
+export function formatCustomerName(rawName: string): string {
+  const trimmed = rawName.trim().replace(/\s+/g, " ");
+  if (!trimmed) return "";
+  return trimmed
+    .split(" ")
+    .map(
+      (word) =>
+        word.charAt(0).toLocaleUpperCase("es-MX") +
+        word.slice(1).toLocaleLowerCase("es-MX"),
+    )
+    .join(" ");
+}
+
 export const customerFormSchema = z.object({
   name: z
     .string()
@@ -18,11 +31,15 @@ export const customerFormSchema = z.object({
     .min(
       CUSTOMER_NAME_MIN_LENGTH,
       "El nombre debe tener al menos 2 caracteres.",
-    ),
+    )
+    .transform(formatCustomerName),
   phone: z
     .string()
     .trim()
-    .regex(CUSTOMER_PHONE_PATTERN, "El teléfono debe tener 10 dígitos."),
+    .refine(
+      (val) => val === "" || CUSTOMER_PHONE_PATTERN.test(val),
+      "El teléfono debe tener 10 dígitos.",
+    ),
 });
 
 export type CustomerFormValues = z.infer<typeof customerFormSchema>;

@@ -152,4 +152,21 @@ describe("CustomerEditForm (Redesign — UX/UI pass, Ficha de cliente edit)", ()
 
     expect(onCancel).toHaveBeenCalled();
   });
+
+  it("calls onDelete when Eliminar cliente button is clicked", async () => {
+    const onDelete = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <CustomerEditForm
+        initialValues={{ name: "Juan Pérez", phone: "5512345678" }}
+        onSubmit={() => {}}
+        onCancel={() => {}}
+        onDelete={onDelete}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Eliminar cliente/i }));
+    expect(onDelete).toHaveBeenCalledTimes(1);
+  });
 });

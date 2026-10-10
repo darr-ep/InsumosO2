@@ -504,26 +504,26 @@ export function RentalNewScreen() {
                   <CircleDollarSign aria-hidden="true" className="size-4 text-primary" />
                   Montos
                 </h2>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="rental-initial-amount" required>
-                    Renta
-                  </Label>
-                  <CurrencyInput
-                    id="rental-initial-amount"
-                    value={initialRentAmount}
-                    onChange={setInitialRentAmount}
-                    className="bg-card"
-                  />
-                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="rental-initial-amount" required>
+                      Renta
+                    </Label>
+                    <CurrencyInput
+                      id="rental-initial-amount"
+                      value={initialRentAmount}
+                      onChange={setInitialRentAmount}
+                    />
+                  </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="rental-deposit-amount">Depósito</Label>
-                  <CurrencyInput
-                    id="rental-deposit-amount"
-                    value={depositAmount}
-                    onChange={setDepositAmount}
-                    className="bg-card"
-                  />
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="rental-deposit-amount">Depósito</Label>
+                    <CurrencyInput
+                      id="rental-deposit-amount"
+                      value={depositAmount}
+                      onChange={setDepositAmount}
+                    />
+                  </div>
                 </div>
               </section>
             </div>

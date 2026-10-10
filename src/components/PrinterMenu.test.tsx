@@ -25,6 +25,7 @@ vi.mock("@/printing/WebBluetoothPrinter", () => ({
     connect: vi.fn(),
     disconnect: vi.fn(),
     print: vi.fn(),
+    printLogo: vi.fn(),
   },
 }));
 
@@ -92,5 +93,23 @@ describe("PrinterMenu (design-fidelity bugfix batch, Fix 4 — real switch widge
     expect(
       screen.getByRole("switch", { name: /auto-imprimir/i }),
     ).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("renders 'Impresión de logo' when connected and calls printLogo on tap", async () => {
+    vi.mocked(webBluetoothPrinter.connectionStatus as unknown as string);
+    (webBluetoothPrinter as unknown as { connectionStatus: string }).connectionStatus = "connected";
+    const user = userEvent.setup();
+    render(<PrinterMenu />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Impresora lista" }),
+    );
+
+    const logoItem = screen.getByRole("menuitem", { name: /impresión de logo/i });
+    expect(logoItem).toBeInTheDocument();
+
+    await user.click(logoItem);
+    expect(webBluetoothPrinter.printLogo).toHaveBeenCalledTimes(1);
+    (webBluetoothPrinter as unknown as { connectionStatus: string }).connectionStatus = "disconnected";
   });
 });

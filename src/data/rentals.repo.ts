@@ -26,6 +26,7 @@ export interface RentalRecord extends RecordModel {
   initial_rent_amount: number;
   deposit_amount: number;
   deposit_returned_amount: number;
+  note?: string;
   created_by: string;
   updated_by: string;
   returned_by: string;
@@ -124,7 +125,12 @@ export interface ReturnRentalInput {
 // name/phone alongside a rental — expanded via PocketBase's `expand`
 // query param (task 2.5/2.6) rather than a second round-trip per rental.
 export interface RentalWithCustomer extends RentalRecord {
-  expand?: { customer_id?: CustomerRecord };
+  expand?: {
+    customer_id?: CustomerRecord;
+    returned_by?: { name: string };
+    created_by?: { name: string };
+    updated_by?: { name: string };
+  };
 }
 
 const RENTALS_COLLECTION = "rentals";
@@ -204,7 +210,10 @@ export async function getRental(
 ): Promise<RentalWithCustomer> {
   return pb
     .collection(RENTALS_COLLECTION)
-    .getOne<RentalWithCustomer>(rentalId, { expand: "customer_id" });
+    .getOne<RentalWithCustomer>(rentalId, {
+      expand: "customer_id,returned_by,created_by,updated_by",
+      requestKey: null,
+    });
 }
 
 // §16.10: "qué tiene rentado" — the rental_items for one rental.
@@ -291,6 +300,7 @@ export async function listRentalsForCustomer(
     .getList<RentalRecord>(1, ACTIVE_RENTALS_PAGE_SIZE, {
       filter: pb.filter("customer_id = {:customerId}", { customerId }),
       sort: "-created",
+      requestKey: null,
     });
 
   return result.items;
@@ -310,6 +320,7 @@ async function listRentalsByStatus(
       filter: pb.filter("status = {:status}", { status }),
       sort: "-created",
       expand: "customer_id",
+      requestKey: null,
     });
 
   return result.items;
@@ -353,7 +364,171 @@ export async function searchRentals(
       filter,
       sort: "-created",
       expand: "customer_id",
+      requestKey: null,
     });
 
   return result.items;
+}
+
+/**
+ * Elimina una renta por su ID y limpia en cascada sus `rental_items` y `payments`.
+ */
+export async function deleteRental(rentalId: string): Promise<void> {
+  const [items, payments] = await Promise.all([
+    pb
+      .collection(RENTAL_ITEMS_COLLECTION)
+      .getFullList<RentalItemRecord>({
+        filter: pb.filter("rental_id = {:rentalId}", { rentalId }),
+        requestKey: null,
+      })
+      .catch(() => []),
+    pb
+      .collection(PAYMENTS_COLLECTION)
+      .getFullList<PaymentRecord>({
+        filter: pb.filter("rental_id = {:rentalId}", { rentalId }),
+        requestKey: null,
+      })
+      .catch(() => []),
+  ]);
+
+  await Promise.all([
+    ...items.map((it) =>
+      pb
+        .collection(RENTAL_ITEMS_COLLECTION)
+        .delete(it.id, { requestKey: null })
+        .catch(() => {}),
+    ),
+    ...payments.map((p) =>
+      pb
+        .collection(PAYMENTS_COLLECTION)
+        .delete(p.id, { requestKey: null })
+        .catch(() => {}),
+    ),
+  ]);
+
+  await pb.collection(RENTALS_COLLECTION).delete(rentalId, { requestKey: null });
+}
+
+export interface UpdateRentalInput {
+  initialRentAmount: number;
+  depositAmount: number;
+  items: { itemType: RentalItemType; quantity: number }[];
+}
+
+/**
+ * Actualiza los montos de una renta, sincroniza sus rental_items y
+ * actualiza/crea/elimina el pago correspondiente al depósito inicial.
+ */
+export async function updateRental(
+  rentalId: string,
+  input: UpdateRentalInput,
+): Promise<RentalRecord> {
+  const updatedRental = await pb
+    .collection(RENTALS_COLLECTION)
+    .update<RentalRecord>(
+      rentalId,
+      {
+        initial_rent_amount: input.initialRentAmount,
+        deposit_amount: input.depositAmount,
+      },
+      { requestKey: null },
+    );
+
+  const existingItems = await listItemsForRental(rentalId);
+
+  for (const item of input.items) {
+    const existing = existingItems.find((e) => e.item_type === item.itemType);
+    if (existing) {
+      if (existing.quantity !== item.quantity) {
+        await pb
+          .collection(RENTAL_ITEMS_COLLECTION)
+          .update(existing.id, { quantity: item.quantity }, { requestKey: null });
+      }
+    } else {
+      await pb.collection(RENTAL_ITEMS_COLLECTION).create(
+        {
+          rental_id: rentalId,
+          item_type: item.itemType,
+          quantity: item.quantity,
+        },
+        { requestKey: null },
+      );
+    }
+  }
+
+  for (const existing of existingItems) {
+    const stillPresent = input.items.some(
+      (i) => i.itemType === existing.item_type,
+    );
+    if (!stillPresent) {
+      await pb
+        .collection(RENTAL_ITEMS_COLLECTION)
+        .delete(existing.id, { requestKey: null });
+    }
+  }
+
+  const paymentsResult = await pb
+    .collection(PAYMENTS_COLLECTION)
+    .getList<PaymentRecord>(1, 50, {
+      filter: pb.filter("rental_id = {:rentalId}", { rentalId }),
+      requestKey: null,
+    });
+  const depositPayment = paymentsResult.items.find(
+    (p) => p.payment_type === "deposit",
+  );
+
+  if (depositPayment) {
+    if (input.depositAmount > 0) {
+      if (depositPayment.amount !== input.depositAmount) {
+        await pb
+          .collection(PAYMENTS_COLLECTION)
+          .update(
+            depositPayment.id,
+            { amount: input.depositAmount },
+            { requestKey: null },
+          );
+      }
+    } else {
+      await pb
+        .collection(PAYMENTS_COLLECTION)
+        .delete(depositPayment.id, { requestKey: null });
+    }
+  } else if (input.depositAmount > 0) {
+    await pb.collection(PAYMENTS_COLLECTION).create(
+      {
+        rental_id: rentalId,
+        amount: input.depositAmount,
+        payment_type: "deposit",
+      },
+      { requestKey: null },
+    );
+  }
+
+  return updatedRental;
+}
+
+export interface UpdateReturnDetailsInput {
+  depositReturnedAmount: number;
+  note?: string;
+}
+
+/**
+ * Updates `deposit_returned_amount` (and optionally `note`) on an already-
+ * RETURNED rental. The collection's `updateRule` blocks the client from
+ * setting `deposit_returned_amount` directly through the generic PATCH
+ * endpoint, so this calls the custom `POST /api/rentals/{id}/update-return`
+ * route in `pb_hooks/rentals_return_edit.pb.js` — the same bypass pattern
+ * `returnRental` (above) uses for `status`/`returned_at`/`returned_by`.
+ */
+export async function updateReturnDetails(
+  rentalId: string,
+  input: UpdateReturnDetailsInput,
+): Promise<RentalRecord> {
+  return pb.send<RentalRecord>(`/api/rentals/${rentalId}/update-return`, {
+    method: "POST",
+    body: {
+      deposit_returned_amount: input.depositReturnedAmount,
+      ...(input.note ? { note: input.note } : {}),
+    },
+  });
 }

@@ -1,5 +1,6 @@
 import type { RecordModel } from "pocketbase";
 import { pb } from "@/data/pocketbaseClient";
+import { formatCustomerName } from "@/domain/customers/customer";
 
 /**
  * SDD.md §7.1 (buscar/crear cliente) + §11 (customers) + §15 (credencial
@@ -40,6 +41,7 @@ export async function listCustomers(): Promise<CustomerRecord[]> {
     .collection(CUSTOMERS_COLLECTION)
     .getList<CustomerRecord>(1, CUSTOMER_LIST_PAGE_SIZE, {
       sort: "name",
+      requestKey: null,
     });
 
   return result.items;
@@ -64,6 +66,7 @@ export async function searchCustomers(
     .getList<CustomerRecord>(1, CUSTOMER_SEARCH_PAGE_SIZE, {
       filter,
       sort: "-created",
+      requestKey: null,
     });
 
   return result.items;
@@ -73,7 +76,7 @@ export async function createCustomer(
   input: CreateCustomerInput,
 ): Promise<CustomerRecord> {
   const formData = new FormData();
-  formData.append("name", input.name);
+  formData.append("name", formatCustomerName(input.name));
   formData.append("phone", input.phone);
   // Phase 3 fix: only append the file when present — the field is
   // `required: false` server-side now, and sending an empty/undefined file
@@ -82,7 +85,9 @@ export async function createCustomer(
     formData.append("credential_photo", input.credentialPhoto);
   }
 
-  return pb.collection(CUSTOMERS_COLLECTION).create<CustomerRecord>(formData);
+  return pb
+    .collection(CUSTOMERS_COLLECTION)
+    .create<CustomerRecord>(formData, { requestKey: null });
 }
 
 // Redesign — UX/UI pass (business-owner request): fixing a typo in a
@@ -102,7 +107,14 @@ export async function updateCustomerContactInfo(
 ): Promise<CustomerRecord> {
   return pb
     .collection(CUSTOMERS_COLLECTION)
-    .update<CustomerRecord>(customerId, input);
+    .update<CustomerRecord>(
+      customerId,
+      {
+        ...input,
+        name: formatCustomerName(input.name),
+      },
+      { requestKey: null },
+    );
 }
 
 // §16.13/CU7's "credencial pendiente" state needs a way out: task 3.4
@@ -117,14 +129,16 @@ export async function updateCustomerCredentialPhoto(
 
   return pb
     .collection(CUSTOMERS_COLLECTION)
-    .update<CustomerRecord>(customerId, formData);
+    .update<CustomerRecord>(customerId, formData, { requestKey: null });
 }
 
 // §16.6/CU7: "Ficha de cliente" needs the customer's own record on demand
 // (opened from Detalle de renta or from the customer picker in Nueva
 // renta) — not just whatever a search result already carried.
 export async function getCustomer(customerId: string): Promise<CustomerRecord> {
-  return pb.collection(CUSTOMERS_COLLECTION).getOne<CustomerRecord>(customerId);
+  return pb
+    .collection(CUSTOMERS_COLLECTION)
+    .getOne<CustomerRecord>(customerId, { requestKey: null });
 }
 
 /**
@@ -140,6 +154,24 @@ export async function getCustomer(customerId: string): Promise<CustomerRecord> {
 export async function getCredentialPhotoUrl(
   customer: CustomerRecord,
 ): Promise<string> {
-  const token = await pb.files.getToken();
+  const token = await pb.files.getToken({ requestKey: null });
   return pb.files.getURL(customer, customer.credential_photo, { token });
+}
+
+/**
+ * Elimina un cliente y sus registros históricos asociados de la base de datos.
+ */
+export async function deleteCustomer(customerId: string): Promise<void> {
+  const customerRentals = await pb
+    .collection("rentals")
+    .getFullList({
+      filter: pb.filter("customer_id = {:id}", { id: customerId }),
+      requestKey: null,
+    });
+
+  for (const rental of customerRentals) {
+    await pb.collection("rentals").delete(rental.id, { requestKey: null });
+  }
+
+  await pb.collection(CUSTOMERS_COLLECTION).delete(customerId, { requestKey: null });
 }

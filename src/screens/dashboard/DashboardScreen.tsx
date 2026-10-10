@@ -1,11 +1,15 @@
 import { memo, useEffect, useRef, useState } from "react";
+import { Link } from "react-router";
 import {
   CalendarDays,
   Droplet,
   Loader2,
   PackageOpen,
+  Plus,
+  Search,
   Wind,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { RentalCard } from "@/components/RentalCard";
 import { DashboardStats } from "@/components/DashboardStats";
 import { EmptyState } from "@/components/EmptyState";
@@ -165,6 +169,7 @@ export const DashboardScreen = memo(function DashboardScreen({
 }: DashboardScreenProps) {
   const {
     rentals,
+    returnedRentals,
     activeItems,
     businessSettings,
     rentalsError,
@@ -177,6 +182,7 @@ export const DashboardScreen = memo(function DashboardScreen({
   const [results, setResults] = useState<RentalWithCustomer[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchedQuery, setSearchedQuery] = useState<string>("");
 
   const [selectedRentalId, setSelectedRentalId] = useState<string | null>(null);
   const [rentalDetailOpen, setRentalDetailOpen] = useState(false);
@@ -186,7 +192,9 @@ export const DashboardScreen = memo(function DashboardScreen({
   const [customerDetailOpen, setCustomerDetailOpen] = useState(false);
   const [showStaleOnly, setShowStaleOnly] = useState(false);
   const [displayLimit, setDisplayLimit] = useState(20);
+  const [displayReturnedLimit, setDisplayReturnedLimit] = useState(20);
   const observerRef = useRef<HTMLDivElement>(null);
+  const returnedObserverRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => loadRentalsIfNeeded(), [loadRentalsIfNeeded]);
 
@@ -208,11 +216,35 @@ export const DashboardScreen = memo(function DashboardScreen({
   }, [rentals]);
 
   useEffect(() => {
+    const target = returnedObserverRef.current;
+    if (!target) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setDisplayReturnedLimit((prev) => prev + 20);
+        }
+      },
+      { rootMargin: "100px" },
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [returnedRentals]);
+
+  useEffect(() => {
     const trimmed = query.trim();
 
     if (!trimmed) {
+      setResults([]);
+      setSearchedQuery("");
+      setIsSearching(false);
+      setSearchError(null);
       return;
     }
+
+    setIsSearching(true);
+    setSearchError(null);
 
     let cancelled = false;
 
@@ -221,13 +253,12 @@ export const DashboardScreen = memo(function DashboardScreen({
         return;
       }
 
-      setIsSearching(true);
-      setSearchError(null);
-
       searchRentals(trimmed)
         .then((items) => {
           if (!cancelled) {
             setResults(items);
+            setSearchedQuery(trimmed);
+            setSearchError(null);
           }
         })
         .catch(() => {
@@ -302,16 +333,19 @@ export const DashboardScreen = memo(function DashboardScreen({
 
   const trimmedQuery = query.trim();
   const isSearchActive = trimmedQuery.length > 0;
-  // Derived at render instead of cleared inside the effect above (avoids a
-  // setState-in-effect cascading render for the "query was cleared" case,
-  // same approach CustomerPicker/the old SearchScreen used) — `results` may
-  // briefly hold a stale search's items once the query is emptied, but
-  // they're never shown since `isSearchActive` is false then.
-  const visibleResults = isSearchActive ? results : [];
+  // Derived at render: results are only visible if the active query matches
+  // the completed search query, avoiding showing stale results from previous
+  // queries while the user is still typing the new one.
+  const visibleResults =
+    isSearchActive && searchedQuery === trimmedQuery ? results : [];
 
   const visibleActiveRentals =
     showStaleOnly && staleRentals.length > 0 ? staleRentals : rentals ?? [];
   const displayedRentals = visibleActiveRentals.slice(0, displayLimit);
+  const displayedReturnedRentals = (returnedRentals ?? []).slice(
+    0,
+    displayReturnedLimit,
+  );
 
   return (
     <div className="flex flex-1 min-h-full flex-col">
@@ -322,14 +356,33 @@ export const DashboardScreen = memo(function DashboardScreen({
             {searchError && (
               <p className="text-destructive text-sm">{searchError}</p>
             )}
-            {isSearching && (
+            {isSearching ? (
               <p className="text-muted-foreground text-sm">Buscando…</p>
-            )}
-            {!isSearching && !searchError && visibleResults.length === 0 && (
-              <p className="text-muted-foreground text-sm">Sin resultados.</p>
-            )}
+            ) : (
+              <>
+                {!searchError &&
+                  searchedQuery === trimmedQuery &&
+                  visibleResults.length === 0 && (
+                    <div className="bg-card flex flex-col items-center justify-center gap-3 rounded-2xl border p-6 text-center shadow-xs">
+                      <Search className="size-8 text-muted-foreground/40" />
+                      <div className="flex flex-col gap-1">
+                        <p className="font-semibold text-foreground text-sm">
+                          Sin resultados para "{query}"
+                        </p>
+                        <p className="text-muted-foreground text-xs">
+                          No se encontraron rentas activas ni devueltas con ese término.
+                        </p>
+                      </div>
+                      <Button asChild size="sm" className="mt-1 rounded-full">
+                        <Link to="/nueva-renta">
+                          <Plus aria-hidden="true" className="size-4 mr-1" />
+                          Crear nueva renta
+                        </Link>
+                      </Button>
+                    </div>
+                  )}
 
-            {visibleResults.length > 0 && (
+                {visibleResults.length > 0 && (
               <ul className="flex flex-col gap-3">
                 {visibleResults.map((rental) => (
                   <li key={rental.id}>
@@ -350,14 +403,26 @@ export const DashboardScreen = memo(function DashboardScreen({
                       </p>
                     </RentalCard>
                   </li>
-                ))}
-              </ul>
+                    ))}
+                  </ul>
+                )}
+              </>
             )}
           </>
         ) : (
           <>
-            {rentalsError && (
-              <p className="text-destructive text-sm">{rentalsError}</p>
+            {rentalsError && rentals === null && (
+              <div className="flex flex-col items-center justify-center gap-3 py-8 text-center">
+                <p className="text-destructive text-sm">{rentalsError}</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void refreshRentals()}
+                >
+                  Reintentar
+                </Button>
+              </div>
             )}
 
             {rentals === null && !rentalsError && (
@@ -460,6 +525,59 @@ export const DashboardScreen = memo(function DashboardScreen({
                     )}
                   </>
                 )}
+
+                {returnedRentals && returnedRentals.length > 0 && (
+                  <div className="flex flex-col gap-3 pt-4 border-t mt-2">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-base font-bold text-foreground">
+                        Rentas devueltas
+                      </h2>
+                      <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs font-medium">
+                        {returnedRentals.length}
+                      </span>
+                    </div>
+
+                    <ul className="flex flex-col gap-3">
+                      {displayedReturnedRentals.map((rental, index) => (
+                        <li
+                          key={rental.id}
+                          className="animate-card-enter"
+                          style={{
+                            animationDelay: `${Math.min(index, 8) * 40}ms`,
+                          }}
+                        >
+                          <RentalCard
+                            customerName={
+                              rental.expand?.customer_id?.name ?? "Cliente"
+                            }
+                            status={rental.status}
+                            folio={rental.folio}
+                            onClick={() => openRentalDetail(rental.id)}
+                            phone={rental.expand?.customer_id?.phone}
+                            amount={formatCurrencyMXN(rental.initial_rent_amount)}
+                            itemTypeIcon={rentalItemTypeIcon(rental.id)}
+                          >
+                            <p className="flex items-center gap-1.5">
+                              <CalendarDays aria-hidden="true" className="size-3.5" />
+                              Inicio{" "}
+                              {formatDateDisplay(rental.created)}
+                            </p>
+                          </RentalCard>
+                        </li>
+                      ))}
+                    </ul>
+                    {displayedReturnedRentals.length <
+                      returnedRentals.length && (
+                      <div
+                        ref={returnedObserverRef}
+                        className="flex items-center justify-center py-4 text-xs text-muted-foreground"
+                      >
+                        <Loader2 className="mr-2 size-4 animate-spin text-primary" />
+                        <span>Cargando más rentas devueltas…</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </>
@@ -473,13 +591,26 @@ export const DashboardScreen = memo(function DashboardScreen({
             setSelectedCustomerId(customerId);
             setCustomerDetailOpen(true);
           }}
-          onRentalChanged={refreshRentals}
+          onRentalChanged={() => {
+            void refreshRentals();
+            if (selectedRentalId) {
+              setResults((prev) =>
+                prev.filter((r) => r.id !== selectedRentalId),
+              );
+            }
+          }}
         />
         <CustomerDetailSheet
           open={customerDetailOpen}
           onOpenChange={setCustomerDetailOpen}
           customerId={selectedCustomerId}
           onCustomerChanged={refreshRentals}
+          onCustomerDeleted={(deletedId) => {
+            void refreshRentals();
+            setResults((prev) =>
+              prev.filter((r) => r.customer_id !== deletedId),
+            );
+          }}
         />
       </div>
 

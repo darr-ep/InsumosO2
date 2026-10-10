@@ -19,7 +19,20 @@ export default defineConfig({
     basicSsl(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["logo.png"],
+      workbox: {
+        cleanupOutdatedCaches: true,
+        skipWaiting: true,
+        clientsClaim: true,
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+      },
+      includeAssets: [
+        "icon.png",
+        "pwa-192x192.png",
+        "pwa-512x512.png",
+        "apple-touch-icon.png",
+        "logo.png",
+        "logo-ticket.png",
+      ],
       manifest: {
         name: "Insumos O2",
         short_name: "Insumos O2",
@@ -31,16 +44,28 @@ export default defineConfig({
         theme_color: "#0c68c2",
         icons: [
           {
-            src: "/logo.png",
-            sizes: "554x554",
+            src: "/pwa-192x192.png",
+            sizes: "192x192",
             type: "image/png",
             purpose: "any",
           },
           {
-            src: "/logo.png",
-            sizes: "554x554",
+            src: "/pwa-512x512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "any",
+          },
+          {
+            src: "/pwa-512x512.png",
+            sizes: "512x512",
             type: "image/png",
             purpose: "maskable",
+          },
+          {
+            src: "/icon.png",
+            sizes: "432x432",
+            type: "image/png",
+            purpose: "any",
           },
         ],
       },

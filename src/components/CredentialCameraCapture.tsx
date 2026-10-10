@@ -5,10 +5,8 @@ import {
   useState,
   type ChangeEvent,
 } from "react";
-import { Camera } from "lucide-react";
+import { Camera, Image as ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   DEFAULT_JPEG_QUALITY,
   DEFAULT_MAX_WIDTH_PX,
@@ -20,6 +18,7 @@ import {
   computeCenterCropRect,
   toJpegFilename,
 } from "@/lib/credentialCameraCrop";
+import { ImageCropModal } from "@/components/ImageCropModal";
 
 /**
  * Feature: Credential Photo Camera + Compression (Batch 2) — live camera
@@ -160,6 +159,8 @@ export function CredentialCameraCapture({
 }: CredentialCameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const galleryInputRef = useRef<HTMLInputElement | null>(null);
+  const fallbackInputRef = useRef<HTMLInputElement | null>(null);
   const unmountedRef = useRef(false);
   // Devices without getUserMedia at all skip straight to the fallback file
   // input — showing an "Iniciar cámara" button that's guaranteed to fail
@@ -170,6 +171,7 @@ export function CredentialCameraCapture({
   );
   const [error, setError] = useState<string | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [pendingCropFile, setPendingCropFile] = useState<File | null>(null);
 
   // Stops every track of the current stream — a real, easy-to-miss leak
   // otherwise: without this the browser/OS camera-in-use indicator stays
@@ -199,6 +201,7 @@ export function CredentialCameraCapture({
   // on mount (business owner's request: opening the form shouldn't
   // immediately trigger the OS camera-permission prompt).
   const startCamera = useCallback(async () => {
+    setError(null);
     setMode("loading");
 
     try {
@@ -214,10 +217,13 @@ export function CredentialCameraCapture({
       streamRef.current = stream;
       setMode("live");
     } catch {
-      // Permission denied, no camera hardware, insecure context, etc.
-      // Never dead-end the user — fall back to the native file picker.
+      // Permission denied, camera in use, insecure context, etc.
+      // Reset back to idle with clear error and retry/gallery options.
       if (!unmountedRef.current) {
-        setMode("fallback");
+        setMode("idle");
+        setError(
+          "No se pudo acceder a la cámara o el permiso fue denegado. Puedes intentar de nuevo o seleccionar una foto de la galería.",
+        );
       }
     }
   }, []);
@@ -252,18 +258,36 @@ export function CredentialCameraCapture({
     }
   }, [mode]);
 
-  async function handleFileInputChange(event: ChangeEvent<HTMLInputElement>) {
+  function handleFileInputChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0] ?? null;
     if (!file) {
       return;
     }
 
     setError(null);
+    setPendingCropFile(file);
+    event.target.value = "";
+  }
+
+  function handleGalleryFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    if (!file) {
+      return;
+    }
+
+    setError(null);
+    setPendingCropFile(file);
+    event.target.value = "";
+  }
+
+  async function handleCropConfirm(croppedFile: File) {
+    setPendingCropFile(null);
+    setError(null);
     try {
-      const compressed = await compressImage(file);
-      onCapture(blobToFile(compressed, file.name));
+      const compressed = await compressImage(croppedFile);
+      onCapture(blobToFile(compressed, croppedFile.name));
     } catch {
-      setError("No se pudo procesar la foto. Intenta de nuevo.");
+      setError("No se pudo procesar la foto de la galería. Intenta de nuevo.");
     }
   }
 
@@ -306,6 +330,14 @@ export function CredentialCameraCapture({
         >
           {mode === "idle" && (
             <>
+              <input
+                ref={galleryInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                data-testid="credential-gallery-input"
+                onChange={(event) => void handleGalleryFileChange(event)}
+              />
               {/* pencil ground truth ("Nueva renta - Crear cliente" /
                   "Modal Cliente - Editar" frames): the idle placeholder is a
                   white/light card with a light-blue camera-icon circle above
@@ -313,10 +345,20 @@ export function CredentialCameraCapture({
               <div className="flex size-12 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-950/40">
                 <Camera aria-hidden="true" className="text-primary size-6" />
               </div>
-              <Button type="button" onClick={() => void startCamera()}>
-                <Camera aria-hidden="true" />
-                Tomar foto
-              </Button>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <Button type="button" onClick={() => void startCamera()}>
+                  <Camera aria-hidden="true" className="size-4" />
+                  Tomar foto
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => galleryInputRef.current?.click()}
+                >
+                  <ImageIcon aria-hidden="true" className="size-4" />
+                  Galería
+                </Button>
+              </div>
             </>
           )}
           {mode === "loading" && (
@@ -341,17 +383,35 @@ export function CredentialCameraCapture({
       )}
 
       {mode === "fallback" && (
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="credential-camera-fallback-input">
-            Foto de credencial
-          </Label>
-          <Input
-            id="credential-camera-fallback-input"
-            type="file"
-            accept="image/*"
-            capture="environment"
-            onChange={(event) => void handleFileInputChange(event)}
-          />
+        <div className="flex flex-col gap-2">
+          <div
+            className="relative flex flex-col items-center justify-center gap-3 overflow-hidden rounded-md bg-card border p-4 text-center"
+            style={{ aspectRatio: ID_CARD_ASPECT_RATIO }}
+          >
+            <div className="flex size-12 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-950/40">
+              <Camera aria-hidden="true" className="text-primary size-6" />
+            </div>
+            <p className="text-xs text-muted-foreground max-w-xs">
+              Tu navegador no soporta la cámara en vivo. Puedes seleccionar o tomar una foto con tu dispositivo.
+            </p>
+            <Button
+              type="button"
+              onClick={() => fallbackInputRef.current?.click()}
+            >
+              <Camera aria-hidden="true" className="size-4" />
+              Seleccionar foto
+            </Button>
+            <input
+              ref={fallbackInputRef}
+              id="credential-camera-fallback-input"
+              aria-label="Foto de credencial"
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(event) => void handleFileInputChange(event)}
+            />
+          </div>
         </div>
       )}
 
@@ -379,6 +439,13 @@ export function CredentialCameraCapture({
           </Button>
         )}
       </div>
+
+      <ImageCropModal
+        open={Boolean(pendingCropFile)}
+        file={pendingCropFile}
+        onConfirm={(croppedFile) => void handleCropConfirm(croppedFile)}
+        onCancel={() => setPendingCropFile(null)}
+      />
     </div>
   );
 }

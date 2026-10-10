@@ -11,6 +11,7 @@ import { useHistoryBackClose } from "@/lib/useHistoryBackClose";
 
 function Sheet({
   shouldScaleBackground = false,
+  repositionInputs = false,
   open = false,
   onOpenChange,
   ...props
@@ -23,6 +24,7 @@ function Sheet({
     <Drawer.Root
       data-slot="sheet"
       shouldScaleBackground={shouldScaleBackground}
+      repositionInputs={repositionInputs}
       open={open}
       onOpenChange={onOpenChange}
       {...props}
@@ -86,7 +88,14 @@ function SheetContent({
             <span className="sr-only">Cerrar</span>
           </Drawer.Close>
         )}
-        <div className="flex-1 overflow-y-auto p-4 pt-1 flex flex-col gap-4">
+        <div
+          className="flex-1 overflow-y-auto p-4 pt-1 flex flex-col gap-4"
+          onBlurCapture={() => {
+            if (typeof window !== "undefined" && window.scrollY !== 0) {
+              window.scrollTo({ top: 0, behavior: "instant" });
+            }
+          }}
+        >
           {children}
         </div>
       </Drawer.Content>

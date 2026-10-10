@@ -15,6 +15,15 @@ describe("paymentFormSchema (§20, §7.2)", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts a rent payment with an optional note", () => {
+    const result = paymentFormSchema.safeParse({
+      payment_type: "rent",
+      amount: 3000,
+      note: "Pago quincenal",
+    });
+    expect(result.success).toBe(true);
+  });
+
   it("rejects a rent payment with amount <= 0", () => {
     const result = paymentFormSchema.safeParse({
       payment_type: "rent",
@@ -23,48 +32,22 @@ describe("paymentFormSchema (§20, §7.2)", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects an adjustment without a note (CU5's last scenario)", () => {
+  it("rejects a rent payment with negative amount", () => {
     const result = paymentFormSchema.safeParse({
-      payment_type: "adjustment",
-      amount: -200,
+      payment_type: "rent",
+      amount: -100,
     });
     expect(result.success).toBe(false);
   });
 
-  it("rejects an adjustment with a blank note", () => {
+  it("defaults payment_type to rent if omitted", () => {
     const result = paymentFormSchema.safeParse({
-      payment_type: "adjustment",
-      amount: -200,
-      note: "   ",
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it("accepts an adjustment with a note and a negative amount (overcharge correction, CU5)", () => {
-    const result = paymentFormSchema.safeParse({
-      payment_type: "adjustment",
-      amount: -200,
-      note: "se cobró de más por error",
+      amount: 3000,
     });
     expect(result.success).toBe(true);
-  });
-
-  it("accepts an adjustment with a note and a positive amount (undercharge correction, §11.2)", () => {
-    const result = paymentFormSchema.safeParse({
-      payment_type: "adjustment",
-      amount: 200,
-      note: "se cobró de menos por error",
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("rejects an adjustment with amount 0", () => {
-    const result = paymentFormSchema.safeParse({
-      payment_type: "adjustment",
-      amount: 0,
-      note: "motivo",
-    });
-    expect(result.success).toBe(false);
+    if (result.success) {
+      expect(result.data.payment_type).toBe("rent");
+    }
   });
 });
 

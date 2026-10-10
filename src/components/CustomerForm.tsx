@@ -5,9 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CredentialCameraCapture } from "@/components/CredentialCameraCapture";
-import { customerFormSchema, type CustomerFormValues } from "@/domain/customers/customer";
+import {
+  customerFormSchema,
+  formatCustomerName,
+  type CustomerFormValues,
+} from "@/domain/customers/customer";
 import { ID_CARD_ASPECT_RATIO } from "@/lib/credentialCameraCrop";
-import { cleanPhoneDigits, formatPhoneDisplay } from "@/lib/phone";
+import { cleanPhoneDigits, formatPhoneDisplay, getCursorPositionAfterFormat } from "@/lib/phone";
 
 /**
  * SDD.md §7.1 (cliente nuevo: nombre, teléfono, foto de credencial) + §20
@@ -127,10 +131,6 @@ export function CustomerForm({
   initialValues,
 }: CustomerFormProps) {
   const [photo, setPhoto] = useState<File | null>(null);
-  // Once a photo has been captured at least once, every subsequent retake
-  // (via "Cambiar foto") should jump straight into the live camera instead
-  // of back to the idle "Tomar foto" button — see file doc comment.
-  const [hasCapturedBefore, setHasCapturedBefore] = useState(false);
 
   // Derived at render time (not via setState-in-effect) so it's always in
   // sync with `photo` — recomputed only when `photo` itself changes.
@@ -193,7 +193,6 @@ export function CustomerForm({
 
   function handleCapture(file: File) {
     setPhoto(file);
-    setHasCapturedBefore(true);
   }
 
   function handleRetakePhoto() {
@@ -230,11 +229,16 @@ export function CustomerForm({
           autoComplete="name"
           placeholder="Ej. Juan Pérez"
           aria-invalid={!!errors.name}
-          className="bg-card"
           {...register("name", {
             onChange: (e) => {
               if (e.target.value.trim().length >= 2) {
                 clearErrors("name");
+              }
+            },
+            onBlur: (e) => {
+              const formatted = formatCustomerName(e.target.value);
+              if (formatted !== e.target.value) {
+                setValue("name", formatted, { shouldValidate: true });
               }
             },
           })}
@@ -245,7 +249,7 @@ export function CustomerForm({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="customer-phone" required>Teléfono</Label>
+        <Label htmlFor="customer-phone">Teléfono</Label>
         <Input
           id="customer-phone"
           type="tel"
@@ -254,14 +258,28 @@ export function CustomerForm({
           maxLength={12}
           placeholder="775 123 4567"
           aria-invalid={!!errors.phone}
-          className="bg-card"
           value={formatPhoneDisplay(watchedPhone || "")}
           onChange={(e) => {
-            const digits = cleanPhoneDigits(e.target.value);
+            const inputEl = e.target;
+            const selectionStart = inputEl.selectionStart;
+            const rawValue = inputEl.value;
+
+            const digits = cleanPhoneDigits(rawValue);
             setValue("phone", digits, { shouldValidate: true });
-            if (digits.length === 10) {
+            if (digits.length === 0 || digits.length === 10) {
               clearErrors("phone");
             }
+
+            const formatted = formatPhoneDisplay(digits);
+            const newCursor = getCursorPositionAfterFormat(
+              rawValue,
+              selectionStart,
+              formatted,
+            );
+
+            requestAnimationFrame(() => {
+              inputEl.setSelectionRange(newCursor, newCursor);
+            });
           }}
           onBlur={() => {
             void trigger("phone");
@@ -294,14 +312,8 @@ export function CustomerForm({
             </Button>
           </div>
         ) : (
-          // CredentialCameraCapture already reserves its own
-          // ID_CARD_ASPECT_RATIO box for idle/loading/live — rendered as-is,
-          // not re-wrapped in another box (see file doc comment). `autoStart`
-          // only kicks in once a photo has been captured before (retakes);
-          // `onCancel` is a no-op that just makes "Cancelar" render while
-          // live (see file doc comment).
           <CredentialCameraCapture
-            autoStart={hasCapturedBefore}
+            autoStart={false}
             onCapture={handleCapture}
             onCancel={handleCameraCancel}
           />

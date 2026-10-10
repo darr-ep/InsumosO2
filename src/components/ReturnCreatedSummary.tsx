@@ -133,6 +133,12 @@ export function ReturnCreatedSummary({
                   <dd className="font-semibold text-foreground">{currencyFormatter.format(receipt.depositReturned)}</dd>
                 </div>
               )}
+              {receipt.note && (
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Nota</dt>
+                  <dd className="font-semibold text-foreground text-right">{receipt.note}</dd>
+                </div>
+              )}
             </dl>
 
             {printStatus === "failed" && (

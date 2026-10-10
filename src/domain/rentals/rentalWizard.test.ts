@@ -26,13 +26,13 @@ describe("validateCustomerStep (design-fidelity D1.1)", () => {
     ).toBe(false);
   });
 
-  it("is invalid when the draft's phone is blank", () => {
+  it("is valid when the draft's phone is blank (phone is optional)", () => {
     expect(
       validateCustomerStep({
         selectedCustomer: null,
         pendingNewCustomer: { name: "Juan Pérez", phone: "" },
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("is invalid when the draft's name is too short", () => {

@@ -28,3 +28,7 @@ import PocketBase from "pocketbase";
 export const pb = new PocketBase(
   import.meta.env.VITE_POCKETBASE_URL || window.location.origin,
 );
+
+// Prevent PocketBase SDK from cancelling concurrent requests to the same collection/path
+pb.autoCancellation(false);
+

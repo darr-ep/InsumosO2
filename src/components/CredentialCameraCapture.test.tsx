@@ -272,7 +272,7 @@ describe("CredentialCameraCapture — getUserMedia fallback (never dead-ends the
     ).not.toBeInTheDocument();
   });
 
-  it("falls back to a file input when getUserMedia rejects (permission denied)", async () => {
+  it("shows an error message, stays in idle mode and allows retrying or gallery when getUserMedia rejects (permission denied)", async () => {
     vi.stubGlobal("navigator", {
       mediaDevices: {
         getUserMedia: vi.fn().mockRejectedValue(new DOMException("denied", "NotAllowedError")),
@@ -283,8 +283,12 @@ describe("CredentialCameraCapture — getUserMedia fallback (never dead-ends the
     await startCameraViaButton();
 
     expect(
-      await screen.findByLabelText("Foto de credencial"),
+      await screen.findByText(
+        "No se pudo acceder a la cámara o el permiso fue denegado. Puedes intentar de nuevo o seleccionar una foto de la galería.",
+      ),
     ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tomar foto" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Galería" })).toBeInTheDocument();
   });
 
   it("the fallback input has accept=image/* and capture=environment (opens native camera app on mobile)", async () => {
@@ -310,9 +314,10 @@ describe("CredentialCameraCapture — getUserMedia fallback (never dead-ends the
     const input = await screen.findByLabelText("Foto de credencial");
     const file = new File(["x"], "credencial.png", { type: "image/png" });
     await user.upload(input, file);
+    await user.click(await screen.findByRole("button", { name: "Usar foto" }));
 
     await waitFor(() => expect(onCapture).toHaveBeenCalledTimes(1));
-    expect(mockedCompressImage).toHaveBeenCalledWith(file);
+    expect(mockedCompressImage).toHaveBeenCalled();
 
     const receivedFile = onCapture.mock.calls[0][0] as File;
     expect(receivedFile.name).toBe("credencial.jpg");
@@ -415,5 +420,67 @@ describe("CredentialCameraCapture — autoStart (used by CustomerForm.tsx for re
 
     await screen.findByRole("button", { name: "Tomar foto" });
     expect(getUserMedia).not.toHaveBeenCalled();
+  });
+});
+
+describe("CredentialCameraCapture — gallery photo selection", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  it("renders a 'Galería' button in idle mode and triggers compressed onCapture when a file is selected", async () => {
+    const getUserMedia = vi.fn().mockResolvedValue(makeStream());
+    vi.stubGlobal("navigator", { mediaDevices: { getUserMedia } });
+    mockedCompressImage.mockResolvedValue(
+      new Blob(["compressed-gallery-image"], { type: "image/jpeg" }),
+    );
+    const onCapture = vi.fn();
+    const user = userEvent.setup();
+
+    render(<CredentialCameraCapture onCapture={onCapture} />);
+
+    expect(await screen.findByRole("button", { name: "Galería" })).toBeInTheDocument();
+
+    const input = screen.getByTestId("credential-gallery-input");
+    const file = new File(["dummy-content"], "credencial-ine.png", {
+      type: "image/png",
+    });
+
+    await user.upload(input, file);
+    await user.click(await screen.findByRole("button", { name: "Usar foto" }));
+
+    await waitFor(() => expect(onCapture).toHaveBeenCalledTimes(1));
+    expect(mockedCompressImage).toHaveBeenCalled();
+
+    const receivedFile = onCapture.mock.calls[0][0] as File;
+    expect(receivedFile).toBeInstanceOf(File);
+    expect(receivedFile.name).toBe("credencial-ine.jpg");
+    expect(receivedFile.type).toBe("image/jpeg");
+  });
+
+  it("shows an error message when gallery image compression fails", async () => {
+    const getUserMedia = vi.fn().mockResolvedValue(makeStream());
+    vi.stubGlobal("navigator", { mediaDevices: { getUserMedia } });
+    mockedCompressImage.mockRejectedValue(new Error("Compression failed"));
+    const onCapture = vi.fn();
+    const user = userEvent.setup();
+
+    render(<CredentialCameraCapture onCapture={onCapture} />);
+
+    const input = await screen.findByTestId("credential-gallery-input");
+    const file = new File(["corrupt-data"], "bad-file.png", {
+      type: "image/png",
+    });
+
+    await user.upload(input, file);
+    await user.click(await screen.findByRole("button", { name: "Usar foto" }));
+
+    expect(
+      await screen.findByText(
+        "No se pudo procesar la foto de la galería. Intenta de nuevo.",
+      ),
+    ).toBeInTheDocument();
+    expect(onCapture).not.toHaveBeenCalled();
   });
 });

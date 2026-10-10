@@ -72,6 +72,7 @@ const SHARED_OPTIONS = {
   instructionsPullToRefresh: "Desliza para actualizar",
   instructionsReleaseToRefresh: "Suelta para actualizar",
   instructionsRefreshing: "Actualizando…",
+  getStyles: () => "",
 };
 
 export function usePanelPullToRefresh({

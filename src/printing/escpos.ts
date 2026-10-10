@@ -16,7 +16,9 @@ export const ALIGN_LEFT = new Uint8Array([ESC, 0x61, 0x00]);
 export const ALIGN_CENTER = new Uint8Array([ESC, 0x61, 0x01]);
 export const ALIGN_RIGHT = new Uint8Array([ESC, 0x61, 0x02]);
 
-// Text styles
+// Text styles & fonts
+export const FONT_A = new Uint8Array([ESC, 0x4d, 0x00]); // ESC M 0 : Standard font (Font A)
+export const FONT_B = new Uint8Array([ESC, 0x4d, 0x01]); // ESC M 1 : Compressed font (Font B)
 export const BOLD_ON = new Uint8Array([ESC, 0x45, 0x01]);
 export const BOLD_OFF = new Uint8Array([ESC, 0x45, 0x00]);
 export const DOUBLE_SIZE = new Uint8Array([GS, 0x21, 0x11]);
@@ -35,11 +37,15 @@ const currencyFormatter = new Intl.NumberFormat("es-MX", {
   currency: "MXN",
 });
 
+export const LINE_WIDTH = 48;
+const SOLID_DIVIDER = "=".repeat(LINE_WIDTH) + "\n";
+const DASH_DIVIDER = "-".repeat(LINE_WIDTH) + "\n";
+
 /**
- * Formats a 2-column key-value line for 32-character thermal roll widths.
- * E.g.: "Concentrador 5L        $2,800.00"
+ * Formats a 2-column key-value line for thermal roll widths (48 columns for 80mm).
+ * E.g.: "Concentrador 5L                                $2,800.00"
  */
-export function formatRow(left: string, right: string, width = 32): string {
+export function formatRow(left: string, right: string, width = LINE_WIDTH): string {
   const totalLen = left.length + right.length;
   if (totalLen >= width) {
     const availableLeft = Math.max(1, width - right.length - 1);
@@ -85,12 +91,11 @@ export function concatBytes(parts: Uint8Array[]): Uint8Array {
 }
 
 /**
- * Cheap BLE thermal printers commonly have a small effective MTU (~20
- * bytes) and drop or garble data sent in one large write — confirmed
- * against the WW-POS58U in the prototype. The caller pairs this with a
- * short pause between writes (see `WebBluetoothPrinter`, task 5.3).
+ * Splits byte arrays into chunks for BLE transmission. 128 bytes is standard
+ * for modern thermal printers, providing fast throughput while staying within
+ * safe BLE packet bounds.
  */
-export function chunk(data: Uint8Array, size = 20): Uint8Array[] {
+export function chunk(data: Uint8Array, size = 128): Uint8Array[] {
   const chunks: Uint8Array[] = [];
   for (let i = 0; i < data.length; i += size) {
     chunks.push(data.slice(i, i + size));
@@ -110,7 +115,7 @@ export function buildTicket(lines: string[]): Uint8Array {
   for (const line of lines) {
     parts.push(latin1Bytes(line + "\n"));
   }
-  parts.push(FEED_LINES(3));
+  parts.push(FEED_LINES(6));
   parts.push(CUT);
   return concatBytes(parts);
 }
@@ -118,7 +123,7 @@ export function buildTicket(lines: string[]): Uint8Array {
 /**
  * Builds a structured, high-polish thermal ticket with optional dithered logo,
  * centered header, clean key-value column alignment, clear section dividers,
- * emphasized totals, and friendly footer.
+ * emphasized totals, and friendly footer with bottom margin.
  */
 export function buildStructuredTicket(
   receipt: ReceiptData,
@@ -147,7 +152,7 @@ export function buildStructuredTicket(
     parts.push(latin1Bytes(`Tel: ${receipt.businessPhone}\n`));
     parts.push(BOLD_OFF);
   }
-  parts.push(latin1Bytes("================================\n"));
+  parts.push(latin1Bytes(SOLID_DIVIDER));
 
   // 3. Document Title & Folio
   parts.push(BOLD_ON);
@@ -159,24 +164,17 @@ export function buildStructuredTicket(
         : "COMPROBANTE DE RENTA";
   parts.push(latin1Bytes(title + "\n"));
   parts.push(latin1Bytes(`Folio: ${receipt.folio}\n`));
+  parts.push(BOLD_OFF);
+  parts.push(latin1Bytes(DASH_DIVIDER));
+
+  // 4. Customer & Date Info (Unificados en una sola sección limpia, nombre completo)
   const targetDate =
     receipt.kind === "return" ? receipt.returnedAt : receipt.date;
   const dateStr = formatDateDisplay(targetDate);
-  const timeStr = targetDate.toLocaleTimeString("es-MX", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
-  parts.push(latin1Bytes(`Fecha: ${dateStr}   Hora: ${timeStr}\n`));
-  parts.push(BOLD_OFF);
-  parts.push(latin1Bytes("--------------------------------\n"));
-
-  // 4. Customer Info (Nombre de pila únicamente)
-  const firstName =
-    receipt.customerName.trim().split(/\s+/)[0] || receipt.customerName;
   parts.push(ALIGN_LEFT);
-  parts.push(latin1Bytes(`Cliente: ${firstName}\n`));
-  parts.push(latin1Bytes("--------------------------------\n"));
+  parts.push(latin1Bytes(`Fecha: ${dateStr}\n`));
+  parts.push(latin1Bytes(`Cliente: ${receipt.customerName}\n`));
+  parts.push(latin1Bytes(DASH_DIVIDER));
 
   // 5. Items / Breakdown
   if (receipt.kind === "return") {
@@ -201,7 +199,7 @@ export function buildStructuredTicket(
         formatRow("Tiempo rentado:", `${receipt.rentedDays} días`) + "\n",
       ),
     );
-    parts.push(latin1Bytes("--------------------------------\n"));
+    parts.push(latin1Bytes(DASH_DIVIDER));
     parts.push(
       latin1Bytes(
         formatRow(
@@ -220,6 +218,9 @@ export function buildStructuredTicket(
       ),
     );
     parts.push(BOLD_OFF);
+    if (receipt.note) {
+      parts.push(latin1Bytes(`Nota: ${receipt.note}\n`));
+    }
   } else if (receipt.kind === "payment") {
     parts.push(BOLD_ON);
     parts.push(
@@ -274,7 +275,7 @@ export function buildStructuredTicket(
   }
 
   // 6. Totals
-  parts.push(latin1Bytes("================================\n"));
+  parts.push(latin1Bytes(SOLID_DIVIDER));
   parts.push(BOLD_ON);
   if (receipt.kind === "return") {
     parts.push(
@@ -300,7 +301,7 @@ export function buildStructuredTicket(
     );
   }
   parts.push(BOLD_OFF);
-  parts.push(latin1Bytes("================================\n"));
+  parts.push(latin1Bytes(SOLID_DIVIDER));
 
   // 7. Footer
   parts.push(ALIGN_CENTER);
@@ -314,7 +315,9 @@ export function buildStructuredTicket(
     parts.push(latin1Bytes("Indispensable para devolución\n"));
     parts.push(latin1Bytes("de su depósito en garantía.\n"));
   }
-  parts.push(FEED_LINES(3));
+  parts.push(latin1Bytes("No se aceptan cambios,\n"));
+  parts.push(latin1Bytes("devoluciones ni reembolsos\n"));
+  parts.push(FEED_LINES(6));
   parts.push(CUT);
 
   return concatBytes(parts);

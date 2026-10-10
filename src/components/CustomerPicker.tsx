@@ -245,7 +245,7 @@ export function CustomerPicker({
       </div>
 
       {error && <p className="text-destructive text-sm">{error}</p>}
-      {customersError && (
+      {customersError && customers === null && (
         <p className="text-destructive text-sm">{customersError}</p>
       )}
 

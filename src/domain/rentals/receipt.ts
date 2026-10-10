@@ -71,6 +71,7 @@ export interface ReturnReceiptData {
   rentedDays: number;
   amountCollected: number;
   depositReturned: number;
+  note?: string;
 }
 
 export interface BuildReturnReceiptInput {
@@ -83,6 +84,7 @@ export interface BuildReturnReceiptInput {
   returnedAt: Date;
   amountCollected: number;
   depositReturned: number;
+  note?: string;
 }
 
 export function buildReturnReceipt(
@@ -174,6 +176,7 @@ export function formatReceiptLines(receipt: ReceiptData): string[] {
       `Tiempo rentado: ${receipt.rentedDays} días`,
       `Monto cobrado: ${currencyFormatter.format(receipt.amountCollected)}`,
       `Depósito devuelto: ${currencyFormatter.format(receipt.depositReturned)}`,
+      ...(receipt.note ? [`Nota: ${receipt.note}`] : []),
     ];
   }
 

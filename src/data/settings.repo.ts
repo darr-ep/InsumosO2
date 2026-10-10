@@ -32,7 +32,7 @@ const BUSINESS_SETTINGS_COLLECTION = "business_settings";
 export async function getBusinessSettings(): Promise<BusinessSettingsRecord> {
   return pb
     .collection(BUSINESS_SETTINGS_COLLECTION)
-    .getFirstListItem<BusinessSettingsRecord>("");
+    .getFirstListItem<BusinessSettingsRecord>("", { requestKey: null });
 }
 
 // Business owner (verbatim): needs to be editable "tanto para aumentar como

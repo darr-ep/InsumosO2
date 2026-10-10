@@ -359,22 +359,58 @@
   }
 }
 
+/* Inputs and textareas inside modals (DialogContent) render with a recessed background (var(--background))
+   to create clear contrast against the modal's card/white surface, while keeping general inputs on pages as bg-card */
+[data-slot="dialog-content"] input:not([type="checkbox"]):not([type="radio"]),
+[data-slot="dialog-content"] textarea {
+  background-color: var(--background) !important;
+}
+
 /* Post-launch: pull-to-refresh (`src/lib/usePanelPullToRefresh.ts`) is now
-   backed by `pulltorefreshjs` after two rounds of hand-rolled touch-event
-   jank. Its public API has no live-pull-distance callback to drive a fully
-   custom Tailwind indicator (see that file's own docblock) — kept its
-   default markup, restyled here to use this app's own design tokens
-   instead of the library's own gray/black defaults, so it reads as part
-   of the app. `.ptr--` is the library's default `classPrefix`. */
+   backed by `pulltorefreshjs`. All styling is defined here using application design
+   tokens and works seamlessly in both light and dark modes. */
 .ptr--ptr {
+  pointer-events: none;
+  font-size: 0.85em;
+  font-weight: 500;
+  top: 0;
+  height: 0;
+  transition: height 0.3s, min-height 0.3s;
+  text-align: center;
+  width: 100%;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  align-content: stretch;
   color: var(--muted-foreground);
 }
+
+.ptr--box {
+  padding: 10px;
+  flex-basis: 100%;
+}
+
+.ptr--pull {
+  transition: none;
+}
+
 .ptr--text {
-  color: var(--muted-foreground);
+  margin-top: 0.33em;
+  color: var(--muted-foreground) !important;
   font-weight: 500;
 }
+
 .ptr--icon {
-  color: var(--muted-foreground);
+  color: var(--muted-foreground) !important;
+  transition: transform 0.3s;
+}
+
+.ptr--top {
+  touch-action: pan-x pan-down pinch-zoom;
+}
+
+.ptr--release .ptr--icon {
+  transform: rotate(180deg);
 }
 
 

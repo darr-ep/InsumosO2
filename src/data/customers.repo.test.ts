@@ -42,9 +42,13 @@ describe("listCustomers (Redesign Round 2, Batch 2 — Clientes screen)", () => 
     const result = await listCustomers();
 
     expect(collection).toHaveBeenCalledWith("customers");
-    expect(getList).toHaveBeenCalledWith(1, expect.any(Number), {
-      sort: "name",
-    });
+    expect(getList).toHaveBeenCalledWith(
+      1,
+      expect.any(Number),
+      expect.objectContaining({
+        sort: "name",
+      }),
+    );
     expect(result).toEqual([
       { id: "c1", name: "Ana", phone: "5511111111" },
       { id: "c2", name: "Beto", phone: "5522222222" },
@@ -163,7 +167,7 @@ describe("getCustomer (§16.6, CU7 — ficha de cliente)", () => {
     const customer = await getCustomer("c1");
 
     expect(collection).toHaveBeenCalledWith("customers");
-    expect(getOne).toHaveBeenCalledWith("c1");
+    expect(getOne).toHaveBeenCalledWith("c1", { requestKey: null });
     expect(customer).toEqual({ id: "c1", name: "Juan Pérez" });
   });
 });

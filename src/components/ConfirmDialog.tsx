@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, Loader2 } from "lucide-react";
+import { AlertTriangle, Check, CircleHelp, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -65,7 +65,8 @@ export interface ConfirmDialogProps {
   confirmLabel?: string;
   cancelLabel?: string;
   onConfirm: () => void | Promise<void>;
-  tone?: "default" | "destructive";
+  tone?: "default" | "destructive" | "info";
+  showCancel?: boolean;
   isConfirming?: boolean;
   status?: "idle" | "loading" | "success";
   loadingTitle?: string;
@@ -89,6 +90,7 @@ export function ConfirmDialog({
   cancelLabel = "Cancelar",
   onConfirm,
   tone = "default",
+  showCancel = true,
   isConfirming = false,
   status = "idle",
   loadingTitle,
@@ -107,7 +109,7 @@ export function ConfirmDialog({
     <Dialog open={open} onOpenChange={onOpenChange} manageHistory={manageHistory}>
       <DialogContent
         showCloseButton={false}
-        className="max-w-[330px]"
+        className="max-w-[360px] sm:max-w-[380px] w-full"
         overlayClassName="bg-scrim/60 backdrop-blur-none"
         onEscapeKeyDown={(event) => {
           if (isBlocked) event.preventDefault();
@@ -126,28 +128,38 @@ export function ConfirmDialog({
             // (a className alone wouldn't re-trigger on a prop change).
             <div
               key="success"
-              className="animate-icon-pop flex size-12 items-center justify-center rounded-full bg-green-50 dark:bg-green-950/40"
+              className="animate-icon-pop flex size-12 items-center justify-center rounded-full bg-success-soft"
             >
-              <Check aria-hidden="true" className="size-6 text-green-600" />
+              <Check aria-hidden="true" className="size-6 text-success" />
             </div>
           ) : isLoading ? (
             <div
               key="loading"
-              className="animate-icon-in flex size-12 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-950/40"
+              className="animate-icon-in flex size-12 items-center justify-center rounded-full bg-primary-soft"
             >
               <Loader2
                 aria-hidden="true"
                 className="text-primary size-6 animate-spin"
               />
             </div>
+          ) : tone === "info" ? (
+            <div
+              key="info"
+              className="flex size-12 items-center justify-center rounded-full bg-primary-soft"
+            >
+              <CircleHelp
+                aria-hidden="true"
+                className="size-6 text-primary"
+              />
+            </div>
           ) : (
             <div
               key="idle"
-              className="flex size-12 items-center justify-center rounded-full bg-rose-50 dark:bg-rose-950/40"
+              className="flex size-12 items-center justify-center rounded-full bg-destructive-soft"
             >
               <AlertTriangle
                 aria-hidden="true"
-                className="size-6 text-red-600"
+                className="size-6 text-destructive"
               />
             </div>
           )}
@@ -176,7 +188,7 @@ export function ConfirmDialog({
               // vanish against the dark theme's own near-black --card/
               // --background — inverted to near-white in dark mode, same
               // "deliberately neutral, not brand-blue" intent per theme.
-              className="w-full bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300"
+              className="w-full whitespace-normal text-sm px-4 py-2 h-auto min-h-11 leading-tight text-center bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300"
               onClick={onDismissSuccess ?? (() => onOpenChange(false))}
             >
               <Check aria-hidden="true" />
@@ -184,25 +196,29 @@ export function ConfirmDialog({
             </Button>
           </DialogFooter>
         ) : (
-          <DialogFooter className="flex-row gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="lg"
-              className="flex-1"
-              disabled={isBlocked}
-              onClick={() => onOpenChange(false)}
-            >
-              {cancelLabel}
-            </Button>
+          <DialogFooter className={showCancel ? "flex-row gap-2" : "flex-col"}>
+            {showCancel && (
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="flex-1 whitespace-normal text-xs sm:text-sm px-2.5 py-2 h-auto min-h-11 leading-tight text-center break-words"
+                disabled={isBlocked}
+                onClick={() => onOpenChange(false)}
+              >
+                {cancelLabel}
+              </Button>
+            )}
             <Button
               type="button"
               variant={tone === "destructive" ? "destructive" : "default"}
               size="lg"
               className={
                 tone === "destructive"
-                  ? "flex-1"
-                  : "flex-1 bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300"
+                  ? (showCancel ? "flex-1 whitespace-normal text-xs sm:text-sm px-2.5 py-2 h-auto min-h-11 leading-tight text-center break-words" : "w-full whitespace-normal text-sm px-4 py-2 h-auto min-h-11 leading-tight text-center")
+                  : (showCancel
+                      ? "flex-1 whitespace-normal text-xs sm:text-sm px-2.5 py-2 h-auto min-h-11 leading-tight text-center break-words bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300"
+                      : "w-full whitespace-normal text-sm px-4 py-2 h-auto min-h-11 leading-tight text-center bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300")
               }
               disabled={isBlocked}
               onClick={() => void onConfirm()}

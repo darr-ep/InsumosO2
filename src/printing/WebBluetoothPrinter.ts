@@ -1,5 +1,5 @@
 import { buildStructuredTicket, chunk, sleep } from "@/printing/escpos";
-import { getLogoDithered } from "@/printing/imageEscpos";
+import { buildImageTicket, getLogoDithered } from "@/printing/imageEscpos";
 import type { ReceiptData } from "@/domain/rentals/receipt";
 import type { ReceiptPrinter } from "@/printing/ReceiptPrinter";
 
@@ -37,8 +37,8 @@ const CANDIDATE_SERVICE_UUIDS: string[] = [
 // other error name is not transient and rejects immediately.
 const MAX_CONNECT_ATTEMPTS = 3;
 const CONNECT_RETRY_DELAY_MS = 800;
-const WRITE_CHUNK_SIZE = 20; // cheap BLE printers commonly have a ~20-byte effective MTU
-const WRITE_CHUNK_DELAY_MS = 20;
+const WRITE_CHUNK_SIZE = 128; // 128-byte chunks for fast BLE throughput on 80mm printers
+const WRITE_CHUNK_DELAY_MS = 5; // 5ms delay between chunks instead of 20ms
 
 // getDevices()-sourced devices aren't guaranteed to be "in range" — must
 // wait for a real advertisement before gatt.connect(), or it fails with
@@ -99,10 +99,8 @@ export class WebBluetoothPrinter implements ReceiptPrinter {
   }
 
   async connect(): Promise<void> {
-    // Already have a live writable characteristic from this tab session —
-    // §23.3's "reconecta automáticamente sin mostrar el picker" for the
-    // common case of printing more than once without navigating away.
-    if (this.writeCharacteristic) {
+    // Already have a live writable characteristic from this tab session
+    if (this.writeCharacteristic && this.device?.gatt?.connected) {
       return;
     }
 
@@ -113,12 +111,22 @@ export class WebBluetoothPrinter implements ReceiptPrinter {
         );
       }
 
-      const device =
-        this.device ??
-        (await navigator.bluetooth.requestDevice({
-          acceptAllDevices: true,
-          optionalServices: CANDIDATE_SERVICE_UUIDS,
-        }));
+      let device = this.device;
+      if (device && device.gatt) {
+        try {
+          this.setStatus("connecting");
+          await this.connectToDevice(device);
+          return;
+        } catch {
+          // If connecting to remembered device fails, fall back to picker
+          this.device = null;
+        }
+      }
+
+      device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: CANDIDATE_SERVICE_UUIDS,
+      });
 
       this.setStatus("connecting");
       await this.connectToDevice(device);
@@ -292,11 +300,34 @@ export class WebBluetoothPrinter implements ReceiptPrinter {
     await this.writeBytes(ticket);
   }
 
+  async printLogo(): Promise<void> {
+    if (!this.writeCharacteristic) {
+      throw new Error("No hay conexión activa con la impresora. Conecta primero.");
+    }
+
+    const logo = await getLogoDithered();
+    if (!logo) {
+      throw new Error("No se pudo cargar el logo para imprimir.");
+    }
+
+    const ticket = buildImageTicket(logo);
+    await this.writeBytes(ticket);
+  }
+
   async disconnect(): Promise<void> {
-    this.device?.gatt?.disconnect();
-    this.device = null;
+    try {
+      this.device?.gatt?.disconnect();
+    } catch {
+      // ignore gatt disconnect errors
+    }
     this.writeCharacteristic = null;
     this.setStatus("disconnected");
+  }
+
+  async forgetDevice(): Promise<void> {
+    await this.disconnect();
+    this.device = null;
+    this.notify();
   }
 
   private async writeBytes(data: Uint8Array): Promise<void> {

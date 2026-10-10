@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Users } from "lucide-react";
+import { Loader2, Search, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { CustomerCard } from "@/components/CustomerCard";
 import { CustomerDetailSheet } from "@/components/CustomerDetailSheet";
 import { EmptyState } from "@/components/EmptyState";
@@ -70,6 +71,7 @@ export const ClientesScreen = memo(function ClientesScreen({
   const [results, setResults] = useState<CustomerRecord[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchedQuery, setSearchedQuery] = useState<string>("");
 
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(
     null,
@@ -100,8 +102,15 @@ export const ClientesScreen = memo(function ClientesScreen({
     const trimmed = query.trim();
 
     if (!trimmed) {
+      setResults([]);
+      setSearchedQuery("");
+      setIsSearching(false);
+      setSearchError(null);
       return;
     }
+
+    setIsSearching(true);
+    setSearchError(null);
 
     let cancelled = false;
 
@@ -110,13 +119,12 @@ export const ClientesScreen = memo(function ClientesScreen({
         return;
       }
 
-      setIsSearching(true);
-      setSearchError(null);
-
       searchCustomers(trimmed)
         .then((items) => {
           if (!cancelled) {
             setResults(items);
+            setSearchedQuery(trimmed);
+            setSearchError(null);
           }
         })
         .catch(() => {
@@ -146,10 +154,11 @@ export const ClientesScreen = memo(function ClientesScreen({
 
   const trimmedQuery = query.trim();
   const isSearchActive = trimmedQuery.length > 0;
-  // Derived at render instead of cleared inside the effect above — same
-  // approach as DashboardScreen's own search fold (avoids a
-  // setState-in-effect cascading render for the "query was cleared" case).
-  const visibleResults = isSearchActive ? results : [];
+  // Derived at render: results are only visible if the active query matches
+  // the completed search query, avoiding showing stale results from previous
+  // queries while the user is still typing the new one.
+  const visibleResults =
+    isSearchActive && searchedQuery === trimmedQuery ? results : [];
   const visibleCustomers = isSearchActive ? visibleResults : (customers ?? []);
   const displayedCustomers = visibleCustomers.slice(0, displayLimit);
 
@@ -198,15 +207,33 @@ export const ClientesScreen = memo(function ClientesScreen({
           {!isSearching &&
             !searchError &&
             visibleResults.length === 0 && (
-              <p className="text-muted-foreground text-sm">
-                Sin resultados.
-              </p>
+              <div className="bg-card flex flex-col items-center justify-center gap-3 rounded-2xl border p-6 text-center shadow-xs">
+                <Search className="size-8 text-muted-foreground/40" />
+                <div className="flex flex-col gap-1">
+                  <p className="font-semibold text-foreground text-sm">
+                    Sin resultados para "{query}"
+                  </p>
+                  <p className="text-muted-foreground text-xs">
+                    No se encontraron clientes registrados con ese término.
+                  </p>
+                </div>
+              </div>
             )}
         </>
       ) : (
         <>
-          {customersError && (
-            <p className="text-destructive text-sm">{customersError}</p>
+          {customersError && customers === null && (
+            <div className="flex flex-col items-center justify-center gap-3 py-8 text-center">
+              <p className="text-destructive text-sm">{customersError}</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void refreshCustomers()}
+              >
+                Reintentar
+              </Button>
+            </div>
           )}
 
           {customers === null && !customersError && (
@@ -271,6 +298,10 @@ export const ClientesScreen = memo(function ClientesScreen({
         onOpenChange={setCustomerDetailOpen}
         customerId={selectedCustomerId}
         onCustomerChanged={refreshCustomers}
+        onCustomerDeleted={(deletedId) => {
+          void refreshCustomers();
+          setResults((prev) => prev.filter((c) => c.id !== deletedId));
+        }}
       />
     </div>
   );

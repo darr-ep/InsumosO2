@@ -6,6 +6,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import PocketBase from "pocketbase";
 import { createTestUser } from "@/data/testSupport";
+import type { RentalRecord } from "@/data/rentals.repo";
 
 /**
  * SDD.md §19.1 (`status`/`returned_at`/`returned_by` resueltos
@@ -167,6 +168,40 @@ describe.skipIf(!reachable)(
 
       await expect(
         pb.collection("rentals").update(rental.id, { status: "RETURNED" }),
+      ).rejects.toThrow();
+    });
+
+    it("updates deposit_returned_amount on a RETURNED rental", async () => {
+      const rental = await createActiveRental();
+
+      await pb.send(`/api/rentals/${rental.id}/return`, {
+        method: "POST",
+        body: { amount_collected: 0, deposit_returned: 1000 },
+      });
+
+      const updated = await pb.send<RentalRecord>(
+        `/api/rentals/${rental.id}/update-return`,
+        {
+          method: "POST",
+          body: { deposit_returned_amount: 750 },
+        },
+      );
+
+      expect(updated.deposit_returned_amount).toBe(750);
+      expect(updated.status).toBe("RETURNED");
+
+      const reloaded = await pb.collection("rentals").getOne(rental.id);
+      expect(reloaded.deposit_returned_amount).toBe(750);
+    });
+
+    it("rejects update-return on an ACTIVE rental", async () => {
+      const rental = await createActiveRental();
+
+      await expect(
+        pb.send(`/api/rentals/${rental.id}/update-return`, {
+          method: "POST",
+          body: { deposit_returned_amount: 500 },
+        }),
       ).rejects.toThrow();
     });
   },

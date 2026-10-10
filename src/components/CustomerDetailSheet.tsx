@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { IdCard, Loader2, Lock, PackageOpen, Pencil, Phone, Plus, Receipt } from "lucide-react";
+import { Camera, IdCard, Loader2, Lock, PackageOpen, Pencil, Phone, Plus, Receipt } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -13,14 +14,18 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { AnimatedSwitch } from "@/components/ui/animated-switch";
 import { RentalStatusBadge } from "@/components/RentalStatusBadge";
 import { RentalDetailSheet } from "@/components/RentalDetailSheet";
 import { CustomerEditForm } from "@/components/CustomerEditForm";
+import { pb } from "@/data/pocketbaseClient";
+import { DataCacheContext } from "@/app/DataCacheContext";
 import { ID_CARD_ASPECT_RATIO } from "@/lib/credentialCameraCrop";
 import { formatPhoneDisplay } from "@/lib/phone";
 import { formatDateDisplay } from "@/lib/formatDate";
 import {
+  deleteCustomer,
   getCredentialPhotoUrl,
   getCustomer,
   updateCustomerContactInfo,
@@ -36,6 +41,7 @@ export interface CustomerDetailSheetProps {
   onOpenChange: (open: boolean) => void;
   customerId: string | null;
   onCustomerChanged?: (customer: CustomerRecord) => void;
+  onCustomerDeleted?: (customerId: string) => void;
 }
 
 export function CustomerDetailSheet({
@@ -43,14 +49,20 @@ export function CustomerDetailSheet({
   onOpenChange,
   customerId,
   onCustomerChanged,
+  onCustomerDeleted,
 }: CustomerDetailSheetProps) {
   const navigate = useNavigate();
+  const cache = useContext(DataCacheContext);
   const [customer, setCustomer] = useState<CustomerRecord | null>(null);
   const [rentals, setRentals] = useState<RentalRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [rentalSegment, setRentalSegment] = useState<"activas" | "historial">(
     "activas",
   );
+
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [activeRentalsBlockedOpen, setActiveRentalsBlockedOpen] = useState(false);
+  const [isDeletingCustomer, setIsDeletingCustomer] = useState(false);
 
   const [credentialUrl, setCredentialUrl] = useState<string | null>(null);
   const [credentialError, setCredentialError] = useState<string | null>(null);
@@ -126,14 +138,43 @@ export function CustomerDetailSheet({
             });
         }
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (!cancelled) {
+          const is404 = (err as { status?: number })?.status === 404;
+          if (is404) {
+            onOpenChange(false);
+            return;
+          }
           setError("No se pudo cargar el cliente.");
         }
       });
 
     return () => {
       cancelled = true;
+    };
+  }, [open, customerId]);
+
+  useEffect(() => {
+    if (!open || !customerId) return;
+
+    const hasEventSource = typeof EventSource !== "undefined";
+    if (!hasEventSource || !pb?.collection) return;
+
+    const handleRealtimeCustomerUpdate = (e: { record?: { customer_id?: string; id?: string } }) => {
+      if (e?.record?.id === customerId || e?.record?.customer_id === customerId) {
+        fetchCustomerDetail(customerId).then(([c, r]) => {
+          setCustomer(c);
+          setRentals(r);
+        }).catch(() => {});
+      }
+    };
+
+    pb.collection("customers").subscribe(customerId, handleRealtimeCustomerUpdate).catch(() => {});
+    pb.collection("rentals").subscribe("*", handleRealtimeCustomerUpdate).catch(() => {});
+
+    return () => {
+      pb.collection("customers").unsubscribe(customerId).catch(() => {});
+      pb.collection("rentals").unsubscribe("*").catch(() => {});
     };
   }, [open, customerId]);
 
@@ -253,6 +294,35 @@ export function CustomerDetailSheet({
     return () => observer.disconnect();
   }, [historialRentals, rentalSegment]);
 
+  function handleDeleteCustomerClick() {
+    if (!customer) return;
+    if (activeRentals.length > 0) {
+      setActiveRentalsBlockedOpen(true);
+      return;
+    }
+    setDeleteConfirmOpen(true);
+  }
+
+  async function handleConfirmDeleteCustomer() {
+    if (!customer) return;
+    setIsDeletingCustomer(true);
+    try {
+      await deleteCustomer(customer.id);
+      toast.success("Cliente eliminado correctamente");
+      setDeleteConfirmOpen(false);
+      onOpenChange(false);
+      onCustomerDeleted?.(customer.id);
+      if (cache) {
+        void cache.refreshCustomers();
+        void cache.refreshRentals();
+      }
+    } catch {
+      toast.error("No se pudo eliminar el cliente. Intenta de nuevo.");
+    } finally {
+      setIsDeletingCustomer(false);
+    }
+  }
+
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
@@ -313,6 +383,7 @@ export function CustomerDetailSheet({
                       setIsEditing(false);
                       setEditError(null);
                     }}
+                    onDelete={handleDeleteCustomerClick}
                     isSubmitting={isSavingEdit}
                   />
                 </div>
@@ -360,18 +431,30 @@ export function CustomerDetailSheet({
                     </h2>
 
                     {pending ? (
-                      <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3.5 shadow-xs">
-                        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                          <IdCard className="size-4" />
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-border bg-card p-3.5 shadow-xs">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                            <IdCard className="size-4" />
+                          </div>
+                          <div className="flex flex-col min-w-0">
+                            <p className="text-sm font-semibold text-foreground leading-tight">
+                              Sin credencial registrada
+                            </p>
+                            <p className="text-xs text-muted-foreground leading-tight mt-0.5">
+                              Captura una foto o selecciónala de la galería.
+                            </p>
+                          </div>
                         </div>
-                        <div className="flex flex-col min-w-0">
-                          <p className="text-sm font-semibold text-foreground leading-tight">
-                            Sin credencial registrada
-                          </p>
-                          <p className="text-xs text-muted-foreground leading-tight mt-0.5">
-                            Puedes capturarla o actualizarla editando los datos del cliente.
-                          </p>
-                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="shrink-0 self-start sm:self-auto"
+                          onClick={() => setIsEditing(true)}
+                        >
+                          <Camera className="size-3.5 mr-1.5" />
+                          Agregar credencial
+                        </Button>
                       </div>
                     ) : credentialUrl ? (
                       <div
@@ -528,7 +611,41 @@ export function CustomerDetailSheet({
         open={rentalDetailOpen}
         onOpenChange={setRentalDetailOpen}
         rentalId={selectedRentalId}
+        onRentalChanged={() => {
+          if (customerId) {
+            fetchCustomerDetail(customerId).then(([c, r]) => {
+              setCustomer(c);
+              setRentals(r);
+            }).catch(() => {});
+          }
+        }}
       />
+
+      {customer && (
+        <ConfirmDialog
+          open={activeRentalsBlockedOpen}
+          onOpenChange={setActiveRentalsBlockedOpen}
+          title="No se puede eliminar el cliente"
+          description={`El cliente ${customer.name} tiene ${activeRentals.length} renta(s) activa(s). Para poder eliminarlo, primero debes devolver o eliminar sus rentas activas.`}
+          confirmLabel="Entendido"
+          showCancel={false}
+          tone="info"
+          onConfirm={() => setActiveRentalsBlockedOpen(false)}
+        />
+      )}
+
+      {customer && (
+        <ConfirmDialog
+          open={deleteConfirmOpen}
+          onOpenChange={setDeleteConfirmOpen}
+          title="¿Eliminar este cliente?"
+          description={`Se eliminarán los datos de ${customer.name}, su foto de credencial y todo su historial de rentas. Esta acción no se puede deshacer.`}
+          confirmLabel={isDeletingCustomer ? "Eliminando..." : "Sí, eliminar"}
+          tone="destructive"
+          isConfirming={isDeletingCustomer}
+          onConfirm={handleConfirmDeleteCustomer}
+        />
+      )}
     </>
   );
 }

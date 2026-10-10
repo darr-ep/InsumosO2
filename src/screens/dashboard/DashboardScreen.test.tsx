@@ -7,6 +7,7 @@ import { DataCacheProvider } from "@/app/DataCacheContext";
 import { formatDateDisplay } from "@/lib/formatDate";
 
 const listActiveRentals = vi.fn();
+const listReturnedRentals = vi.fn();
 const listActiveRentalItems = vi.fn();
 const searchRentals = vi.fn();
 const getRental = vi.fn();
@@ -17,6 +18,7 @@ const updateBusinessSettings = vi.fn();
 
 vi.mock("@/data/rentals.repo", () => ({
   listActiveRentals: (...args: unknown[]) => listActiveRentals(...args),
+  listReturnedRentals: (...args: unknown[]) => listReturnedRentals(...args),
   listActiveRentalItems: (...args: unknown[]) => listActiveRentalItems(...args),
   searchRentals: (...args: unknown[]) => searchRentals(...args),
   getRental: (...args: unknown[]) => getRental(...args),
@@ -66,6 +68,7 @@ const juan = { id: "c1", name: "Juan Pérez", phone: "5512345678" };
 describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
   beforeEach(() => {
     listActiveRentals.mockReset().mockResolvedValue([]);
+    listReturnedRentals.mockReset().mockResolvedValue([]);
     listActiveRentalItems.mockReset().mockResolvedValue([]);
     searchRentals.mockReset();
     getRental.mockReset();
@@ -108,6 +111,43 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
     expect(within(activeTile).getByText("1")).toBeInTheDocument();
     expect(screen.getByText("R-000001")).toBeInTheDocument();
     expect(screen.getByText("Activa")).toBeInTheDocument();
+  });
+
+  it("shows returned rentals underneath the active rentals when present", async () => {
+    listActiveRentals.mockResolvedValue([
+      {
+        id: "r1",
+        folio: "R-000001",
+        status: "ACTIVE",
+        created: "2026-08-20 10:00:00.000Z",
+        initial_rent_amount: 2800,
+        expand: { customer_id: juan },
+      },
+    ]);
+    listReturnedRentals.mockResolvedValue([
+      {
+        id: "r2",
+        folio: "R-000002",
+        status: "RETURNED",
+        created: "2026-08-10 10:00:00.000Z",
+        returned_at: "2026-08-25 10:00:00.000Z",
+        initial_rent_amount: 1500,
+        expand: { customer_id: { id: "c2", name: "María López", phone: "5587654321" } },
+      },
+    ]);
+
+    renderScreen();
+
+    expect(await screen.findByText("Juan Pérez")).toBeInTheDocument();
+    expect(await screen.findByText("María López")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Rentas activas" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Rentas devueltas" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("R-000002")).toBeInTheDocument();
+    expect(screen.getByText("Devuelta")).toBeInTheDocument();
   });
 
   it("shows the customer's phone on each active-rental card (Redesign — UX/UI pass, free from already-expanded data)", async () => {
@@ -667,7 +707,7 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
 
       setQuery("xyz123");
 
-      expect(await screen.findByText("Sin resultados.")).toBeInTheDocument();
+      expect(await screen.findByText(/sin resultados/i)).toBeInTheDocument();
     });
 
     it("shows an error message when the search fails", async () => {

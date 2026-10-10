@@ -213,7 +213,7 @@ export function LoginScreen() {
             </div>
           </div>
 
-          <div className="fixed bottom-0 left-0 right-0 z-30 flex justify-center border-t border-border bg-muted p-6 shadow-xs">
+          <div className="fixed bottom-0 left-0 right-0 z-30 flex justify-center border-t border-border bg-card p-6 shadow-xs">
             <Button
               type="button"
               size="lg"
@@ -304,7 +304,7 @@ export function LoginScreen() {
             )}
           </div>
 
-          <div className="fixed bottom-0 left-0 right-0 z-30 flex justify-center border-t border-border bg-muted p-6 shadow-xs">
+          <div className="fixed bottom-0 left-0 right-0 z-30 flex justify-center border-t border-border bg-card p-6 shadow-xs">
             <Button
               type="submit"
               size="lg"

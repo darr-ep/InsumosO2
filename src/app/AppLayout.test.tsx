@@ -11,6 +11,7 @@ import { DataCacheProvider } from "@/app/DataCacheContext";
 // the same minimal data-layer mocking those screens' own tests use, just
 // enough to render without a real network call.
 const listActiveRentals = vi.fn();
+const listReturnedRentals = vi.fn();
 const listActiveRentalItems = vi.fn();
 const searchRentals = vi.fn();
 const getBusinessSettings = vi.fn();
@@ -19,6 +20,7 @@ const listCustomers = vi.fn();
 
 vi.mock("@/data/rentals.repo", () => ({
   listActiveRentals: (...args: unknown[]) => listActiveRentals(...args),
+  listReturnedRentals: (...args: unknown[]) => listReturnedRentals(...args),
   listActiveRentalItems: (...args: unknown[]) => listActiveRentalItems(...args),
   searchRentals: (...args: unknown[]) => searchRentals(...args),
 }));
@@ -57,6 +59,7 @@ describe("AppLayout", () => {
   beforeEach(() => {
     vi.stubEnv("VITE_BUSINESS_NAME", "");
     listActiveRentals.mockReset().mockResolvedValue([]);
+    listReturnedRentals.mockReset().mockResolvedValue([]);
     listActiveRentalItems.mockReset().mockResolvedValue([]);
     getBusinessSettings.mockReset().mockResolvedValue({
       id: "s1",

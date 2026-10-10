@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CUT, FEED_LINES, INIT } from "@/printing/escpos";
+import { ALIGN_CENTER, CUT, FEED_LINES, INIT } from "@/printing/escpos";
 import {
   buildImageTicket,
   findContentBoundingBox,
@@ -115,6 +115,7 @@ describe("buildImageTicket (§23.1 — GS v 0 raster command)", () => {
 
     expect(Array.from(ticket)).toEqual([
       ...INIT,
+      ...ALIGN_CENTER,
       0x1d,
       0x76,
       0x30,
@@ -125,7 +126,7 @@ describe("buildImageTicket (§23.1 — GS v 0 raster command)", () => {
       0, // height = 2
       0x81,
       0x00,
-      ...FEED_LINES(3),
+      ...FEED_LINES(6),
       ...CUT,
     ]);
   });
@@ -142,6 +143,7 @@ describe("buildImageTicket (§23.1 — GS v 0 raster command)", () => {
 
     expect(Array.from(ticket)).toEqual([
       ...INIT,
+      ...ALIGN_CENTER,
       0x1d,
       0x76,
       0x30,
@@ -152,7 +154,7 @@ describe("buildImageTicket (§23.1 — GS v 0 raster command)", () => {
       0,
       0xff,
       0x80,
-      ...FEED_LINES(3),
+      ...FEED_LINES(6),
       ...CUT,
     ]);
   });

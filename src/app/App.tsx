@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   createBrowserRouter,
   Navigate,
@@ -16,7 +16,6 @@ import { DashboardScreen } from "@/screens/dashboard/DashboardScreen";
 import { RentalNewScreen } from "@/screens/rental-new/RentalNewScreen";
 import { ClientesScreen } from "@/screens/clientes/ClientesScreen";
 import { ProfileScreen } from "@/screens/profile/ProfileScreen";
-import { webBluetoothPrinter } from "@/printing/WebBluetoothPrinter";
 import { useApplyTheme } from "@/lib/theme";
 
 /**
@@ -38,12 +37,6 @@ import { useApplyTheme } from "@/lib/theme";
  */
 function RequireAuth() {
   const isAuthenticated = useIsAuthenticated();
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      webBluetoothPrinter.startAutoReconnect();
-    }
-  }, [isAuthenticated]);
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;

@@ -101,6 +101,12 @@ export function ReceiptDialog({
                   <dt>Depósito devuelto</dt>
                   <dd>{currencyFormatter.format(receipt.depositReturned)}</dd>
                 </div>
+                {receipt.note && (
+                  <div className="flex justify-between">
+                    <dt className="text-muted-foreground">Nota</dt>
+                    <dd className="text-right">{receipt.note}</dd>
+                  </div>
+                )}
               </dl>
             ) : receipt.kind === "payment" ? (
               <dl className="flex flex-col gap-2 text-sm">

@@ -129,7 +129,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Se registrará un pago de $3,000.00 en la renta de Juan Pérez. Los pagos no se pueden editar ni borrar después.",
+        "Se registrará un pago de $3,000.00 en la renta de Juan Pérez.",
       ),
     ).toBeInTheDocument();
     expect(createPayment).not.toHaveBeenCalled();
@@ -140,7 +140,7 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
     await waitFor(() => expect(createPayment).toHaveBeenCalledTimes(1));
   });
 
-  it("shows a confirmation dialog with the adjustment copy before calling createPayment, and only calls createPayment after confirming (design-fidelity #3, owner decision #2222: always confirm)", async () => {
+  it("registers a rent payment with an optional note", async () => {
     const user = userEvent.setup();
 
     render(
@@ -159,29 +159,20 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
       />,
     );
 
-    await user.click(screen.getByRole("radio", { name: "Ajuste" }));
-    await user.clear(screen.getByLabelText("Monto del ajuste"));
-    await user.type(screen.getByLabelText("Monto del ajuste"), "-200");
+    await user.type(screen.getByLabelText("Monto"), "3000");
     await user.type(
-      screen.getByLabelText("Nota"),
-      "se cobró de más por error",
+      screen.getByLabelText(/Nota/i),
+      "Pago quincenal acordado",
     );
     await user.click(screen.getByRole("button", { name: "Confirmar" }));
-
-    expect(
-      screen.getByRole("heading", { name: "¿Registrar este ajuste?" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Se registrará un ajuste de -$200.00 en la renta de Juan Pérez. Los ajustes no se pueden editar ni borrar después.",
-      ),
-    ).toBeInTheDocument();
-    expect(createPayment).not.toHaveBeenCalled();
-
-    createPayment.mockResolvedValueOnce({ id: "p3" });
     await user.click(screen.getByRole("button", { name: "Sí, registrar" }));
 
-    await waitFor(() => expect(createPayment).toHaveBeenCalledTimes(1));
+    expect(createPayment).toHaveBeenCalledWith({
+      rentalId: "r1",
+      amount: 3000,
+      paymentType: "rent",
+      note: "Pago quincenal acordado",
+    });
   });
 
   it("does NOT fire a toast on success — the PaymentCreatedSummary receipt (handed to onRegistered) is the confirmation now, design-fidelity 'Éxito · Pago registrado', superseding the old §16.13/§17 gap-fill toast", async () => {
@@ -276,79 +267,6 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
     expect(createPayment).toHaveBeenCalledWith(
       expect.objectContaining({ amount: 3500 }),
     );
-  });
-
-  it("rejects an adjustment without a note and never calls createPayment (CU5's last scenario)", async () => {
-    const user = userEvent.setup();
-
-    render(
-      <PaymentDialog
-        open
-        onOpenChange={() => {}}
-        rentalId="r1"
-        folio="R-000001"
-        businessName="Insumos O2"
-        businessPhone="771 131 3535"
-        customerName="Juan Pérez"
-        customerPhone="5512345678"
-        suggestedAmount={3000}
-        initialRentAmount={2800}
-        hasPreviousRentPayment
-      />,
-    );
-
-    await user.click(screen.getByRole("radio", { name: "Ajuste" }));
-    await user.clear(screen.getByLabelText("Monto del ajuste"));
-    await user.type(screen.getByLabelText("Monto del ajuste"), "-200");
-    await user.click(screen.getByRole("button", { name: "Confirmar" }));
-
-    expect(
-      await screen.findByText("La nota es obligatoria para un ajuste."),
-    ).toBeInTheDocument();
-    // design-fidelity B4: a validation error must never show the confirm
-    // popup — the gate sits AFTER local validation.
-    expect(
-      screen.queryByRole("heading", { name: "¿Registrar este ajuste?" }),
-    ).not.toBeInTheDocument();
-    expect(createPayment).not.toHaveBeenCalled();
-  });
-
-  it("registers an adjustment with a note and a negative amount (CU5)", async () => {
-    createPayment.mockResolvedValueOnce({ id: "p3" });
-    const user = userEvent.setup();
-
-    render(
-      <PaymentDialog
-        open
-        onOpenChange={() => {}}
-        rentalId="r1"
-        folio="R-000001"
-        businessName="Insumos O2"
-        businessPhone="771 131 3535"
-        customerName="Juan Pérez"
-        customerPhone="5512345678"
-        suggestedAmount={3000}
-        initialRentAmount={2800}
-        hasPreviousRentPayment
-      />,
-    );
-
-    await user.click(screen.getByRole("radio", { name: "Ajuste" }));
-    await user.clear(screen.getByLabelText("Monto del ajuste"));
-    await user.type(screen.getByLabelText("Monto del ajuste"), "-200");
-    await user.type(
-      screen.getByLabelText("Nota"),
-      "se cobró de más por error",
-    );
-    await user.click(screen.getByRole("button", { name: "Confirmar" }));
-    await user.click(screen.getByRole("button", { name: "Sí, registrar" }));
-
-    expect(createPayment).toHaveBeenCalledWith({
-      rentalId: "r1",
-      amount: -200,
-      paymentType: "adjustment",
-      note: "se cobró de más por error",
-    });
   });
 
   it("keeps the form filled and shows an error when the save fails (§21)", async () => {
@@ -542,51 +460,5 @@ describe("PaymentDialog (§7.2, §11.2, CU5)", () => {
     expect(
       screen.queryByRole("heading", { name: "Procesando pago..." }),
     ).not.toBeInTheDocument();
-  });
-
-  it("shows the 'Registrando ajuste...' loading popup (not 'Procesando pago...') while submitting an adjustment", async () => {
-    let resolveCreatePayment: (value: { id: string }) => void = () => {};
-    createPayment.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          resolveCreatePayment = resolve;
-        }),
-    );
-    const user = userEvent.setup();
-
-    render(
-      <PaymentDialog
-        open
-        onOpenChange={() => {}}
-        rentalId="r1"
-        folio="R-000001"
-        businessName="Insumos O2"
-        businessPhone="771 131 3535"
-        customerName="Juan Pérez"
-        customerPhone="5512345678"
-        suggestedAmount={3000}
-        initialRentAmount={2800}
-        hasPreviousRentPayment
-      />,
-    );
-
-    await user.click(screen.getByRole("radio", { name: "Ajuste" }));
-    await user.type(screen.getByLabelText("Monto del ajuste"), "-100");
-    await user.type(
-      screen.getByLabelText("Nota"),
-      "Descuento por equipo dañado",
-    );
-    await user.click(screen.getByRole("button", { name: "Confirmar" }));
-    await user.click(screen.getByRole("button", { name: "Sí, registrar" }));
-
-    expect(
-      screen.getByRole("heading", { name: "Registrando ajuste..." }),
-    ).toBeInTheDocument();
-
-    resolveCreatePayment({ id: "p1" });
-
-    expect(
-      await screen.findByRole("button", { name: "Confirmar" }),
-    ).toBeInTheDocument();
   });
 });

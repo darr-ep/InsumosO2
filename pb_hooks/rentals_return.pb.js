@@ -72,6 +72,9 @@ routerAdd(
       rental.set("returned_at", new DateTime());
       rental.set("returned_by", e.auth.id);
       rental.set("deposit_returned_amount", depositReturned);
+      if (note) {
+        rental.set("note", note);
+      }
       rental.set("updated_by", e.auth.id);
       txApp.save(rental);
 

@@ -193,6 +193,7 @@ export function ReturnDialog({
           returnedAt: new Date(rental.returned_at),
           amountCollected: parsed.data.amount_collected,
           depositReturned: parsed.data.deposit_returned,
+          note: parsed.data.note ? parsed.data.note : undefined,
         }),
       );
       // §16.13/§17 (gap-fill finding 4) originally added a toast here for
@@ -221,7 +222,7 @@ export function ReturnDialog({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent showCloseButton={false} className="bg-muted">
+        <SheetContent showCloseButton={false} className="bg-background">
           <SheetHeader className="flex-row items-center justify-between gap-2 border-b-0 pr-4">
             <SheetTitle>Devolver renta</SheetTitle>
             <span className="bg-primary-soft text-primary shrink-0 rounded-full px-2.5 py-1 text-xs font-medium">
@@ -322,7 +323,7 @@ export function ReturnDialog({
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
                 rows={3}
-                className="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 w-full min-w-0 rounded-md border bg-card px-3 py-2 text-base outline-none transition-[color,box-shadow] focus-visible:ring-[3px]"
+                className="border-input placeholder:text-muted-foreground/45 focus-visible:border-ring focus-visible:ring-ring/50 w-full min-w-0 rounded-md border bg-background px-3 py-2 text-base outline-none transition-[color,box-shadow] shadow-xs focus-visible:ring-[3px]"
               />
             </div>
 

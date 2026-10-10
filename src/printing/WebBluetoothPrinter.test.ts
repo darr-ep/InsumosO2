@@ -344,6 +344,11 @@ describe("WebBluetoothPrinter.print (§22/§23.1)", () => {
     expect(writable.writeValue).toHaveBeenCalled();
     expect(writable.writeValueWithoutResponse).not.toHaveBeenCalled();
   });
+
+  it("printLogo throws when not connected", async () => {
+    const printer = new WebBluetoothPrinter();
+    await expect(printer.printLogo()).rejects.toThrow();
+  });
 });
 
 describe("WebBluetoothPrinter.disconnect (§23.4)", () => {

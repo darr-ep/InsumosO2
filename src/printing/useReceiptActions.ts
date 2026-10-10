@@ -50,14 +50,22 @@ export function useReceiptActions(
         available &&
         autoPrint &&
         receipt.kind === "create" &&
-        webBluetoothPrinter.isConnected
+        webBluetoothPrinter.deviceName
       ) {
         setPrintStatus("printing");
         try {
+          await webBluetoothPrinter.connect();
           await webBluetoothPrinter.print(receipt);
+          await new Promise((resolve) => setTimeout(resolve, 400));
           if (!cancelled) setPrintStatus("printed");
         } catch {
-          if (!cancelled) setPrintStatus("failed");
+          if (!cancelled) setPrintStatus("idle");
+        } finally {
+          try {
+            await webBluetoothPrinter.disconnect();
+          } catch {
+            // ignore disconnect error
+          }
         }
       }
     });
@@ -90,9 +98,18 @@ export function useReceiptActions(
     try {
       await webBluetoothPrinter.connect();
       await webBluetoothPrinter.print(receipt);
+      // Wait briefly for the printer hardware buffer to finish receiving data before closing the link
+      await new Promise((resolve) => setTimeout(resolve, 400));
       setPrintStatus("printed");
     } catch {
       setPrintStatus("failed");
+    } finally {
+      // Always disconnect so the printer is immediately available for other devices
+      try {
+        await webBluetoothPrinter.disconnect();
+      } catch {
+        // ignore disconnect errors
+      }
     }
   }
 
