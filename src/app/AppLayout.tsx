@@ -112,6 +112,7 @@ export function AppLayout() {
     loop: false,
     align: "start",
     startIndex: initialIndex,
+    duration: 25,
   });
 
   // Derived from the route on every render, NOT from Embla's own 'select'
@@ -173,47 +174,20 @@ export function AppLayout() {
     emblaApi.scrollTo(targetIndex);
   }, [emblaApi, location.pathname]);
 
-  // Live-tested finding (not assumed): Embla's `duration` option — per its
-  // own docs — only governs API-triggered `scrollTo()`, never a drag
-  // release; a release's settle speed is derived purely from drag force
-  // (`DragHandler`'s hardcoded `baseSpeed`/friction, read from Embla's own
-  // source, v8.6.0). For a real fast flick this resolves to a duration so
-  // low it renders the ENTIRE remaining distance in a single frame —
-  // confirmed via a live drag probe sampling the container's *computed*
-  // transform every animation frame across a release (a real
-  // touch-release couldn't be reproduced reliably via CDP in this desktop
-  // environment; a mouse drag exercises the identical `DragHandler` code
-  // path and reproduced the same single-frame jump). Embla
-  // exposes no event that fires before that frame renders, so the release
-  // can't be intercepted before the jump happens — but a CSS transition on
-  // the SAME element still animates it: the browser compares the
-  // last-painted transform to whatever Embla sets next, regardless of how
-  // many synchronous JS writes happened in between. Toggled off on
-  // `pointerDown` so an active drag still tracks the finger 1:1 (Embla
-  // rewrites `transform` every frame while dragging; transitioning that
-  // would lag behind the touch). This only wraps how Embla's OWN
-  // `transform` value is painted — never sets it — matching Embla's own
-  // guidance for adding a transition without fighting its rendering.
+  // Re-initialize Embla on window resize so that wide screens, orientation changes
+  // and browser resizes maintain exact 1:1 panel alignment and centering.
   useEffect(() => {
     if (!emblaApi) {
       return;
     }
 
-    const container = emblaApi.containerNode();
-
-    function onPointerDown() {
-      container.style.transition = "";
+    function handleResize() {
+      emblaApi?.reInit();
     }
 
-    function onPointerUp() {
-      container.style.transition = "transform 280ms cubic-bezier(0.22, 1, 0.36, 1)";
-    }
-
-    emblaApi.on("pointerDown", onPointerDown);
-    emblaApi.on("pointerUp", onPointerUp);
+    window.addEventListener("resize", handleResize);
     return () => {
-      emblaApi.off("pointerDown", onPointerDown);
-      emblaApi.off("pointerUp", onPointerUp);
+      window.removeEventListener("resize", handleResize);
     };
   }, [emblaApi]);
 
@@ -258,10 +232,10 @@ export function AppLayout() {
         className="flex-1 overflow-hidden"
         style={{ touchAction: "pan-y pinch-zoom" }}
       >
-        <div className="flex h-full">
+        <div className="flex h-full w-full">
           <div
             id={DASHBOARD_PANEL_ID}
-            className="h-full min-w-0 shrink-0 grow-0 basis-full overflow-y-auto"
+            className="h-full w-full min-w-full shrink-0 grow-0 basis-full overflow-y-auto"
           >
             <div id={DASHBOARD_CONTENT_ID}>
               <DashboardScreen query={query} />
@@ -269,7 +243,7 @@ export function AppLayout() {
           </div>
           <div
             id={CLIENTES_PANEL_ID}
-            className="h-full min-w-0 shrink-0 grow-0 basis-full overflow-y-auto"
+            className="h-full w-full min-w-full shrink-0 grow-0 basis-full overflow-y-auto"
           >
             <div id={CLIENTES_CONTENT_ID}>
               <ClientesScreen query={query} />

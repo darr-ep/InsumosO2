@@ -89,7 +89,7 @@ describe("AppLayout", () => {
     renderLayout("/dashboard");
 
     expect(
-      await screen.findByRole("group", { name: "Rentas activas: 0" }),
+      await screen.findByText("No hay rentas activas todavía."),
     ).toBeInTheDocument();
     expect(
       screen.getByText("Aún no hay clientes registrados."),
@@ -135,7 +135,7 @@ describe("AppLayout", () => {
    */
   it("renders exactly 3 interactive nav elements — Inicio, the Nueva renta CTA, and Clientes — with the correct hrefs", async () => {
     renderLayout();
-    await screen.findByRole("group", { name: "Rentas activas: 0" });
+    await screen.findByText("No hay rentas activas todavía.");
 
     const nav = screen.getByRole("navigation", {
       name: "Navegación principal",
@@ -172,7 +172,7 @@ describe("AppLayout", () => {
   it("navigates to /nueva-renta when the center CTA is tapped", async () => {
     const user = userEvent.setup();
     renderLayout("/dashboard");
-    await screen.findByRole("group", { name: "Rentas activas: 0" });
+    await screen.findByText("No hay rentas activas todavía.");
 
     const nav = screen.getByRole("navigation", {
       name: "Navegación principal",
@@ -185,7 +185,7 @@ describe("AppLayout", () => {
 
   it("marks Inicio as the active tab when the current route is /dashboard", async () => {
     renderLayout("/dashboard");
-    await screen.findByRole("group", { name: "Rentas activas: 0" });
+    await screen.findByText("No hay rentas activas todavía.");
 
     const nav = screen.getByRole("navigation", {
       name: "Navegación principal",
@@ -219,7 +219,7 @@ describe("AppLayout", () => {
   it("updates the active tab and header title when Clientes is tapped, without unmounting Inicio's own body content", async () => {
     const user = userEvent.setup();
     renderLayout("/dashboard");
-    await screen.findByRole("group", { name: "Rentas activas: 0" });
+    await screen.findByText("No hay rentas activas todavía.");
 
     const nav = screen.getByRole("navigation", {
       name: "Navegación principal",
@@ -238,7 +238,7 @@ describe("AppLayout", () => {
     ).toBeInTheDocument();
     // Still mounted — tapping the tab scrolls, it never routes exclusively.
     expect(
-      screen.getByRole("group", { name: "Rentas activas: 0" }),
+      screen.getByText("No hay rentas activas todavía."),
     ).toBeInTheDocument();
   });
 });
