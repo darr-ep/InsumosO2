@@ -31,7 +31,7 @@ const PB_URL = import.meta.env.VITE_POCKETBASE_URL || "http://127.0.0.1:8090";
 const B2_CONFIGURED_URL = import.meta.env.VITE_PB_TEST_B2_CONFIGURED_URL || "";
 
 const SUPERUSER_EMAIL = "phase4-test-superuser@insumoso2.local";
-const SUPERUSER_PASSWORD = "Passw0rd!2026Super";
+const SUPERUSER_PASSWORD = "test-superuser-pass-12345";
 
 async function isReachable(url: string): Promise<boolean> {
   if (!url) return false;

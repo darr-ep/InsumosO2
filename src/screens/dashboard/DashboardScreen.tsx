@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RentalCard } from "@/components/RentalCard";
-import { DashboardStats } from "@/components/DashboardStats";
 import { EmptyState } from "@/components/EmptyState";
 import { RentalDetailSheet } from "@/components/RentalDetailSheet";
 import { CustomerDetailSheet } from "@/components/CustomerDetailSheet";
@@ -24,10 +23,6 @@ import {
   isStaleRental,
   staleRentalDaysThreshold,
 } from "@/domain/rentals/dashboard";
-import {
-  availableStock,
-  countActiveQuantityByType,
-} from "@/domain/rentals/availability";
 import { formatDateDisplay } from "@/lib/formatDate";
 import { formatCurrencyMXN } from "@/lib/currency";
 
@@ -171,12 +166,10 @@ export const DashboardScreen = memo(function DashboardScreen({
     rentals,
     returnedRentals,
     activeItems,
-    businessSettings,
+    activePayments,
     rentalsError,
-    isRefreshingRentals,
     loadRentalsIfNeeded,
     refreshRentals,
-    setBusinessSettings,
   } = useDataCache();
 
   const [results, setResults] = useState<RentalWithCustomer[]>([]);
@@ -288,8 +281,30 @@ export const DashboardScreen = memo(function DashboardScreen({
     import.meta.env.VITE_STALE_RENTAL_DAYS,
   );
   const now = new Date();
+
+  // Agrupamos los pagos de tipo 'rent' por rental_id para saber cuántos periodos
+  // están cubiertos (el pago inicial cubre 1 periodo, cada pago de renta adicional cubre +1).
+  const rentPaymentsCountByRentalId = new Map<string, number>();
+  for (const payment of activePayments ?? []) {
+    if (payment.payment_type === "rent") {
+      const count = rentPaymentsCountByRentalId.get(payment.rental_id) ?? 0;
+      rentPaymentsCountByRentalId.set(payment.rental_id, count + 1);
+    }
+  }
+
+  function getPeriodsCoveredForRental(rentalId: string): number {
+    // 1 periodo base por la renta inicial + 1 por cada pago de renta registrado
+    const rentPayments = rentPaymentsCountByRentalId.get(rentalId) ?? 0;
+    return 1 + rentPayments;
+  }
+
   const staleRentals = (rentals ?? []).filter((rental) =>
-    isStaleRental(new Date(rental.created), thresholdDays, now),
+    isStaleRental(
+      new Date(rental.created),
+      thresholdDays,
+      now,
+      getPeriodsCoveredForRental(rental.id),
+    ),
   );
 
   // Redesign — UX/UI pass: a subtle per-card product-type icon
@@ -318,18 +333,6 @@ export const DashboardScreen = memo(function DashboardScreen({
       <Icon aria-hidden="true" className="text-muted-foreground size-4" />
     );
   }
-
-  const activeQuantities = countActiveQuantityByType(activeItems);
-  const totalConcentradores = businessSettings?.total_concentradores ?? 0;
-  const totalTanques = businessSettings?.total_tanques ?? 0;
-  const concentradoresDisponibles = availableStock(
-    totalConcentradores,
-    activeQuantities.concentrator,
-  );
-  const tanquesDisponibles = availableStock(
-    totalTanques,
-    activeQuantities.tank,
-  );
 
   const trimmedQuery = query.trim();
   const isSearchActive = trimmedQuery.length > 0;
@@ -431,44 +434,37 @@ export const DashboardScreen = memo(function DashboardScreen({
 
             {rentals !== null && (
               <>
-                <DashboardStats
-                  activeRentalsCount={rentals.length}
-                  concentradoresDisponibles={concentradoresDisponibles}
-                  tanquesDisponibles={tanquesDisponibles}
-                  totalConcentradores={totalConcentradores}
-                  totalTanques={totalTanques}
-                  onSettingsUpdated={setBusinessSettings}
-                  isRefreshing={isRefreshingRentals}
-                />
-
-                {staleRentals.length > 0 && (
-                  <button
-                    type="button"
-                    aria-pressed={showStaleOnly}
-                    onClick={() => setShowStaleOnly((value) => !value)}
-                    className="border-warning bg-warning/10 text-foreground flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-left text-sm font-medium"
-                  >
-                    <span>
-                      {staleRentals.length}{" "}
-                      {staleRentals.length === 1
-                        ? "renta requiere"
-                        : "rentas requieren"}{" "}
-                      revisión
-                    </span>
-                    <span className="text-muted-foreground text-xs">
-                      {showStaleOnly ? "Ver todas" : "Ver"}
-                    </span>
-                  </button>
-                )}
-
                 {rentals.length > 0 && (
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-base font-bold text-foreground">
-                      Rentas activas
-                    </h2>
-                    <span className="bg-primary-soft text-primary rounded-full px-2 py-0.5 text-xs font-medium">
-                      {visibleActiveRentals.length}
-                    </span>
+                  <div className="flex flex-col gap-2.5">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-base font-bold text-foreground">
+                        {showStaleOnly ? "Rentas por revisar" : "Rentas activas"}
+                      </h2>
+                      <span className="bg-primary-soft text-primary rounded-full px-2 py-0.5 text-xs font-medium">
+                        {visibleActiveRentals.length}
+                      </span>
+                    </div>
+
+                    {staleRentals.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowStaleOnly((v) => !v)}
+                        className="flex w-full items-center justify-between gap-3 rounded-xl bg-warning-soft/75 px-3.5 py-2.5 text-xs text-warning-soft-foreground transition-colors hover:bg-warning-soft text-left"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="size-2 rounded-full bg-warning animate-pulse" />
+                          <span>
+                            <strong>{staleRentals.length}</strong>{" "}
+                            {staleRentals.length === 1
+                              ? "renta requiere revisión"
+                              : "rentas requieren revisión"}
+                          </span>
+                        </div>
+                        <span className="font-semibold underline underline-offset-2">
+                          {showStaleOnly ? "Ver todas" : "Filtrar"}
+                        </span>
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -493,20 +489,17 @@ export const DashboardScreen = memo(function DashboardScreen({
                               rental.expand?.customer_id?.name ?? "Cliente"
                             }
                             status={rental.status}
+                            isStale={isStaleRental(
+                              new Date(rental.created),
+                              thresholdDays,
+                              now,
+                              getPeriodsCoveredForRental(rental.id),
+                            )}
                             folio={rental.folio}
                             onClick={() => openRentalDetail(rental.id)}
                             phone={rental.expand?.customer_id?.phone}
                             amount={formatCurrencyMXN(rental.initial_rent_amount)}
                             itemTypeIcon={rentalItemTypeIcon(rental.id)}
-                            cardClassName={
-                              isStaleRental(
-                                new Date(rental.created),
-                                thresholdDays,
-                                now,
-                              )
-                                ? "border-warning"
-                                : undefined
-                            }
                           >
                             <p className="flex items-center gap-1.5">
                               <CalendarDays aria-hidden="true" className="size-3.5" />

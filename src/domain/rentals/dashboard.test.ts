@@ -31,6 +31,17 @@ describe("isStaleRental (§16.4, Anexo A.3, CU2)", () => {
     const now = new Date("2026-08-26T00:00:00.000Z");
     expect(isStaleRental(now, 30, now)).toBe(false);
   });
+
+  it("respects periodsCovered monthly cutoff: false before cutoff, true on/after cutoff", () => {
+    const startedAt = new Date(Date.UTC(2026, 0, 1)); // 1 Ene
+    // 1 period covered -> next due date is 1 Feb
+    expect(isStaleRental(startedAt, 30, new Date(Date.UTC(2026, 0, 25)), 1)).toBe(false);
+    expect(isStaleRental(startedAt, 30, new Date(Date.UTC(2026, 1, 1)), 1)).toBe(true);
+
+    // 2 periods covered (e.g. paid on Jan 28) -> next due date is 1 Mar
+    expect(isStaleRental(startedAt, 30, new Date(Date.UTC(2026, 1, 15)), 2)).toBe(false);
+    expect(isStaleRental(startedAt, 30, new Date(Date.UTC(2026, 2, 1)), 2)).toBe(true);
+  });
 });
 
 describe("staleRentalDaysThreshold (Anexo A.3)", () => {

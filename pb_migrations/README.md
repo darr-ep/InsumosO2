@@ -104,7 +104,7 @@ skip-gracefully behavior when nothing answers `/api/health`.
   the (now closed) public create endpoint, so a superuser MUST exist on any
   instance you run the suite against:
   ```
-  ./pocketbase superuser upsert phase4-test-superuser@insumoso2.local Passw0rd!2026Super
+  ./pocketbase superuser upsert phase4-test-superuser@insumoso2.local test-superuser-pass-12345
   ```
   (email/password are `testSupport.ts`'s defaults, overridable via
   `VITE_PB_TEST_SUPERUSER_EMAIL`/`VITE_PB_TEST_SUPERUSER_PASSWORD` for a
@@ -157,18 +157,18 @@ skip-gracefully behavior when nothing answers `/api/health`.
 ```
 # instance 1 (required) -- everything except the two scenarios below
 PB_TEST_MODE=1 ./pocketbase serve --http=127.0.0.1:8090
-./pocketbase superuser upsert phase4-test-superuser@insumoso2.local Passw0rd!2026Super
+./pocketbase superuser upsert phase4-test-superuser@insumoso2.local test-superuser-pass-12345
 
 # instance 2 (optional) -- proves the real (non-test-mode) rate limit
 ./pocketbase serve --http=127.0.0.1:8091   # a second copy, no PB_TEST_MODE
-./pocketbase superuser upsert phase4-test-superuser@insumoso2.local Passw0rd!2026Super
+./pocketbase superuser upsert phase4-test-superuser@insumoso2.local test-superuser-pass-12345
 
 # instance 3 (optional) -- proves the B2 conditional wiring with dummy values
 PB_BACKUPS_B2_BUCKET=test-bucket PB_BACKUPS_B2_REGION=us-west-004 \
 PB_BACKUPS_B2_ENDPOINT=https://s3.us-west-004.backblazeb2.com \
 PB_BACKUPS_B2_ACCESS_KEY=dummy PB_BACKUPS_B2_SECRET=dummy \
 ./pocketbase serve --http=127.0.0.1:8092
-./pocketbase superuser upsert phase4-test-superuser@insumoso2.local Passw0rd!2026Super
+./pocketbase superuser upsert phase4-test-superuser@insumoso2.local test-superuser-pass-12345
 
 VITE_POCKETBASE_URL=http://127.0.0.1:8090 \
 VITE_PB_TEST_RATE_LIMIT_URL=http://127.0.0.1:8091 \
@@ -271,7 +271,7 @@ mkdir -p /path/to/scratch/data
 PB_TEST_MODE=1 ./pocketbase.exe serve --http=127.0.0.1:8095 \
   --dir=/path/to/scratch/data \
   --migrationsDir="$(pwd)/pb_migrations" --hooksDir="$(pwd)/pb_hooks"
-./pocketbase.exe superuser upsert phase4-test-superuser@insumoso2.local Passw0rd!2026Super \
+./pocketbase.exe superuser upsert phase4-test-superuser@insumoso2.local test-superuser-pass-12345 \
   --dir=/path/to/scratch/data
 
 VITE_PB_TEST_BUSINESS_SETTINGS_URL=http://127.0.0.1:8095 \

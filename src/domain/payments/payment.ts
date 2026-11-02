@@ -24,7 +24,7 @@ export type PaymentDialogType = (typeof PAYMENT_DIALOG_TYPES)[number];
 const PAYMENT_TYPE_LABELS: Record<"rent" | "deposit" | "adjustment", string> =
   {
     rent: "Pago",
-    deposit: "Depósito inicial",
+    deposit: "Pago Inicial",
     adjustment: "Ajuste",
   };
 

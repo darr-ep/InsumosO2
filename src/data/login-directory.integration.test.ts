@@ -106,8 +106,8 @@ describe.skipIf(!reachable)(
 
       const uniqueSuffix = Date.now().toString().slice(-9);
       const created = await superuser.collection("users").create({
-        password: "Passw0rd!2026",
-        passwordConfirm: "Passw0rd!2026",
+        password: "test-password-12345",
+        passwordConfirm: "test-password-12345",
         phone: `7${uniqueSuffix}`.slice(0, 10),
         name: "Usuario sin email (gap-fill)",
         // deliberately no `email` field

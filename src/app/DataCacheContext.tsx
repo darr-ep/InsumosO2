@@ -15,11 +15,11 @@ import {
   type RentalItemRecord,
   type RentalWithCustomer,
 } from "@/data/rentals.repo";
-import {
-  getBusinessSettings,
-  type BusinessSettingsRecord,
-} from "@/data/settings.repo";
 import { listCustomers, type CustomerRecord } from "@/data/customers.repo";
+import {
+  listActiveRentalsPayments,
+} from "@/data/payments.repo";
+import type { PaymentRecord } from "@/data/rentals.repo";
 
 /**
  * Cache compartido Dashboard/Clientes (bug real, no solo cosmético):
@@ -48,12 +48,11 @@ export interface DataCacheValue {
   rentals: RentalWithCustomer[] | null;
   returnedRentals: RentalWithCustomer[] | null;
   activeItems: RentalItemRecord[];
-  businessSettings: BusinessSettingsRecord | null;
+  activePayments: PaymentRecord[];
   rentalsError: string | null;
   isRefreshingRentals: boolean;
   loadRentalsIfNeeded: () => void;
   refreshRentals: () => Promise<void>;
-  setBusinessSettings: (settings: BusinessSettingsRecord) => void;
 
   customers: CustomerRecord[] | null;
   customersError: string | null;
@@ -70,8 +69,7 @@ export function DataCacheProvider({ children }: { children: ReactNode }) {
     RentalWithCustomer[] | null
   >(null);
   const [activeItems, setActiveItems] = useState<RentalItemRecord[]>([]);
-  const [businessSettings, setBusinessSettings] =
-    useState<BusinessSettingsRecord | null>(null);
+  const [activePayments, setActivePayments] = useState<PaymentRecord[]>([]);
   const [rentalsError, setRentalsError] = useState<string | null>(null);
   const [isRefreshingRentals, setIsRefreshingRentals] = useState(false);
   const isLoadingRentalsRef = useRef(false);
@@ -104,16 +102,16 @@ export function DataCacheProvider({ children }: { children: ReactNode }) {
       setIsRefreshingRentals(true);
 
       try {
-        const [activeRentals, returned, items, settings] = await Promise.all([
+        const [activeRentals, returned, items, payments] = await Promise.all([
           listActiveRentals(),
           listReturnedRentals(),
           listActiveRentalItems(),
-          getBusinessSettings(),
+          listActiveRentalsPayments().catch(() => [] as PaymentRecord[]),
         ]);
         setRentals(activeRentals);
         setReturnedRentals(returned);
         setActiveItems(items);
-        setBusinessSettings(settings);
+        setActivePayments(payments);
         setRentalsError(null);
       } catch (err: unknown) {
         const isAbort =
@@ -220,15 +218,6 @@ export function DataCacheProvider({ children }: { children: ReactNode }) {
       }, 50);
     };
 
-    const onSettingsChange = (e: { record?: BusinessSettingsRecord }) => {
-      if (!active) return;
-      if (e?.record) {
-        setBusinessSettings(e.record);
-      } else {
-        onRentalsChange();
-      }
-    };
-
     const hasEventSource = typeof EventSource !== "undefined";
 
     if (hasEventSource && pb?.collection) {
@@ -236,7 +225,6 @@ export function DataCacheProvider({ children }: { children: ReactNode }) {
       pb.collection("rental_items").subscribe("*", onRentalsChange).catch(() => {});
       pb.collection("payments").subscribe("*", onRentalsChange).catch(() => {});
       pb.collection("customers").subscribe("*", onCustomersChange).catch(() => {});
-      pb.collection("business_settings").subscribe("*", onSettingsChange).catch(() => {});
     }
 
     const onVisibilityChange = () => {
@@ -275,7 +263,6 @@ export function DataCacheProvider({ children }: { children: ReactNode }) {
         pb.collection("rental_items").unsubscribe("*").catch(() => {});
         pb.collection("payments").unsubscribe("*").catch(() => {});
         pb.collection("customers").unsubscribe("*").catch(() => {});
-        pb.collection("business_settings").unsubscribe("*").catch(() => {});
       }
     };
   }, []);
@@ -284,12 +271,11 @@ export function DataCacheProvider({ children }: { children: ReactNode }) {
     rentals,
     returnedRentals,
     activeItems,
-    businessSettings,
+    activePayments,
     rentalsError,
     isRefreshingRentals,
     loadRentalsIfNeeded,
     refreshRentals,
-    setBusinessSettings,
 
     customers,
     customersError,

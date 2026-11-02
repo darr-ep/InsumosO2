@@ -58,8 +58,8 @@ describe.skipIf(!reachable)(
       await expect(
         anon.collection("users").create({
           email: `phase4-selfreg-${uniqueSuffix}@insumoso2.local`,
-          password: "Passw0rd!2026",
-          passwordConfirm: "Passw0rd!2026",
+          password: "test-password-12345",
+          passwordConfirm: "test-password-12345",
           phone: `3${uniqueSuffix}`.slice(0, 10),
           name: "Should Never Be Created",
         }),
@@ -77,8 +77,8 @@ describe.skipIf(!reachable)(
       await expect(
         client.collection("users").create({
           email: `phase4-authed-selfreg-${uniqueSuffix}@insumoso2.local`,
-          password: "Passw0rd!2026",
-          passwordConfirm: "Passw0rd!2026",
+          password: "test-password-12345",
+          passwordConfirm: "test-password-12345",
           phone: `1${uniqueSuffix}`.slice(0, 10),
           name: "Should Also Never Be Created",
         }),

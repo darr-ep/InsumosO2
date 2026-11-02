@@ -76,8 +76,8 @@ describe("paymentTypeLabel (Redesign Round 3 — historial de pagos)", () => {
     expect(paymentTypeLabel("rent")).toBe("Pago");
   });
 
-  it("labels deposit as Depósito inicial (disambiguated from ReturnDialog's 'Depósito a devolver')", () => {
-    expect(paymentTypeLabel("deposit")).toBe("Depósito inicial");
+  it("labels deposit as Pago Inicial (disambiguated from ReturnDialog's 'Depósito a devolver')", () => {
+    expect(paymentTypeLabel("deposit")).toBe("Pago Inicial");
   });
 
   it("labels adjustment as Ajuste", () => {

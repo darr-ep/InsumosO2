@@ -59,6 +59,22 @@ export async function listPaymentsForRental(
   return result.items;
 }
 
+/**
+ * Obtiene todos los pagos de rentas activas para determinar qué periodos
+ * de renta están cubiertos en el Dashboard.
+ */
+export async function listActiveRentalsPayments(): Promise<PaymentRecord[]> {
+  const result = await pb
+    .collection(PAYMENTS_COLLECTION)
+    .getFullList<PaymentRecord>({
+      filter: pb.filter("rental_id.status = 'ACTIVE'"),
+      sort: "created",
+      requestKey: null,
+    });
+
+  return result;
+}
+
 // §A.7: the "Registrar pago" suggestion is based on the last `rent` payment
 // specifically — the `deposit` payment created alongside the rental (task
 // 1.4) isn't "historial" of periodic rent payments, so it's excluded here.

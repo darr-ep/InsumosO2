@@ -38,3 +38,11 @@ pocketbase
 # app's scaffold or git history, kept on disk only for local reference.
 /test-pocketbase/
 /test-impresora/
+
+
+# One-off migration/verification scripts with production data
+scripts/consolidate_prod_customer.py
+scripts/verify_consolidation.py
+
+# Agent / tool caches
+.atl/

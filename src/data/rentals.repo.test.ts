@@ -175,8 +175,10 @@ describe("createRental (CU4 orchestration)", () => {
     expect(rentalPayload).not.toHaveProperty("status");
   });
 
-  it("does not create a payment when there is no deposit", async () => {
-    create.mockResolvedValueOnce({ id: "rental2", folio: "R-000003" });
+  it("creates a payment for initial rent when there is no deposit", async () => {
+    create
+      .mockResolvedValueOnce({ id: "rental2", folio: "R-000003" })
+      .mockResolvedValueOnce({ id: "payment1" });
 
     const result = await createRental({
       customerId: "cust1",
@@ -185,8 +187,13 @@ describe("createRental (CU4 orchestration)", () => {
       depositAmount: 0,
     });
 
-    expect(collection).not.toHaveBeenCalledWith("payments");
-    expect(result.depositPayment).toBeNull();
+    expect(collection).toHaveBeenCalledWith("payments");
+    expect(create).toHaveBeenLastCalledWith({
+      rental_id: "rental2",
+      amount: 500,
+      payment_type: "deposit",
+    });
+    expect(result.depositPayment).toEqual({ id: "payment1" });
   });
 });
 

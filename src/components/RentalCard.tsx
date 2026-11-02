@@ -71,6 +71,7 @@ export interface RentalCardProps {
   phone?: string;
   amount?: ReactNode;
   itemTypeIcon?: ReactNode;
+  isStale?: boolean;
   children?: ReactNode;
 }
 
@@ -83,6 +84,7 @@ export function RentalCard({
   phone,
   amount,
   itemTypeIcon,
+  isStale,
   children,
 }: RentalCardProps) {
   return (
@@ -91,7 +93,7 @@ export function RentalCard({
         <CardHeader>
           <div className="flex items-center justify-between gap-2">
             <CardTitle>{customerName}</CardTitle>
-            <RentalStatusBadge status={status} />
+            <RentalStatusBadge status={status} isStale={isStale} />
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-1.5">

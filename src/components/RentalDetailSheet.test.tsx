@@ -144,7 +144,7 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
 
     expect(within(historySection).getByText("Pago")).toBeInTheDocument();
     expect(
-      within(historySection).getByText("Depósito inicial"),
+      within(historySection).getByText("Pago Inicial"),
     ).toBeInTheDocument();
     expect(within(historySection).getByText("Registró: Juan")).toBeInTheDocument();
     expect(within(historySection).getByText("Registró: Ana")).toBeInTheDocument();
@@ -182,10 +182,10 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
       await screen.findByText("Historial de pagos")
     ).closest("section")!;
     const labels = within(historySection)
-      .getAllByText(/Depósito inicial|Pago/)
+      .getAllByText(/Pago Inicial|Pago/)
       .map((el) => el.textContent);
 
-    expect(labels).toEqual(["Depósito inicial", "Pago"]);
+    expect(labels).toEqual(["Pago Inicial", "Pago"]);
   });
 
   it("shows Devolución de depósito at the bottom of the payments list when the rental is returned", async () => {
@@ -259,7 +259,7 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
     rows.forEach((row) => expect(row).not.toHaveClass("border-l-2"));
 
     const depositRow = within(historySection)
-      .getByText("Depósito inicial")
+      .getByText("Pago Inicial")
       .closest("li")!;
     const rentRow = within(historySection)
       .getByText("Pago")
@@ -292,7 +292,7 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
     expect(within(historySection).getByText("Registró: Ana")).toBeInTheDocument();
   });
 
-  it("lets reprinting the Depósito inicial receipt from its own row in the history (per-action reprint)", async () => {
+  it("lets reprinting the Pago Inicial receipt from its own row in the history (per-action reprint)", async () => {
     getRental.mockResolvedValue(activeRental);
     listItemsForRental.mockResolvedValue([
       { id: "i1", item_type: "concentrator", quantity: 1 },
@@ -313,7 +313,7 @@ describe("RentalDetailSheet (§16.10, §18, task 3.3)", () => {
 
     await user.click(
       await screen.findByRole("button", {
-        name: "Reimprimir comprobante de depósito inicial",
+        name: "Reimprimir comprobante de pago inicial",
       }),
     );
 

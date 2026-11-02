@@ -36,7 +36,7 @@ const SUPERUSER_EMAIL =
   import.meta.env.VITE_PB_TEST_SUPERUSER_EMAIL ??
   "phase4-test-superuser@insumoso2.local";
 const SUPERUSER_PASSWORD =
-  import.meta.env.VITE_PB_TEST_SUPERUSER_PASSWORD ?? "Passw0rd!2026Super";
+  import.meta.env.VITE_PB_TEST_SUPERUSER_PASSWORD ?? "test-superuser-pass-12345";
 
 const superuserClientsByUrl = new Map<string, PocketBase>();
 
@@ -97,7 +97,7 @@ export async function createTestUser(
       .padStart(3, "0");
   const phone = `${prefix}${uniqueSuffix}`.slice(0, 10);
   const email = `${prefix}-${uniqueSuffix}@insumoso2.local`;
-  const password = "Passw0rd!2026";
+  const password = "test-password-12345";
 
   await superuserClient.collection("users").create({
     email,

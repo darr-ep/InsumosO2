@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { DashboardScreen } from "@/screens/dashboard/DashboardScreen";
@@ -13,6 +13,7 @@ const searchRentals = vi.fn();
 const getRental = vi.fn();
 const listItemsForRental = vi.fn();
 const listPaymentsForRental = vi.fn();
+const listActiveRentalsPayments = vi.fn();
 const getBusinessSettings = vi.fn();
 const updateBusinessSettings = vi.fn();
 
@@ -27,6 +28,7 @@ vi.mock("@/data/rentals.repo", () => ({
 
 vi.mock("@/data/payments.repo", () => ({
   listPaymentsForRental: (...args: unknown[]) => listPaymentsForRental(...args),
+  listActiveRentalsPayments: (...args: unknown[]) => listActiveRentalsPayments(...args),
 }));
 
 // Feature: Runtime-Editable Total Stock — replaces the old
@@ -74,6 +76,7 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
     getRental.mockReset();
     listItemsForRental.mockReset();
     listPaymentsForRental.mockReset();
+    listActiveRentalsPayments.mockReset().mockResolvedValue([]);
     // Feature: Runtime-Editable Total Stock — matches the migration's own
     // seeded default (0/0). Most tests below don't care about stock; tests
     // that need real math override this explicitly.
@@ -96,7 +99,7 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
         id: "r1",
         folio: "R-000001",
         status: "ACTIVE",
-        created: "2026-08-20 10:00:00.000Z",
+        created: new Date().toISOString(),
         initial_rent_amount: 2800,
         expand: { customer_id: juan },
       },
@@ -105,10 +108,10 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
     renderScreen();
 
     expect(await screen.findByText("Juan Pérez")).toBeInTheDocument();
-    const activeTile = await screen.findByRole("group", {
-      name: "Rentas activas: 1",
-    });
-    expect(within(activeTile).getByText("1")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Rentas activas" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("1")).toBeInTheDocument();
     expect(screen.getByText("R-000001")).toBeInTheDocument();
     expect(screen.getByText("Activa")).toBeInTheDocument();
   });
@@ -198,127 +201,25 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
     ).toBeInTheDocument();
   });
 
-  /**
-   * Redesign Round 2, Batch 4 (Dashboard Restructure). Business owner
-   * (verbatim, confirmed): "Concentradores disponibles"/"Tanques
-   * disponibles" means REAL availability (total configured stock − active
-   * rentals of that type). Proves the full wiring end-to-end: Feature:
-   * Runtime-Editable Total Stock — `getBusinessSettings` (business_settings
-   * collection) → `listActiveRentalItems` → `availability.ts` →
-   * `DashboardStats`' `--success`/neutral-gray styling. Replaces this same
-   * test's prior env-var-stubbing version (Redesign Round 2, Batch 4's
-   * original `VITE_TOTAL_CONCENTRADORES`/`VITE_TOTAL_TANQUES`).
-   */
-  it("computes real availability from business_settings totals (getBusinessSettings) minus active item quantities (business-owner confirmed rule)", async () => {
-    getBusinessSettings.mockResolvedValue({
-      id: "s1",
-      total_concentradores: 5,
-      total_tanques: 0,
-    });
-    listActiveRentals.mockResolvedValue([]);
-    listActiveRentalItems.mockResolvedValue([
-      { id: "i1", rental_id: "r1", item_type: "concentrator", quantity: 2 },
-      { id: "i2", rental_id: "r2", item_type: "tank", quantity: 3 },
+  it("renders the active rentals header count", async () => {
+    listActiveRentals.mockResolvedValue([
+      {
+        id: "r1",
+        folio: "R-000001",
+        status: "ACTIVE",
+        created: new Date().toISOString(),
+        initial_rent_amount: 2800,
+        expand: { customer_id: juan },
+      },
     ]);
 
     renderScreen();
 
-    const concentradoresTile = await screen.findByRole("group", {
-      name: "Concentradores disponibles: 3",
+    const heading = await screen.findByRole("heading", {
+      name: "Rentas activas",
     });
-    expect(within(concentradoresTile).getByText("3")).toHaveClass(
-      "text-foreground",
-    );
-
-    // Total tanques = 0 → available is clamped to 0 regardless of active
-    // count, and 0 renders in destructive red (out of stock).
-    const tanquesTile = screen.getByRole("group", {
-      name: "Tanques disponibles: 0",
-    });
-    expect(within(tanquesTile).getByText("0")).toHaveClass(
-      "text-destructive",
-    );
-  });
-
-  /**
-   * Feature: Runtime-Editable Total Stock. Confirms the exact default
-   * behavior when the business owner hasn't configured stock yet —
-   * `business_settings`' seeded default (0/0, matching the migration) is
-   * what `beforeEach` above already stubs by default — availability must
-   * show 0, in destructive red (out of stock).
-   */
-  it("shows 0 availability in destructive red when business_settings' totals are still at their seeded default (0/0)", async () => {
-    listActiveRentals.mockResolvedValue([]);
-    listActiveRentalItems.mockResolvedValue([
-      { id: "i1", rental_id: "r1", item_type: "concentrator", quantity: 2 },
-    ]);
-
-    renderScreen();
-
-    const concentradoresTile = await screen.findByRole("group", {
-      name: "Concentradores disponibles: 0",
-    });
-    expect(within(concentradoresTile).getByText("0")).toHaveClass(
-      "text-destructive",
-    );
-
-    const tanquesTile = screen.getByRole("group", {
-      name: "Tanques disponibles: 0",
-    });
-    expect(within(tanquesTile).getByText("0")).toHaveClass(
-      "text-destructive",
-    );
-  });
-
-  /**
-   * Feature: Runtime-Editable Total Stock — end-to-end proof that editing
-   * the total from the Dashboard's tap-to-edit dialog
-   * (`DashboardStats.tsx`) actually persists (`updateBusinessSettings`) AND
-   * updates the DISPLAYED availability number immediately, with no full
-   * page reload — the business owner's core requirement for this feature.
-   */
-  it("editing the total concentradores from the tap-to-edit dialog updates the displayed availability immediately, no page reload", async () => {
-    getBusinessSettings.mockResolvedValue({
-      id: "s1",
-      total_concentradores: 5,
-      total_tanques: 0,
-    });
-    listActiveRentals.mockResolvedValue([]);
-    listActiveRentalItems.mockResolvedValue([
-      { id: "i1", rental_id: "r1", item_type: "concentrator", quantity: 2 },
-    ]);
-    updateBusinessSettings.mockResolvedValue({
-      id: "s1",
-      total_concentradores: 10,
-      total_tanques: 0,
-    });
-    const user = userEvent.setup();
-
-    renderScreen();
-
-    // 5 total − 2 active = 3 disponibles, before the edit.
-    const tile = await screen.findByRole("group", {
-      name: "Concentradores disponibles: 3",
-    });
-    await user.click(within(tile).getByRole("button"));
-
-    // Stepper: 5 -> 10 (five taps), replacing the old free-text input.
-    const increase = screen.getByLabelText("Sumar uno al total");
-    for (let i = 0; i < 5; i++) {
-      await user.click(increase);
-    }
-    await user.click(screen.getByRole("button", { name: "Guardar" }));
-
-    expect(updateBusinessSettings).toHaveBeenCalledWith({
-      totalConcentradores: 10,
-    });
-    // 10 total − 2 active = 8 disponibles, after the edit — same React tree,
-    // no re-fetch of rentals/items, no full reload.
-    expect(
-      await screen.findByRole("group", {
-        name: "Concentradores disponibles: 8",
-      }),
-    ).toBeInTheDocument();
+    expect(heading).toBeInTheDocument();
+    expect(screen.getByText("1")).toBeInTheDocument();
   });
 
   /**
@@ -355,7 +256,7 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
     expect(screen.getAllByText("Juan Pérez")).toHaveLength(1);
   });
 
-  it("marks a stale rental's card with the --warning border token in the single unified list, not a hardcoded color", async () => {
+  it("marks a stale rental's card with the Revisión badge in yellow (warning-soft)", async () => {
     const oldDate = new Date();
     oldDate.setDate(oldDate.getDate() - 45);
 
@@ -372,9 +273,10 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
 
     renderScreen();
 
-    const name = await screen.findByText("Juan Pérez");
-    expect(name.closest(".border-warning")).not.toBeNull();
-    expect(name.closest(".border-amber-500")).toBeNull();
+    const badge = await screen.findByText("Revisión");
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveClass("bg-warning-soft");
+    expect(badge).toHaveClass("text-warning-soft-foreground");
   });
 
   it("tapping the stale-rentals banner filters the list to only stale rentals; tapping again shows all again", async () => {
@@ -542,7 +444,7 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
 
     const { container } = renderScreen();
 
-    await screen.findByRole("group", { name: "Rentas activas: 1" });
+    await screen.findByRole("heading", { name: "Rentas activas" });
 
     // The CTA bar (`sticky bottom-0 shrink-0`) is a flex sibling of the
     // scrollable content, not an overlay — it always reserves its own
@@ -568,9 +470,9 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
    * once in `AppLayout`, above the whole swipeable panel (see
    * `AppLayout.tsx`'s own docblock), not inside `DashboardScreen`'s tree at
    * all anymore. This test only verifies what `DashboardScreen` itself
-   * still orders: estadísticas, indicador de antiguas, lista.
+   * still orders: encabezado, indicador de antiguas, lista.
    */
-  it("orders content as: estadísticas, indicador de antiguas, lista (business-owner brief, Batch 4 — buscador now lives in AppLayout)", async () => {
+  it("orders content as: encabezado, indicador de antiguas, lista (business-owner brief, Batch 4 — buscador now lives in AppLayout)", async () => {
     const oldDate = new Date();
     oldDate.setDate(oldDate.getDate() - 45);
 
@@ -587,8 +489,8 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
 
     renderScreen();
 
-    const statsTile = await screen.findByRole("group", {
-      name: "Rentas activas: 1",
+    const heading = await screen.findByRole("heading", {
+      name: "Rentas activas",
     });
     const banner = screen.getByRole("button", {
       name: /1 renta requiere revisión/i,
@@ -601,7 +503,7 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
       );
     }
 
-    expect(isBefore(statsTile, banner)).toBe(true);
+    expect(isBefore(heading, banner)).toBe(true);
     expect(isBefore(banner, listItem)).toBe(true);
   });
 
@@ -781,7 +683,7 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
         },
       ]);
       const { setQuery } = renderScreen();
-      await screen.findByRole("group", { name: "Rentas activas: 1" });
+      await screen.findByRole("heading", { name: "Rentas activas" });
       expect(
         await screen.findByRole("button", { name: /1 renta requiere revisión/i }),
       ).toBeInTheDocument();
@@ -790,7 +692,7 @@ describe("DashboardScreen (§16.3, §16.4, §16.6, Anexo A.3, CU2)", () => {
 
       expect(await screen.findByText("R-000184")).toBeInTheDocument();
       expect(
-        screen.queryByRole("group", { name: "Rentas activas: 1" }),
+        screen.queryByRole("heading", { name: "Rentas activas" }),
       ).not.toBeInTheDocument();
       expect(screen.queryByText("R-000001")).not.toBeInTheDocument();
       expect(

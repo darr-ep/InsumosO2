@@ -1,10 +1,7 @@
 import type { RecordModel } from "pocketbase";
 import { pb } from "@/data/pocketbaseClient";
 import type { CustomerRecord } from "@/data/customers.repo";
-import {
-  shouldRegisterDepositPayment,
-  type RentalItemType,
-} from "@/domain/rentals/rental";
+import type { RentalItemType } from "@/domain/rentals/rental";
 
 /**
  * SDD.md §7.1 (flujo Nueva renta) + §11 (rentals/rental_items/payments) +
@@ -188,13 +185,20 @@ export async function createRental(
   }
 
   try {
-    const depositPayment = shouldRegisterDepositPayment(input.depositAmount)
-      ? await pb.collection(PAYMENTS_COLLECTION).create<PaymentRecord>({
-          rental_id: rental.id,
-          amount: input.depositAmount,
-          payment_type: "deposit" satisfies PaymentType,
-        })
-      : null;
+    // Si hay depósito, se registra el pago de tipo deposit por ese monto.
+    // Si no hay depósito pero sí monto de renta inicial, se registra el pago inicial de tipo deposit
+    // para que quede constancia del "Pago Inicial" en el historial y balance.
+    const initialPaymentAmount =
+      input.depositAmount > 0 ? input.depositAmount : input.initialRentAmount;
+
+    const depositPayment =
+      initialPaymentAmount > 0
+        ? await pb.collection(PAYMENTS_COLLECTION).create<PaymentRecord>({
+            rental_id: rental.id,
+            amount: initialPaymentAmount,
+            payment_type: "deposit" satisfies PaymentType,
+          })
+        : null;
 
     return { rental, items, depositPayment };
   } catch (error) {

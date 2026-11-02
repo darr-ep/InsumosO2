@@ -65,8 +65,8 @@ describe.skipIf(!reachable)(
     let client: PocketBase;
     let userId: string;
     let phone: string;
-    const originalPassword = "Passw0rd!2026";
-    const newPassword = "Passw0rd!2026New";
+    const originalPassword = "test-password-12345";
+    const newPassword = "test-password-67890";
 
     beforeAll(async () => {
       const testUser = await createTestUser(PB_URL, "9");
