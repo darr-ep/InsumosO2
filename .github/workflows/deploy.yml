@@ -1,0 +1,85 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    name: Build & Deploy to Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run verification (typecheck & core tests)
+        run: |
+          npm run typecheck
+          npx vitest run src/screens/dashboard/DashboardScreen.test.tsx src/domain/rentals/billing.test.ts src/domain/rentals/dashboard.test.ts
+
+      - name: Build frontend for production
+        run: npm run build
+
+      - name: Setup SSH
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          SSH_HOST: ${{ secrets.VPS_HOST }}
+          SSH_PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf "%s\n" "$SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Sync files to VPS
+        env:
+          SSH_USER: ${{ secrets.VPS_USER }}
+          SSH_HOST: ${{ secrets.VPS_HOST }}
+          SSH_PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          SSH_CMD="ssh -i ~/.ssh/id_deploy -p $SSH_PORT"
+
+          echo "Syncing frontend dist..."
+          rsync -avz --delete -e "$SSH_CMD" dist/ "$SSH_USER@$SSH_HOST":/home/chato/docker/insumoso2-web/dist/
+
+          echo "Syncing PocketBase migrations..."
+          rsync -avz --delete -e "$SSH_CMD" pb_migrations/ "$SSH_USER@$SSH_HOST":/home/chato/docker/insumoso2-api/pb_migrations/
+
+          echo "Syncing PocketBase hooks..."
+          rsync -avz --delete -e "$SSH_CMD" pb_hooks/ "$SSH_USER@$SSH_HOST":/home/chato/docker/insumoso2-api/pb_hooks/
+
+      - name: Apply migrations and reload containers
+        env:
+          SSH_USER: ${{ secrets.VPS_USER }}
+          SSH_HOST: ${{ secrets.VPS_HOST }}
+          SSH_PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          ssh -i ~/.ssh/id_deploy -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" << 'EOF'
+            set -e
+            echo "--- Applying PocketBase migrations in container ---"
+            docker exec insumoso2-api /pb/pocketbase migrate up
+
+            echo "--- Restarting containers ---"
+            docker restart insumoso2-api insumoso2-web
+
+            echo "--- Deployment finished successfully ---"
+          EOF
